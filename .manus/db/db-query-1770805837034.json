@@ -1,0 +1,90 @@
+{
+  "query": "SELECT id, fullName, email, telegramId, status, createdAt FROM agents WHERE telegramId IS NOT NULL AND telegramId != '999999999' ORDER BY createdAt DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user hVwujcZ1ppKYgyC.root --database Mef2gZ2igQdMvww2Yiqe9P --execute SELECT id, fullName, email, telegramId, status, createdAt FROM agents WHERE telegramId IS NOT NULL AND telegramId != '999999999' ORDER BY createdAt DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "90006",
+      "fullName": "Волков Игорь Петрович",
+      "email": "volkov.igor@gmail.com",
+      "telegramId": "demo_agent_5",
+      "status": "pending",
+      "createdAt": "2026-02-10 14:59:38"
+    },
+    {
+      "id": "90004",
+      "fullName": "Козлов Андрей Сергеевич",
+      "email": "kozlov.andrey@yandex.ru",
+      "telegramId": "demo_agent_3",
+      "status": "active",
+      "createdAt": "2026-02-10 14:59:38"
+    },
+    {
+      "id": "90007",
+      "fullName": "Морозов Сергей Владимирович",
+      "email": "morozov.sergey@mail.ru",
+      "telegramId": "demo_agent_6",
+      "status": "rejected",
+      "createdAt": "2026-02-10 14:59:38"
+    },
+    {
+      "id": "90002",
+      "fullName": "Петров Дмитрий Александрович",
+      "email": "petrov.dmitry@mail.ru",
+      "telegramId": "demo_agent_1",
+      "status": "active",
+      "createdAt": "2026-02-10 14:59:38"
+    },
+    {
+      "id": "90003",
+      "fullName": "Смирнова Елена Викторовна",
+      "email": "smirnova.elena@gmail.com",
+      "telegramId": "demo_agent_2",
+      "status": "active",
+      "createdAt": "2026-02-10 14:59:38"
+    },
+    {
+      "id": "90005",
+      "fullName": "Новикова Мария Ивановна",
+      "email": "novikova.maria@mail.ru",
+      "telegramId": "demo_agent_4",
+      "status": "pending",
+      "createdAt": "2026-02-10 14:59:38"
+    },
+    {
+      "id": "90001",
+      "fullName": "Сидоров Сергей",
+      "email": "sergei@mail.ru",
+      "telegramId": "7662049968",
+      "status": "active",
+      "createdAt": "2026-02-10 13:52:46"
+    },
+    {
+      "id": "60003",
+      "fullName": "Полина Полина",
+      "email": "murtazina.poli@gmail.com",
+      "telegramId": "717020916",
+      "status": "blocked",
+      "createdAt": "2026-02-07 20:03:02"
+    },
+    {
+      "id": "60001",
+      "fullName": "Саид",
+      "email": "said.i.murtazin@gmail.com",
+      "telegramId": "360869102",
+      "status": "active",
+      "createdAt": "2026-02-07 19:35:59"
+    },
+    {
+      "id": "30006",
+      "fullName": "Кузнецова Елена Дмитриевна",
+      "email": "kuznetsova@example.com",
+      "telegramId": "test_agent_5",
+      "status": "active",
+      "createdAt": "2026-02-07 16:47:02"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tfullName\temail\ttelegramId\tstatus\tcreatedAt\n90006\tВолков Игорь Петрович\tvolkov.igor@gmail.com\tdemo_agent_5\tpending\t2026-02-10 14:59:38\n90004\tКозлов Андрей Сергеевич\tkozlov.andrey@yandex.ru\tdemo_agent_3\tactive\t2026-02-10 14:59:38\n90007\tМорозов Сергей Владимирович\tmorozov.sergey@mail.ru\tdemo_agent_6\trejected\t2026-02-10 14:59:38\n90002\tПетров Дмитрий Александрович\tpetrov.dmitry@mail.ru\tdemo_agent_1\tactive\t2026-02-10 14:59:38\n90003\tСмирнова Елена Викторовна\tsmirnova.elena@gmail.com\tdemo_agent_2\tactive\t2026-02-10 14:59:38\n90005\tНовикова Мария Ивановна\tnovikova.maria@mail.ru\tdemo_agent_4\tpending\t2026-02-10 14:59:38\n90001\tСидоров Сергей\tsergei@mail.ru\t7662049968\tactive\t2026-02-10 13:52:46\n60003\tПолина Полина\tmurtazina.poli@gmail.com\t717020916\tblocked\t2026-02-07 20:03:02\n60001\tСаид\tsaid.i.murtazin@gmail.com\t360869102\tactive\t2026-02-07 19:35:59\n30006\tКузнецова Елена Дмитриевна\tkuznetsova@example.com\ttest_agent_5\tactive\t2026-02-07 16:47:02\n",
+  "stderr": "",
+  "execution_time_ms": 2285
+}

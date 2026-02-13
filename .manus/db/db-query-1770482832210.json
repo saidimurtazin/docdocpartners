@@ -1,0 +1,9 @@
+{
+  "query": "-- Add more test payments with correct column names\nINSERT INTO payments (agentId, amount, status, completedAt, createdAt) VALUES\n(1, 1050000, 'completed', DATE_SUB(NOW(), INTERVAL 20 DAY), DATE_SUB(NOW(), INTERVAL 25 DAY)),\n(2, 500000, 'pending', NULL, DATE_SUB(NOW(), INTERVAL 3 DAY)),\n(3, 750000, 'failed', DATE_SUB(NOW(), INTERVAL 10 DAY), DATE_SUB(NOW(), INTERVAL 12 DAY));",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user hVwujcZ1ppKYgyC.root --database Mef2gZ2igQdMvww2Yiqe9P --execute -- Add more test payments with correct column names\nINSERT INTO payments (agentId, amount, status, completedAt, createdAt) VALUES\n(1, 1050000, 'completed', DATE_SUB(NOW(), INTERVAL 20 DAY), DATE_SUB(NOW(), INTERVAL 25 DAY)),\n(2, 500000, 'pending', NULL, DATE_SUB(NOW(), INTERVAL 3 DAY)),\n(3, 750000, 'failed', DATE_SUB(NOW(), INTERVAL 10 DAY), DATE_SUB(NOW(), INTERVAL 12 DAY));",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 370
+}

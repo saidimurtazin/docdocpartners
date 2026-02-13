@@ -1,0 +1,9 @@
+{
+  "query": "SELECT code, email, used, expiresAt, NOW() as now, expiresAt > NOW() as notExpired FROM otpCodes WHERE code='542314'",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user hVwujcZ1ppKYgyC.root --database Mef2gZ2igQdMvww2Yiqe9P --execute SELECT code, email, used, expiresAt, NOW() as now, expiresAt > NOW() as notExpired FROM otpCodes WHERE code='542314'",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 56
+}

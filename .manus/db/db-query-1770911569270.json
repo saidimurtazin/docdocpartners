@@ -1,0 +1,16 @@
+{
+  "query": "SELECT code, used, expiresAt > NOW() as notExpired, createdAt FROM otpCodes WHERE email='sergei@mail.ru' ORDER BY createdAt DESC LIMIT 1",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user hVwujcZ1ppKYgyC.root --database Mef2gZ2igQdMvww2Yiqe9P --execute SELECT code, used, expiresAt > NOW() as notExpired, createdAt FROM otpCodes WHERE email='sergei@mail.ru' ORDER BY createdAt DESC LIMIT 1",
+  "rows": [
+    {
+      "code": "317594",
+      "used": "no",
+      "notExpired": "1",
+      "createdAt": "2026-02-12 15:51:47"
+    }
+  ],
+  "messages": [],
+  "stdout": "code\tused\tnotExpired\tcreatedAt\n317594\tno\t1\t2026-02-12 15:51:47\n",
+  "stderr": "",
+  "execution_time_ms": 63
+}

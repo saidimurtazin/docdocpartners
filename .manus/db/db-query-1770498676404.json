@@ -1,0 +1,70 @@
+{
+  "query": "SELECT id, fullName, email, totalEarnings FROM agents ORDER BY id DESC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user hVwujcZ1ppKYgyC.root --database Mef2gZ2igQdMvww2Yiqe9P --execute SELECT id, fullName, email, totalEarnings FROM agents ORDER BY id DESC LIMIT 10;",
+  "rows": [
+    {
+      "id": "60003",
+      "fullName": "Полина Полина",
+      "email": "murtazina.poli@gmail.com",
+      "totalEarnings": "0"
+    },
+    {
+      "id": "60001",
+      "fullName": "Саид",
+      "email": "said.i.murtazin@gmail.com",
+      "totalEarnings": "0"
+    },
+    {
+      "id": "30006",
+      "fullName": "Кузнецова Елена Дмитриевна",
+      "email": "kuznetsova@example.com",
+      "totalEarnings": "0"
+    },
+    {
+      "id": "30005",
+      "fullName": "Смирнов Алексей Викторович",
+      "email": "smirnov@example.com",
+      "totalEarnings": "0"
+    },
+    {
+      "id": "30004",
+      "fullName": "Петрова Мария Сергеевна",
+      "email": "petrova@example.com",
+      "totalEarnings": "0"
+    },
+    {
+      "id": "5",
+      "fullName": "Смирнов Алексей Викторович",
+      "email": "smirnov@example.com",
+      "totalEarnings": "50000"
+    },
+    {
+      "id": "4",
+      "fullName": "Козлова Анна Дмитриевна",
+      "email": "kozlova@example.com",
+      "totalEarnings": "200000"
+    },
+    {
+      "id": "3",
+      "fullName": "Сидоров Петр Алексеевич",
+      "email": "sidorov@example.com",
+      "totalEarnings": "0"
+    },
+    {
+      "id": "2",
+      "fullName": "Петрова Мария Сергеевна",
+      "email": "petrova@example.com",
+      "totalEarnings": "85000"
+    },
+    {
+      "id": "1",
+      "fullName": "Иванов Иван Иванович",
+      "email": "ivanov@example.com",
+      "totalEarnings": "125000"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tfullName\temail\ttotalEarnings\n60003\tПолина Полина\tmurtazina.poli@gmail.com\t0\n60001\tСаид\tsaid.i.murtazin@gmail.com\t0\n30006\tКузнецова Елена Дмитриевна\tkuznetsova@example.com\t0\n30005\tСмирнов Алексей Викторович\tsmirnov@example.com\t0\n30004\tПетрова Мария Сергеевна\tpetrova@example.com\t0\n5\tСмирнов Алексей Викторович\tsmirnov@example.com\t50000\n4\tКозлова Анна Дмитриевна\tkozlova@example.com\t200000\n3\tСидоров Петр Алексеевич\tsidorov@example.com\t0\n2\tПетрова Мария Сергеевна\tpetrova@example.com\t85000\n1\tИванов Иван Иванович\tivanov@example.com\t125000\n",
+  "stderr": "",
+  "execution_time_ms": 348
+}

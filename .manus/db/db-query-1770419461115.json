@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO payments (agentId, amount, status, method, notes, createdAt) VALUES\n(1, 500000, 'completed', 'bank_transfer', 'Выплата за январь 2026', NOW() - INTERVAL 10 DAY),\n(2, 800000, 'completed', 'bank_transfer', 'Выплата за январь 2026', NOW() - INTERVAL 8 DAY),\n(4, 400000, 'pending', 'bank_transfer', 'Ожидает обработки', NOW() - INTERVAL 2 DAY),\n(4, 600000, 'completed', 'bank_transfer', 'Выплата за декабрь 2025', NOW() - INTERVAL 30 DAY),\n(5, 50000, 'failed', 'bank_transfer', 'Агент заблокирован', NOW() - INTERVAL 5 DAY);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user hVwujcZ1ppKYgyC.root --database Mef2gZ2igQdMvww2Yiqe9P --execute INSERT INTO payments (agentId, amount, status, method, notes, createdAt) VALUES\n(1, 500000, 'completed', 'bank_transfer', 'Выплата за январь 2026', NOW() - INTERVAL 10 DAY),\n(2, 800000, 'completed', 'bank_transfer', 'Выплата за январь 2026', NOW() - INTERVAL 8 DAY),\n(4, 400000, 'pending', 'bank_transfer', 'Ожидает обработки', NOW() - INTERVAL 2 DAY),\n(4, 600000, 'completed', 'bank_transfer', 'Выплата за декабрь 2025', NOW() - INTERVAL 30 DAY),\n(5, 50000, 'failed', 'bank_transfer', 'Агент заблокирован', NOW() - INTERVAL 5 DAY);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 361
+}

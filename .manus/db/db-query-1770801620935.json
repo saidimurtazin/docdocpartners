@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO agents (fullName, email, phone, telegramId, city, role, specialization, status, totalEarnings, createdAt, updatedAt) \nVALUES ('Тестовый Агент Иванов', 'test.agent@example.com', '+79991234567', '999999999', 'Москва', 'врач', 'терапевт', 'active', 0, NOW(), NOW());",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user hVwujcZ1ppKYgyC.root --database Mef2gZ2igQdMvww2Yiqe9P --execute INSERT INTO agents (fullName, email, phone, telegramId, city, role, specialization, status, totalEarnings, createdAt, updatedAt) \nVALUES ('Тестовый Агент Иванов', 'test.agent@example.com', '+79991234567', '999999999', 'Москва', 'врач', 'терапевт', 'active', 0, NOW(), NOW());",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 66
+}

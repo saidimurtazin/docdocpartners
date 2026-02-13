@@ -1,0 +1,18 @@
+{
+  "query": "SELECT id, fullName, email, telegramId, totalEarnings, status FROM agents WHERE telegramId = '360869102';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user hVwujcZ1ppKYgyC.root --database Mef2gZ2igQdMvww2Yiqe9P --execute SELECT id, fullName, email, telegramId, totalEarnings, status FROM agents WHERE telegramId = '360869102';",
+  "rows": [
+    {
+      "id": "60001",
+      "fullName": "Саид",
+      "email": "said.i.murtazin@gmail.com",
+      "telegramId": "360869102",
+      "totalEarnings": "0",
+      "status": "active"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tfullName\temail\ttelegramId\ttotalEarnings\tstatus\n60001\tСаид\tsaid.i.murtazin@gmail.com\t360869102\t0\tactive\n",
+  "stderr": "",
+  "execution_time_ms": 348
+}

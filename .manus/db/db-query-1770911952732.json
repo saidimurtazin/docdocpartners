@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE otpCodes SET used='no' WHERE code='734893'",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user hVwujcZ1ppKYgyC.root --database Mef2gZ2igQdMvww2Yiqe9P --execute UPDATE otpCodes SET used='no' WHERE code='734893'",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 121
+}

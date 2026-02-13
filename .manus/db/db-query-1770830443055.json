@@ -1,0 +1,17 @@
+{
+  "query": "SELECT id, fullName, email, phone, status FROM agents WHERE email = 'sergei@mail.ru';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user hVwujcZ1ppKYgyC.root --database Mef2gZ2igQdMvww2Yiqe9P --execute SELECT id, fullName, email, phone, status FROM agents WHERE email = 'sergei@mail.ru';",
+  "rows": [
+    {
+      "id": "90001",
+      "fullName": "Сидоров Сергей",
+      "email": "sergei@mail.ru",
+      "phone": "+79932927233",
+      "status": "active"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tfullName\temail\tphone\tstatus\n90001\tСидоров Сергей\tsergei@mail.ru\t+79932927233\tactive\n",
+  "stderr": "",
+  "execution_time_ms": 52
+}

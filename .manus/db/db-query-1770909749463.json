@@ -1,0 +1,37 @@
+{
+  "query": "SELECT * FROM otpCodes WHERE email = 'sergei@mail.ru' ORDER BY createdAt DESC LIMIT 3;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user hVwujcZ1ppKYgyC.root --database Mef2gZ2igQdMvww2Yiqe9P --execute SELECT * FROM otpCodes WHERE email = 'sergei@mail.ru' ORDER BY createdAt DESC LIMIT 3;",
+  "rows": [
+    {
+      "id": "210003",
+      "email": "sergei@mail.ru",
+      "code": "617429",
+      "purpose": "registration",
+      "expiresAt": "2026-02-12 15:25:53",
+      "used": "no",
+      "createdAt": "2026-02-12 15:20:53"
+    },
+    {
+      "id": "210002",
+      "email": "sergei@mail.ru",
+      "code": "349124",
+      "purpose": "registration",
+      "expiresAt": "2026-02-12 15:23:51",
+      "used": "no",
+      "createdAt": "2026-02-12 15:18:50"
+    },
+    {
+      "id": "180001",
+      "email": "sergei@mail.ru",
+      "code": "721592",
+      "purpose": "registration",
+      "expiresAt": "2026-02-12 13:23:06",
+      "used": "yes",
+      "createdAt": "2026-02-12 13:18:06"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\temail\tcode\tpurpose\texpiresAt\tused\tcreatedAt\n210003\tsergei@mail.ru\t617429\tregistration\t2026-02-12 15:25:53\tno\t2026-02-12 15:20:53\n210002\tsergei@mail.ru\t349124\tregistration\t2026-02-12 15:23:51\tno\t2026-02-12 15:18:50\n180001\tsergei@mail.ru\t721592\tregistration\t2026-02-12 13:23:06\tyes\t2026-02-12 13:18:06\n",
+  "stderr": "",
+  "execution_time_ms": 57
+}

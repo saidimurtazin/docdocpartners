@@ -1,0 +1,55 @@
+{
+  "query": "SELECT id, fullName, email, phone, telegramId, status, createdAt FROM agents ORDER BY createdAt DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user hVwujcZ1ppKYgyC.root --database Mef2gZ2igQdMvww2Yiqe9P --execute SELECT id, fullName, email, phone, telegramId, status, createdAt FROM agents ORDER BY createdAt DESC LIMIT 5;",
+  "rows": [
+    {
+      "id": "90005",
+      "fullName": "Новикова Мария Ивановна",
+      "email": "novikova.maria@mail.ru",
+      "phone": "+79164567890",
+      "telegramId": "demo_agent_4",
+      "status": "pending",
+      "createdAt": "2026-02-10 14:59:38"
+    },
+    {
+      "id": "90003",
+      "fullName": "Смирнова Елена Викторовна",
+      "email": "smirnova.elena@gmail.com",
+      "phone": "+79162345678",
+      "telegramId": "demo_agent_2",
+      "status": "active",
+      "createdAt": "2026-02-10 14:59:38"
+    },
+    {
+      "id": "90004",
+      "fullName": "Козлов Андрей Сергеевич",
+      "email": "kozlov.andrey@yandex.ru",
+      "phone": "+79163456789",
+      "telegramId": "demo_agent_3",
+      "status": "active",
+      "createdAt": "2026-02-10 14:59:38"
+    },
+    {
+      "id": "90002",
+      "fullName": "Петров Дмитрий Александрович",
+      "email": "petrov.dmitry@mail.ru",
+      "phone": "+79161234567",
+      "telegramId": "demo_agent_1",
+      "status": "active",
+      "createdAt": "2026-02-10 14:59:38"
+    },
+    {
+      "id": "90006",
+      "fullName": "Волков Игорь Петрович",
+      "email": "volkov.igor@gmail.com",
+      "phone": "+79165678901",
+      "telegramId": "demo_agent_5",
+      "status": "pending",
+      "createdAt": "2026-02-10 14:59:38"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tfullName\temail\tphone\ttelegramId\tstatus\tcreatedAt\n90005\tНовикова Мария Ивановна\tnovikova.maria@mail.ru\t+79164567890\tdemo_agent_4\tpending\t2026-02-10 14:59:38\n90003\tСмирнова Елена Викторовна\tsmirnova.elena@gmail.com\t+79162345678\tdemo_agent_2\tactive\t2026-02-10 14:59:38\n90004\tКозлов Андрей Сергеевич\tkozlov.andrey@yandex.ru\t+79163456789\tdemo_agent_3\tactive\t2026-02-10 14:59:38\n90002\tПетров Дмитрий Александрович\tpetrov.dmitry@mail.ru\t+79161234567\tdemo_agent_1\tactive\t2026-02-10 14:59:38\n90006\tВолков Игорь Петрович\tvolkov.igor@gmail.com\t+79165678901\tdemo_agent_5\tpending\t2026-02-10 14:59:38\n",
+  "stderr": "",
+  "execution_time_ms": 50
+}

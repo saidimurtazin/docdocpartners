@@ -1,0 +1,17 @@
+{
+  "query": "SELECT code, email, used, expiresAt, createdAt FROM otpCodes WHERE email = 'sergei@mail.ru' ORDER BY createdAt DESC LIMIT 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user hVwujcZ1ppKYgyC.root --database Mef2gZ2igQdMvww2Yiqe9P --execute SELECT code, email, used, expiresAt, createdAt FROM otpCodes WHERE email = 'sergei@mail.ru' ORDER BY createdAt DESC LIMIT 1;",
+  "rows": [
+    {
+      "code": "617429",
+      "email": "sergei@mail.ru",
+      "used": "no",
+      "expiresAt": "2026-02-12 15:25:53",
+      "createdAt": "2026-02-12 15:20:53"
+    }
+  ],
+  "messages": [],
+  "stdout": "code\temail\tused\texpiresAt\tcreatedAt\n617429\tsergei@mail.ru\tno\t2026-02-12 15:25:53\t2026-02-12 15:20:53\n",
+  "stderr": "",
+  "execution_time_ms": 59
+}

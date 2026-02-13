@@ -1,0 +1,33 @@
+{
+  "query": "SELECT * FROM agents WHERE email = 'said.i.murtazin@gmail.com';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user hVwujcZ1ppKYgyC.root --database Mef2gZ2igQdMvww2Yiqe9P --execute SELECT * FROM agents WHERE email = 'said.i.murtazin@gmail.com';",
+  "rows": [
+    {
+      "id": "60001",
+      "telegramId": "360869102",
+      "fullName": "Саид",
+      "email": "said.i.murtazin@gmail.com",
+      "phone": "+79802227733",
+      "role": "Медсестра",
+      "city": "Москва",
+      "specialization": "NULL",
+      "status": "active",
+      "referralCode": "NULL",
+      "referredBy": "NULL",
+      "totalEarnings": "10000",
+      "totalReferrals": "0",
+      "createdAt": "2026-02-07 19:35:59",
+      "updatedAt": "2026-02-07 21:16:10",
+      "bonusPoints": "0",
+      "inn": "NULL",
+      "isSelfEmployed": "unknown",
+      "bankAccount": "NULL",
+      "bankName": "NULL",
+      "bankBik": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttelegramId\tfullName\temail\tphone\trole\tcity\tspecialization\tstatus\treferralCode\treferredBy\ttotalEarnings\ttotalReferrals\tcreatedAt\tupdatedAt\tbonusPoints\tinn\tisSelfEmployed\tbankAccount\tbankName\tbankBik\n60001\t360869102\tСаид\tsaid.i.murtazin@gmail.com\t+79802227733\tМедсестра\tМосква\tNULL\tactive\tNULL\tNULL\t10000\t0\t2026-02-07 19:35:59\t2026-02-07 21:16:10\t0\tNULL\tunknown\tNULL\tNULL\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 72
+}

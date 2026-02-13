@@ -1,0 +1,80 @@
+{
+  "query": "SELECT id, fullName, email, telegramId, status FROM agents LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user hVwujcZ1ppKYgyC.root --database Mef2gZ2igQdMvww2Yiqe9P --execute SELECT id, fullName, email, telegramId, status FROM agents LIMIT 10;",
+  "rows": [
+    {
+      "id": "1",
+      "fullName": "Иванов Иван Иванович",
+      "email": "ivanov@example.com",
+      "telegramId": "123456789",
+      "status": "active"
+    },
+    {
+      "id": "2",
+      "fullName": "Петрова Мария Сергеевна",
+      "email": "petrova@example.com",
+      "telegramId": "987654321",
+      "status": "active"
+    },
+    {
+      "id": "3",
+      "fullName": "Сидоров Петр Алексеевич",
+      "email": "sidorov@example.com",
+      "telegramId": "456789123",
+      "status": "blocked"
+    },
+    {
+      "id": "4",
+      "fullName": "Козлова Анна Дмитриевна",
+      "email": "kozlova@example.com",
+      "telegramId": "789123456",
+      "status": "active"
+    },
+    {
+      "id": "5",
+      "fullName": "Смирнов Алексей Викторович",
+      "email": "smirnov@example.com",
+      "telegramId": "321654987",
+      "status": "active"
+    },
+    {
+      "id": "30004",
+      "fullName": "Петрова Мария Сергеевна",
+      "email": "petrova@example.com",
+      "telegramId": "test_agent_3",
+      "status": "active"
+    },
+    {
+      "id": "30005",
+      "fullName": "Смирнов Алексей Викторович",
+      "email": "smirnov@example.com",
+      "telegramId": "test_agent_4",
+      "status": "active"
+    },
+    {
+      "id": "30006",
+      "fullName": "Кузнецова Елена Дмитриевна",
+      "email": "kuznetsova@example.com",
+      "telegramId": "test_agent_5",
+      "status": "active"
+    },
+    {
+      "id": "60001",
+      "fullName": "Саид",
+      "email": "said.i.murtazin@gmail.com",
+      "telegramId": "360869102",
+      "status": "active"
+    },
+    {
+      "id": "60003",
+      "fullName": "Полина Полина",
+      "email": "murtazina.poli@gmail.com",
+      "telegramId": "717020916",
+      "status": "blocked"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tfullName\temail\ttelegramId\tstatus\n1\tИванов Иван Иванович\tivanov@example.com\t123456789\tactive\n2\tПетрова Мария Сергеевна\tpetrova@example.com\t987654321\tactive\n3\tСидоров Петр Алексеевич\tsidorov@example.com\t456789123\tblocked\n4\tКозлова Анна Дмитриевна\tkozlova@example.com\t789123456\tactive\n5\tСмирнов Алексей Викторович\tsmirnov@example.com\t321654987\tactive\n30004\tПетрова Мария Сергеевна\tpetrova@example.com\ttest_agent_3\tactive\n30005\tСмирнов Алексей Викторович\tsmirnov@example.com\ttest_agent_4\tactive\n30006\tКузнецова Елена Дмитриевна\tkuznetsova@example.com\ttest_agent_5\tactive\n60001\tСаид\tsaid.i.murtazin@gmail.com\t360869102\tactive\n60003\tПолина Полина\tmurtazina.poli@gmail.com\t717020916\tblocked\n",
+  "stderr": "",
+  "execution_time_ms": 95
+}

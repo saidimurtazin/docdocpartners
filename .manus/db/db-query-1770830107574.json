@@ -1,0 +1,19 @@
+{
+  "query": "SELECT * FROM otpCodes WHERE email = 'said.i.murtazin@gmail.com' ORDER BY createdAt DESC LIMIT 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user hVwujcZ1ppKYgyC.root --database Mef2gZ2igQdMvww2Yiqe9P --execute SELECT * FROM otpCodes WHERE email = 'said.i.murtazin@gmail.com' ORDER BY createdAt DESC LIMIT 1;",
+  "rows": [
+    {
+      "id": "150006",
+      "email": "said.i.murtazin@gmail.com",
+      "code": "778101",
+      "purpose": "registration",
+      "expiresAt": "2026-02-11 17:15:44",
+      "used": "yes",
+      "createdAt": "2026-02-11 17:10:44"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\temail\tcode\tpurpose\texpiresAt\tused\tcreatedAt\n150006\tsaid.i.murtazin@gmail.com\t778101\tregistration\t2026-02-11 17:15:44\tyes\t2026-02-11 17:10:44\n",
+  "stderr": "",
+  "execution_time_ms": 54
+}

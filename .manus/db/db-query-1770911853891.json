@@ -1,0 +1,17 @@
+{
+  "query": "SELECT code, used, expiresAt, NOW() as currentTime, TIMESTAMPDIFF(SECOND, NOW(), expiresAt) as secondsUntilExpiry FROM otpCodes WHERE email='sergei@mail.ru' ORDER BY createdAt DESC LIMIT 1",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user hVwujcZ1ppKYgyC.root --database Mef2gZ2igQdMvww2Yiqe9P --execute SELECT code, used, expiresAt, NOW() as currentTime, TIMESTAMPDIFF(SECOND, NOW(), expiresAt) as secondsUntilExpiry FROM otpCodes WHERE email='sergei@mail.ru' ORDER BY createdAt DESC LIMIT 1",
+  "rows": [
+    {
+      "code": "691554",
+      "used": "no",
+      "expiresAt": "2026-02-12 16:00:28",
+      "currentTime": "2026-02-12 15:57:33",
+      "secondsUntilExpiry": "175"
+    }
+  ],
+  "messages": [],
+  "stdout": "code\tused\texpiresAt\tcurrentTime\tsecondsUntilExpiry\n691554\tno\t2026-02-12 16:00:28\t2026-02-12 15:57:33\t175\n",
+  "stderr": "",
+  "execution_time_ms": 64
+}

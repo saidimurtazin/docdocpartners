@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS `otpCodes` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `email` varchar(320) NOT NULL,\n  `code` varchar(6) NOT NULL,\n  `expiresAt` timestamp NOT NULL,\n  `used` enum('yes','no') NOT NULL DEFAULT 'no',\n  `createdAt` timestamp NOT NULL DEFAULT (now()),\n  CONSTRAINT `otpCodes_id` PRIMARY KEY(`id`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user hVwujcZ1ppKYgyC.root --database Mef2gZ2igQdMvww2Yiqe9P --execute CREATE TABLE IF NOT EXISTS `otpCodes` (\n  `id` int AUTO_INCREMENT NOT NULL,\n  `email` varchar(320) NOT NULL,\n  `code` varchar(6) NOT NULL,\n  `expiresAt` timestamp NOT NULL,\n  `used` enum('yes','no') NOT NULL DEFAULT 'no',\n  `createdAt` timestamp NOT NULL DEFAULT (now()),\n  CONSTRAINT `otpCodes_id` PRIMARY KEY(`id`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 53
+}

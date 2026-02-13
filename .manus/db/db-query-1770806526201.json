@@ -1,0 +1,17 @@
+{
+  "query": "SELECT id, fullName, email, telegramId, status FROM agents WHERE email = 'natalia@mail.ru';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user hVwujcZ1ppKYgyC.root --database Mef2gZ2igQdMvww2Yiqe9P --execute SELECT id, fullName, email, telegramId, status FROM agents WHERE email = 'natalia@mail.ru';",
+  "rows": [
+    {
+      "id": "150001",
+      "fullName": "Морозова Наталья",
+      "email": "natalia@mail.ru",
+      "telegramId": "8364291092",
+      "status": "active"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tfullName\temail\ttelegramId\tstatus\n150001\tМорозова Наталья\tnatalia@mail.ru\t8364291092\tactive\n",
+  "stderr": "",
+  "execution_time_ms": 59
+}

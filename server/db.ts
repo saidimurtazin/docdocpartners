@@ -1,0 +1,643 @@
+import { eq, desc, and, like, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/mysql2";
+import { InsertUser, users, agents, referrals, payments, doctors, sessions, otpCodes, type InsertSession } from "../drizzle/schema";
+import { ENV } from './_core/env';
+
+let _db: ReturnType<typeof drizzle> | null = null;
+
+// Lazily create the drizzle instance so local tooling can run without a DB.
+export async function getDb() {
+  if (!_db && process.env.DATABASE_URL) {
+    try {
+      _db = drizzle(process.env.DATABASE_URL);
+    } catch (error) {
+      console.warn("[Database] Failed to connect:", error);
+      _db = null;
+    }
+  }
+  return _db;
+}
+
+export async function upsertUser(user: InsertUser): Promise<void> {
+  if (!user.openId) {
+    throw new Error("User openId is required for upsert");
+  }
+
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot upsert user: database not available");
+    return;
+  }
+
+  try {
+    const values: InsertUser = {
+      openId: user.openId,
+    };
+    const updateSet: Record<string, unknown> = {};
+
+    const textFields = ["name", "email", "loginMethod"] as const;
+    type TextField = (typeof textFields)[number];
+
+    const assignNullable = (field: TextField) => {
+      const value = user[field];
+      if (value === undefined) return;
+      const normalized = value ?? null;
+      values[field] = normalized;
+      updateSet[field] = normalized;
+    };
+
+    textFields.forEach(assignNullable);
+
+    if (user.lastSignedIn !== undefined) {
+      values.lastSignedIn = user.lastSignedIn;
+      updateSet.lastSignedIn = user.lastSignedIn;
+    }
+    if (user.role !== undefined) {
+      values.role = user.role;
+      updateSet.role = user.role;
+    } else if (user.openId === ENV.ownerOpenId) {
+      values.role = 'admin';
+      updateSet.role = 'admin';
+    }
+
+    if (!values.lastSignedIn) {
+      values.lastSignedIn = new Date();
+    }
+
+    if (Object.keys(updateSet).length === 0) {
+      updateSet.lastSignedIn = new Date();
+    }
+
+    await db.insert(users).values(values).onDuplicateKeyUpdate({
+      set: updateSet,
+    });
+  } catch (error) {
+    console.error("[Database] Failed to upsert user:", error);
+    throw error;
+  }
+}
+
+export async function getUserByOpenId(openId: string) {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get user: database not available");
+    return undefined;
+  }
+
+  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+
+  return result.length > 0 ? result[0] : undefined;
+}
+
+// ==================== ADMIN PANEL QUERIES ====================
+
+// AGENTS
+
+export async function getAllAgents() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(agents).orderBy(desc(agents.createdAt));
+}
+
+export async function getAgentById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [agent] = await db.select().from(agents).where(eq(agents.id, id));
+  return agent;
+}
+
+export async function getAgentByTelegramId(telegramId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [agent] = await db.select().from(agents).where(eq(agents.telegramId, telegramId));
+  return agent;
+}
+
+export async function getAgentByEmail(email: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [agent] = await db.select().from(agents).where(eq(agents.email, email));
+  return agent;
+}
+
+export async function createAgent(data: any) {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.insert(agents).values(data);
+  return result.insertId;
+}
+
+export async function updateAgentStatus(id: number, status: "pending" | "active" | "rejected" | "blocked") {
+  const db = await getDb();
+  if (!db) return;
+  
+  // Get agent data before update to check old status and get telegramId
+  const [agent] = await db.select().from(agents).where(eq(agents.id, id));
+  const oldStatus = agent?.status;
+  
+  await db.update(agents).set({ status }).where(eq(agents.id, id));
+  
+  // Send Telegram notification if status changed and agent has telegramId
+  if (agent?.telegramId && oldStatus !== status) {
+    const { notifyAgent } = await import('./telegram-bot-webhook');
+    
+    let message = '';
+    if (status === 'active') {
+      message = '🎉 <b>Поздравляем!</b>\n\n' +
+        'Ваша заявка одобрена! Теперь вы можете отправлять пациентов и зарабатывать.\n\n' +
+        'Используйте команду /patient для отправки нового пациента.';
+    } else if (status === 'rejected') {
+      message = '❌ <b>Заявка отклонена</b>\n\n' +
+        'К сожалению, ваша заявка не была одобрена. Если у вас есть вопросы, свяжитесь с нами.';
+    } else if (status === 'blocked') {
+      message = '🚫 <b>Аккаунт заблокирован</b>\n\n' +
+        'Ваш аккаунт был заблокирован. Для получения информации свяжитесь с администрацией.';
+    }
+    
+    if (message) {
+      await notifyAgent(agent.telegramId, message);
+    }
+  }
+}
+
+export async function updateAgentTelegramData(id: number, data: {
+  telegramId: string;
+  firstName: string;
+  lastName: string | null;
+  username: string | null;
+  photoUrl: string | null;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  
+  // Update only Telegram-related fields
+  const updateData: any = {
+    telegramId: data.telegramId,
+  };
+  
+  // Update full name if we have first name
+  if (data.firstName) {
+    updateData.fullName = data.lastName 
+      ? `${data.firstName} ${data.lastName}`
+      : data.firstName;
+  }
+  
+  await db.update(agents).set(updateData).where(eq(agents.id, id));
+}
+
+// REFERRALS
+
+export async function getAllReferrals() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(referrals).orderBy(desc(referrals.createdAt));
+}
+
+export async function getReferralById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [referral] = await db.select().from(referrals).where(eq(referrals.id, id));
+  return referral;
+}
+
+export async function getReferralsByAgentId(agentId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(referrals)
+    .where(eq(referrals.agentId, agentId))
+    .orderBy(desc(referrals.createdAt));
+}
+
+export async function createReferral(data: any) {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.insert(referrals).values(data);
+  return result.insertId;
+}
+
+export async function updateReferralStatus(
+  id: number, 
+  status: "pending" | "contacted" | "scheduled" | "completed" | "cancelled"
+) {
+  const db = await getDb();
+  if (!db) return;
+  
+  // Get referral data before update to get old status
+  const referralResult = await db.select().from(referrals).where(eq(referrals.id, id)).limit(1);
+  const oldReferral = referralResult[0];
+  
+  if (!oldReferral) {
+    throw new Error(`Referral ${id} not found`);
+  }
+  
+  const oldStatus = oldReferral.status;
+  
+  // Update status
+  await db.update(referrals).set({ status }).where(eq(referrals.id, id));
+  
+  // Send Telegram notification if status changed
+  if (oldStatus !== status) {
+    // Get agent telegram ID
+    const agentResult = await db.select().from(agents).where(eq(agents.id, oldReferral.agentId)).limit(1);
+    const agent = agentResult[0];
+    
+    if (agent?.telegramId) {
+      const { notifyReferralStatusChange } = await import("./telegram-notifications");
+      await notifyReferralStatusChange(agent.telegramId, {
+        id: oldReferral.id,
+        patientFullName: oldReferral.patientFullName,
+        oldStatus,
+        newStatus: status,
+        clinic: oldReferral.clinic,
+        treatmentAmount: oldReferral.treatmentAmount ?? undefined,
+        commissionAmount: oldReferral.commissionAmount ?? undefined,
+      });
+    }
+  }
+}
+
+export async function updateReferralAmounts(id: number, treatmentAmount: number, commissionAmount: number) {
+  const db = await getDb();
+  if (!db) return;
+  
+  // Get referral to find agent
+  const referralResult = await db.select().from(referrals).where(eq(referrals.id, id)).limit(1);
+  const referral = referralResult[0];
+  
+  if (!referral) {
+    throw new Error(`Referral ${id} not found`);
+  }
+  
+  // Update referral amounts
+  await db.update(referrals)
+    .set({ treatmentAmount, commissionAmount })
+    .where(eq(referrals.id, id));
+  
+  // Update agent totalEarnings (add commission)
+  const agentResult = await db.select().from(agents).where(eq(agents.id, referral.agentId)).limit(1);
+  const agent = agentResult[0];
+  
+  if (agent) {
+    const currentEarnings = agent.totalEarnings || 0;
+    const newEarnings = currentEarnings + commissionAmount;
+    
+    await db.update(agents)
+      .set({ totalEarnings: newEarnings })
+      .where(eq(agents.id, referral.agentId));
+  }
+}
+
+// PAYMENTS
+
+export async function getAllPayments() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(payments).orderBy(desc(payments.createdAt));
+}
+
+export async function getPaymentsByAgentId(agentId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(payments)
+    .where(eq(payments.agentId, agentId))
+    .orderBy(desc(payments.createdAt));
+}
+
+export async function createPayment(data: any) {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.insert(payments).values(data);
+  return result.insertId;
+}
+
+export async function updatePaymentStatus(
+  id: number, 
+  status: "pending" | "processing" | "completed" | "failed",
+  transactionId?: string
+) {
+  const db = await getDb();
+  if (!db) return;
+  
+  // Get payment data before update
+  const paymentResult = await db.select().from(payments).where(eq(payments.id, id)).limit(1);
+  const oldPayment = paymentResult[0];
+  
+  if (!oldPayment) {
+    throw new Error(`Payment ${id} not found`);
+  }
+  
+  const oldStatus = oldPayment.status;
+  
+  const updateData: any = { status };
+  if (status === "completed") {
+    updateData.completedAt = new Date();
+  }
+  if (transactionId) {
+    updateData.transactionId = transactionId;
+  }
+  await db.update(payments).set(updateData).where(eq(payments.id, id));
+  
+  // Send Telegram notification if status changed
+  if (oldStatus !== status) {
+    // Get agent telegram ID
+    const agentResult = await db.select().from(agents).where(eq(agents.id, oldPayment.agentId)).limit(1);
+    const agent = agentResult[0];
+    
+    if (agent?.telegramId) {
+      const { notifyPaymentProcessed } = await import("./telegram-notifications");
+      await notifyPaymentProcessed(agent.telegramId, {
+        id: oldPayment.id,
+        amount: oldPayment.amount,
+        status,
+        method: oldPayment.method,
+        transactionId: transactionId || oldPayment.transactionId,
+      });
+    }
+  }
+}
+
+// DOCTORS
+
+export async function getAllDoctors() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(doctors)
+    .where(eq(doctors.isActive, "yes"))
+    .orderBy(doctors.clinic, doctors.fullName);
+}
+
+export async function getDoctorById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [doctor] = await db.select().from(doctors).where(eq(doctors.id, id));
+  return doctor;
+}
+
+export async function searchDoctors(filters: {
+  clinic?: string;
+  specialization?: string;
+  name?: string;
+}) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const conditions = [eq(doctors.isActive, "yes")];
+  if (filters.clinic) conditions.push(like(doctors.clinic, `%${filters.clinic}%`));
+  if (filters.specialization) conditions.push(like(doctors.specialization, `%${filters.specialization}%`));
+  if (filters.name) conditions.push(like(doctors.fullName, `%${filters.name}%`));
+  
+  return db.select().from(doctors)
+    .where(and(...conditions))
+    .orderBy(doctors.clinic, doctors.fullName);
+}
+
+export async function createDoctor(data: any) {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.insert(doctors).values(data);
+  return result.insertId;
+}
+
+export async function updateDoctor(id: number, data: any) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(doctors).set(data).where(eq(doctors.id, id));
+}
+
+export async function deleteDoctor(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(doctors).set({ isActive: "no" }).where(eq(doctors.id, id));
+}
+
+// STATISTICS
+
+export async function getStatistics() {
+  const db = await getDb();
+  if (!db) return {
+    totalAgents: 0,
+    activeAgents: 0,
+    totalReferrals: 0,
+    completedReferrals: 0,
+    totalPaymentsAmount: 0,
+    pendingPaymentsAmount: 0,
+  };
+
+  const [totalAgents] = await db.select({ count: sql<number>`count(*)` }).from(agents);
+  const [activeAgents] = await db.select({ count: sql<number>`count(*)` })
+    .from(agents)
+    .where(eq(agents.status, "active"));
+  const [totalReferrals] = await db.select({ count: sql<number>`count(*)` }).from(referrals);
+  const [completedReferrals] = await db.select({ count: sql<number>`count(*)` })
+    .from(referrals)
+    .where(eq(referrals.status, "completed"));
+  const [totalPayments] = await db.select({ 
+    sum: sql<number>`COALESCE(SUM(amount), 0)` 
+  }).from(payments).where(eq(payments.status, "completed"));
+  const [pendingPayments] = await db.select({ 
+    sum: sql<number>`COALESCE(SUM(amount), 0)` 
+  }).from(payments).where(eq(payments.status, "pending"));
+
+  return {
+    totalAgents: totalAgents.count,
+    activeAgents: activeAgents.count,
+    totalReferrals: totalReferrals.count,
+    completedReferrals: completedReferrals.count,
+    totalPaymentsAmount: totalPayments.sum,
+    pendingPaymentsAmount: pendingPayments.sum,
+  };
+}
+
+
+// ==================== BOT-SPECIFIC QUERIES ====================
+
+export async function updateAgentRequisites(agentId: number, data: {
+  inn?: string;
+  isSelfEmployed?: "yes" | "no" | "unknown";
+  bankName?: string;
+  bankAccount?: string;
+  bankBik?: string;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(agents).set(data).where(eq(agents.id, agentId));
+}
+
+export async function updateAgentPersonalInfo(agentId: number, data: {
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  city?: string;
+  specialization?: string;
+  role?: string;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(agents).set(data).where(eq(agents.id, agentId));
+}
+
+export async function createPaymentRequest(agentId: number, amount: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(payments).values({
+    agentId,
+    amount,
+    status: "pending",
+    createdAt: new Date(),
+  });
+}
+
+export async function getAgentStatistics(agentId: number) {
+  const db = await getDb();
+  if (!db) return {
+    totalReferrals: 0,
+    completedReferrals: 0,
+    totalEarnings: 0,
+    pendingPayments: 0,
+    completedPayments: 0,
+  };
+
+  const [totalReferrals] = await db.select({ count: sql<number>`count(*)` })
+    .from(referrals)
+    .where(eq(referrals.agentId, agentId));
+  
+  const [completedReferrals] = await db.select({ count: sql<number>`count(*)` })
+    .from(referrals)
+    .where(and(eq(referrals.agentId, agentId), eq(referrals.status, "completed")));
+  
+  const [totalEarnings] = await db.select({ 
+    sum: sql<number>`COALESCE(SUM(amount), 0)` 
+  }).from(payments).where(and(eq(payments.agentId, agentId), eq(payments.status, "completed")));
+  
+  const [pendingPayments] = await db.select({ 
+    sum: sql<number>`COALESCE(SUM(amount), 0)` 
+  }).from(payments).where(and(eq(payments.agentId, agentId), eq(payments.status, "pending")));
+  
+  const [completedPaymentsCount] = await db.select({ count: sql<number>`count(*)` })
+    .from(payments)
+    .where(and(eq(payments.agentId, agentId), eq(payments.status, "completed")));
+
+  return {
+    totalReferrals: totalReferrals.count,
+    completedReferrals: completedReferrals.count,
+    totalEarnings: totalEarnings.sum,
+    pendingPayments: pendingPayments.sum,
+    completedPayments: completedPaymentsCount.count,
+  };
+}
+
+
+// ==================== SESSION MANAGEMENT ====================
+
+export async function createSession(data: InsertSession) {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.insert(sessions).values(data);
+  return result.insertId;
+}
+
+export async function getSessionByToken(sessionToken: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [session] = await db.select().from(sessions)
+    .where(and(
+      eq(sessions.sessionToken, sessionToken),
+      eq(sessions.isRevoked, "no")
+    ));
+  return session;
+}
+
+export async function getSessionsByAgentId(agentId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(sessions)
+    .where(and(
+      eq(sessions.agentId, agentId),
+      eq(sessions.isRevoked, "no")
+    ))
+    .orderBy(desc(sessions.lastActivityAt));
+}
+
+export async function getAllSessionsByAgentId(agentId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(sessions)
+    .where(eq(sessions.agentId, agentId))
+    .orderBy(desc(sessions.lastActivityAt));
+}
+
+export async function updateSessionActivity(sessionToken: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(sessions)
+    .set({ lastActivityAt: new Date() })
+    .where(eq(sessions.sessionToken, sessionToken));
+}
+
+export async function revokeSession(sessionId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(sessions)
+    .set({ isRevoked: "yes" })
+    .where(eq(sessions.id, sessionId));
+}
+
+export async function revokeSessionByToken(sessionToken: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(sessions)
+    .set({ isRevoked: "yes" })
+    .where(eq(sessions.sessionToken, sessionToken));
+}
+
+export async function revokeAllSessionsExceptCurrent(agentId: number, currentSessionToken: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(sessions)
+    .set({ isRevoked: "yes" })
+    .where(and(
+      eq(sessions.agentId, agentId),
+      sql`${sessions.sessionToken} != ${currentSessionToken}`,
+      eq(sessions.isRevoked, "no")
+    ));
+}
+
+export async function cleanupExpiredSessions() {
+  const db = await getDb();
+  if (!db) return;
+  const now = new Date();
+  await db.update(sessions)
+    .set({ isRevoked: "yes" })
+    .where(and(
+      sql`${sessions.expiresAt} < ${now}`,
+      eq(sessions.isRevoked, "no")
+    ));
+}
+
+// OTP Code functions
+export async function getValidOtpCode(email: string, code: string) {
+  const db = await getDb();
+  if (!db) return null;
+  
+  const now = new Date();
+  const result = await db.select()
+    .from(otpCodes)
+    .where(and(
+      eq(otpCodes.email, email),
+      eq(otpCodes.code, code),
+      eq(otpCodes.used, "no"),
+      sql`${otpCodes.expiresAt} > ${now}`
+    ))
+    .limit(1);
+  
+  return result[0] || null;
+}
+
+export async function markOtpAsUsed(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  
+  await db.update(otpCodes)
+    .set({ used: "yes" })
+    .where(eq(otpCodes.id, id));
+}
