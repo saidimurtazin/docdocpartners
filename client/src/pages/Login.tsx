@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Shield, Users, ArrowLeft, Loader2, LogOut } from "lucide-react";
+import { Shield, Users, ArrowLeft, Loader2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -18,15 +18,8 @@ export default function Login() {
   const [otpSent, setOtpSent] = useState(false);
   const [, setLocation] = useLocation();
 
-  const { user, logout } = useAuth();
   const requestOtp = trpc.auth.requestOtp.useMutation();
-  const verifyOtp = trpc.auth.verifyOtp.useMutation(); // For admin login
-
-  const handleLogout = async () => {
-    await logout();
-    toast.success("Вы вышли из системы");
-    window.location.reload();
-  };
+  const verifyOtp = trpc.auth.verifyOtp.useMutation();
 
   const handleRequestOtp = async () => {
     try {
@@ -83,17 +76,6 @@ export default function Login() {
             </div>
           </Link>
           <p className="text-muted-foreground">Партнерская программа для врачей</p>
-          {user && (
-            <Button
-              onClick={handleLogout}
-              variant="outline"
-              size="sm"
-              className="mt-4"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Выйти из {user.role === "admin" ? "админа" : "аккаунта"}
-            </Button>
-          )}
         </div>
 
         {mode === "select" && (
