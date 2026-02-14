@@ -57,10 +57,17 @@ export default function DashboardLogin() {
         });
 
         if (response.ok) {
-          // Redirect to dashboard
-          setLocation("/dashboard");
+          const data = await response.json();
+
+          // Redirect based on user role
+          if (data.role === 'admin') {
+            setLocation("/admin");
+          } else {
+            setLocation("/dashboard");
+          }
         } else {
-          alert("Ошибка авторизации. Убедитесь что вы зарегистрированы в боте.");
+          const errorData = await response.json();
+          alert(errorData.error || "Ошибка авторизации. Убедитесь что вы зарегистрированы в боте.");
         }
       } catch (error) {
         console.error("Login error:", error);

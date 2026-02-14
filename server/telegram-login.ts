@@ -48,19 +48,53 @@ export async function handleTelegramLogin(req: Request, res: Response) {
     }
     
     const telegramId = String(telegramData.id);
-    
-    // Find agent by Telegram ID
-    const agent = await db.getAgentByTelegramId(telegramId);
-    
-    if (!agent) {
-      return res.status(404).json({ 
-        error: "Agent not found. Please register in the Telegram bot first." 
+
+    // Check if user is admin first
+    const adminUser = await db.getUserByOpenId(`telegram_${telegramId}`);
+
+    if (adminUser && adminUser.role === 'admin') {
+      // Admin login - create admin session
+      const secret = new TextEncoder().encode(JWT_SECRET);
+      const token = await new SignJWT({
+        userId: adminUser.id,
+        telegramId: telegramId,
+        role: 'admin'
+      })
+        .setProtectedHeader({ alg: 'HS256' })
+        .setIssuedAt()
+        .setExpirationTime('7d')
+        .sign(secret);
+
+      res.cookie('agent_session', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+
+      return res.json({
+        success: true,
+        role: 'admin',
+        user: {
+          id: adminUser.id,
+          name: adminUser.name,
+          email: adminUser.email,
+        }
       });
     }
-    
-    // Create JWT token
+
+    // Find agent by Telegram ID
+    const agent = await db.getAgentByTelegramId(telegramId);
+
+    if (!agent) {
+      return res.status(404).json({
+        error: "User not found. Please register in the Telegram bot first."
+      });
+    }
+
+    // Create JWT token for agent
     const secret = new TextEncoder().encode(JWT_SECRET);
-    const token = await new SignJWT({ 
+    const token = await new SignJWT({
       agentId: agent.id,
       telegramId: agent.telegramId,
       role: 'agent'
@@ -69,7 +103,7 @@ export async function handleTelegramLogin(req: Request, res: Response) {
       .setIssuedAt()
       .setExpirationTime('7d')
       .sign(secret);
-    
+
     // Set cookie
     res.cookie('agent_session', token, {
       httpOnly: true,
@@ -77,9 +111,10 @@ export async function handleTelegramLogin(req: Request, res: Response) {
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
-    
-    return res.json({ 
+
+    return res.json({
       success: true,
+      role: 'agent',
       agent: {
         id: agent.id,
         fullName: agent.fullName,
