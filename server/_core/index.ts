@@ -41,8 +41,13 @@ async function startServer() {
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   // Setup Telegram bot webhook BEFORE other middleware
-  // Use WEBHOOK_DOMAIN env var which is automatically set by Manus platform
-  const webhookDomain = process.env.WEBHOOK_DOMAIN || `https://3000-iec6wouahh8ulu0g8q4nt-25b6db68.us2.manus.computer`;
+  const webhookDomain = process.env.WEBHOOK_DOMAIN;
+  if (!webhookDomain) {
+    console.error('[Server] ERROR: WEBHOOK_DOMAIN environment variable is required!');
+    console.error('[Server] Please set WEBHOOK_DOMAIN in Railway Variables');
+    console.error('[Server] Example: WEBHOOK_DOMAIN=https://your-app.railway.app');
+    throw new Error('WEBHOOK_DOMAIN is required');
+  }
   await setupTelegramWebhook(app, '/telegram-webhook', webhookDomain);
   
   // Telegram Login Widget endpoint
