@@ -296,10 +296,14 @@ export const appRouter = router({
 
         // Set session cookie
         const cookieOptions = getSessionCookieOptions(ctx.req);
+        console.log("[VerifyOTP] Setting cookie with options:", cookieOptions);
+
         ctx.res.cookie(AGENT_COOKIE_NAME, token, {
           ...cookieOptions,
           maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
         });
+
+        console.log("[VerifyOTP] Cookie set for agent:", agent.email);
 
         // Create session record in database
         const deviceInfo = ctx.req.headers["user-agent"] || null;
