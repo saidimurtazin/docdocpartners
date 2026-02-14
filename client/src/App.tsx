@@ -4,12 +4,14 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { isAdminDomain } from "./utils/domain";
 import Home from "./pages/Home";
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminAgents from "./pages/admin/Agents";
 import AdminReferrals from "./pages/admin/Referrals";
 import AdminPayments from "./pages/admin/Payments";
 import AdminDoctors from "./pages/admin/Doctors";
+import AdminLogin from "./pages/AdminLogin";
 import AgentCabinet from "./pages/AgentCabinet";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import Clinics from "./pages/Clinics";
@@ -21,22 +23,36 @@ import AgentReferrals from "./pages/AgentReferrals";
 import Login from "./pages/Login";
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
+  const isAdmin = isAdminDomain();
+
+  // Admin panel routes (admin.docdocpartners.ru)
+  if (isAdmin) {
+    return (
+      <Switch>
+        <Route path={"/login"} component={AdminLogin} />
+        <Route path={"/"} component={AdminDashboard} />
+        <Route path={"/agents"} component={AdminAgents} />
+        <Route path={"/referrals"} component={AdminReferrals} />
+        <Route path={"/payments"} component={AdminPayments} />
+        <Route path={"/doctors"} component={AdminDoctors} />
+        <Route path={"/404"} component={NotFound} />
+        {/* Final fallback route */}
+        <Route component={NotFound} />
+      </Switch>
+    );
+  }
+
+  // Agent panel routes (docdocpartners.ru)
   return (
     <Switch>
       <Route path={"/"} component={Home} />
-      <Route path={"/admin"} component={AdminDashboard} />
-      <Route path={"/admin/agents"} component={AdminAgents} />
-      <Route path={"/admin/referrals"} component={AdminReferrals} />
-      <Route path={"/admin/payments"} component={AdminPayments} />
-      <Route path={"/admin/doctors"} component={AdminDoctors} />
-      <Route path={"/agent/cabinet"} component={AgentCabinet} />
-      <Route path={"/agent/sessions"} component={AgentSessions} />
       <Route path={"/login"} component={Login} />
       <Route path={"/dashboard"} component={AgentDashboard} />
       <Route path={"/dashboard/profile"} component={AgentProfile} />
       <Route path={"/dashboard/payments"} component={AgentPayments} />
       <Route path={"/dashboard/referrals"} component={AgentReferrals} />
+      <Route path={"/agent/cabinet"} component={AgentCabinet} />
+      <Route path={"/agent/sessions"} component={AgentSessions} />
       <Route path={"/knowledge-base"} component={KnowledgeBase} />
       <Route path={"/clinics"} component={Clinics} />
       <Route path={"/404"} component={NotFound} />
