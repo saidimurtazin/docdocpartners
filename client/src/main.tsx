@@ -42,13 +42,11 @@ const trpcClient = trpc.createClient({
       url: "/api/trpc",
       transformer: superjson,
       fetch(input, init) {
-        const token = localStorage.getItem("agent_token");
         return globalThis.fetch(input, {
           ...(init ?? {}),
           credentials: "include",
           headers: {
             ...(init?.headers ?? {}),
-            ...(token ? { authorization: `Bearer ${token}` } : {}),
           },
         });
       },

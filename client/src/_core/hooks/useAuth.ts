@@ -24,10 +24,9 @@ export function useAuth(options?: UseAuthOptions) {
   });
 
   const logout = useCallback(async () => {
-    // Clear tokens IMMEDIATELY at the start (synchronous)
-    localStorage.removeItem('agent_token');
+    // Clear local storage
     localStorage.removeItem('manus-runtime-user-info');
-    
+
     try {
       await logoutMutation.mutateAsync();
     } catch (error: unknown) {
