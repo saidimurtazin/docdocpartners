@@ -71,8 +71,21 @@ export function getAgentSessionFromCookie(cookieHeader: string | null): string |
  */
 export async function verifyAgentSessionFromRequest(req: Request): Promise<SessionInfo | null> {
   try {
-    // Extract token from cookie
-    const token = req.cookies?.[AGENT_COOKIE_NAME];
+    // Extract token from cookie header
+    const cookieHeader = req.headers.cookie || null;
+    if (!cookieHeader) {
+      return null;
+    }
+
+    // Parse cookies manually
+    const cookies = cookieHeader.split(';').map(c => c.trim());
+    const sessionCookie = cookies.find(c => c.startsWith(`${AGENT_COOKIE_NAME}=`));
+
+    if (!sessionCookie) {
+      return null;
+    }
+
+    const token = sessionCookie.split('=')[1];
     if (!token) {
       return null;
     }
