@@ -181,6 +181,8 @@ export const appRouter = router({
         code: z.string().length(6)
       }))
       .mutation(async ({ input, ctx }) => {
+        console.log("[VerifyOTP] Attempt for email:", input.email, "code:", input.code);
+
         const dbInstance = await db.getDb();
         if (!dbInstance) {
           throw new TRPCError({
@@ -267,13 +269,17 @@ export const appRouter = router({
         }
 
         // Find agent
+        console.log("[VerifyOTP] Searching for agent with email:", input.email);
         const agent = await db.getAgentByEmail(input.email);
         if (!agent) {
+          console.log("[VerifyOTP] Agent not found for email:", input.email);
           throw new TRPCError({
             code: "NOT_FOUND",
             message: "Agent not found",
           });
         }
+
+        console.log("[VerifyOTP] Agent found:", agent.id, agent.fullName);
 
         // Create session token
         const secret = new TextEncoder().encode(process.env.JWT_SECRET || "");
@@ -314,6 +320,8 @@ export const appRouter = router({
           expiresAt,
           isRevoked: "no",
         });
+
+        console.log("[VerifyOTP] Agent session created successfully for:", agent.email);
 
         return { success: true, role: "agent" };
       }),
