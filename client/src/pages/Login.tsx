@@ -88,11 +88,13 @@ export default function Login() {
 
   const handleAdminVerifyOtp = async () => {
     try {
-      await verifyOtp.mutateAsync({ email, code: otpCode });
+      const result = await verifyOtp.mutateAsync({ email, code: otpCode });
       toast.success("Вход выполнен", {
         description: "Перенаправление в админ-панель...",
       });
-      setTimeout(() => setLocation("/admin"), 1000);
+      // Redirect based on role returned from server
+      const redirectPath = result?.role === "admin" ? "/admin" : "/dashboard";
+      setTimeout(() => setLocation(redirectPath), 1000);
     } catch (error: any) {
       toast.error("Ошибка", {
         description: error.message || "Неверный код",

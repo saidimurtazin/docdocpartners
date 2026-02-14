@@ -195,7 +195,7 @@ export const appRouter = router({
       }),
     
     verifyOtp: publicProcedure
-      .input(z.object({ 
+      .input(z.object({
         email: z.string().email(),
         code: z.string().length(6)
       }))
@@ -207,10 +207,10 @@ export const appRouter = router({
             message: "Database connection error",
           });
         }
-        
-        const { otpCodes: otpCodesTable } = await import("../drizzle/schema");
+
+        const { otpCodes: otpCodesTable, users: usersTable } = await import("../drizzle/schema");
         const { and, eq, sql } = await import("drizzle-orm");
-        
+
         // Find valid OTP
         const [otpRecord] = await dbInstance
           .select()
@@ -224,20 +224,67 @@ export const appRouter = router({
             )
           )
           .limit(1);
-        
+
         if (!otpRecord) {
           throw new TRPCError({
             code: "UNAUTHORIZED",
             message: "Неверный или истекший код",
           });
         }
-        
+
         // Mark OTP as used
         await dbInstance
           .update(otpCodesTable)
           .set({ used: "yes" })
           .where(eq(otpCodesTable.id, otpRecord.id));
-        
+
+        // Check if user is admin first
+        const [adminUser] = await dbInstance
+          .select()
+          .from(usersTable)
+          .where(
+            and(
+              eq(usersTable.email, input.email),
+              eq(usersTable.role, "admin")
+            )
+          )
+          .limit(1);
+
+        if (adminUser) {
+          console.log("[VerifyOTP] Admin user found, creating admin session");
+
+          // Create admin session token
+          const secret = new TextEncoder().encode(process.env.JWT_SECRET || "");
+          const token = await new SignJWT({
+            userId: adminUser.id,
+            role: "admin",
+            email: adminUser.email,
+          })
+            .setProtectedHeader({ alg: "HS256" })
+            .setIssuedAt()
+            .setExpirationTime("30d")
+            .sign(secret);
+
+          // Set session cookie
+          const cookieOptions = getSessionCookieOptions(ctx.req);
+          ctx.res.cookie(AGENT_COOKIE_NAME, token, {
+            ...cookieOptions,
+            maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+          });
+
+          console.log("[VerifyOTP] Admin session created successfully");
+
+          return {
+            success: true,
+            role: "admin",
+            user: {
+              id: adminUser.id,
+              name: adminUser.name,
+              email: adminUser.email,
+            }
+          };
+        }
+
         // Find agent
         const agent = await db.getAgentByEmail(input.email);
         if (!agent) {
@@ -246,7 +293,7 @@ export const appRouter = router({
             message: "Agent not found",
           });
         }
-        
+
         // Create session token
         const secret = new TextEncoder().encode(process.env.JWT_SECRET || "");
         const token = await new SignJWT({
@@ -259,23 +306,23 @@ export const appRouter = router({
           .setIssuedAt()
           .setExpirationTime("30d")
           .sign(secret);
-        
+
         // Set session cookie
         const cookieOptions = getSessionCookieOptions(ctx.req);
         ctx.res.cookie(AGENT_COOKIE_NAME, token, {
           ...cookieOptions,
           maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
         });
-        
+
         // Create session record in database
         const deviceInfo = ctx.req.headers["user-agent"] || null;
-        const ipAddress = (ctx.req.headers["x-forwarded-for"] as string)?.split(",")[0] || 
+        const ipAddress = (ctx.req.headers["x-forwarded-for"] as string)?.split(",")[0] ||
                           (ctx.req.headers["x-real-ip"] as string) ||
                           ctx.req.socket.remoteAddress || null;
-        
+
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + 30); // 30 days from now
-        
+
         await db.createSession({
           agentId: agent.id,
           sessionToken: token,
@@ -286,8 +333,8 @@ export const appRouter = router({
           expiresAt,
           isRevoked: "no",
         });
-        
-        return { success: true };
+
+        return { success: true, role: "agent" };
       }),
   }),
 
