@@ -143,28 +143,56 @@ export async function handleTelegramLogin(req: Request, res: Response) {
 }
 
 /**
- * Middleware to verify agent session
+ * Session verification result
  */
-export async function verifyAgentSession(req: Request): Promise<number | null> {
+export type SessionInfo = {
+  agentId?: number;
+  userId?: number;
+  role: "agent" | "admin";
+  email?: string;
+};
+
+/**
+ * Middleware to verify agent/admin session
+ */
+export async function verifyAgentSession(req: Request): Promise<SessionInfo | null> {
   try {
     // Check Authorization header first (localStorage approach)
     let token = req.headers.authorization?.replace("Bearer ", "");
-    
+
     // Fallback to cookie (for backward compatibility)
     if (!token) {
       token = req.cookies?.[AGENT_COOKIE_NAME];
     }
-    
+
     if (!token) {
       return null;
     }
-    
+
     const { jwtVerify } = await import('jose');
     const secret = new TextEncoder().encode(JWT_SECRET);
     const { payload } = await jwtVerify(token, secret);
-    
-    return payload.agentId as number;
-    
+
+    // Handle admin session
+    if (payload.role === "admin") {
+      return {
+        userId: payload.userId as number,
+        role: "admin",
+        email: payload.email as string,
+      };
+    }
+
+    // Handle agent session
+    if (payload.agentId) {
+      return {
+        agentId: payload.agentId as number,
+        role: "agent",
+        email: payload.email as string,
+      };
+    }
+
+    return null;
+
   } catch (error) {
     console.error("[Agent Session] Verification failed:", error);
     return null;

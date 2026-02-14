@@ -15,11 +15,45 @@ export const appRouter = router({
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(async (opts) => {
-      // If agent is logged in, return agent data as user
+      // Check session first (Email/OTP or Telegram login)
+      if (opts.ctx.session) {
+        const { session } = opts.ctx;
+
+        // Handle admin session
+        if (session.role === "admin" && session.userId) {
+          const adminUser = await db.getUserById(session.userId);
+          if (adminUser) {
+            return {
+              openId: adminUser.openId,
+              appId: process.env.VITE_APP_ID || '',
+              name: adminUser.name,
+              email: adminUser.email,
+              role: "admin",
+              userId: adminUser.id,
+            };
+          }
+        }
+
+        // Handle agent session
+        if (session.role === "agent" && session.agentId) {
+          const agent = await db.getAgentById(session.agentId);
+          if (agent) {
+            return {
+              openId: `agent_${agent.id}`,
+              appId: process.env.VITE_APP_ID || '',
+              name: agent.fullName,
+              email: agent.email,
+              role: agent.role,
+              agentId: agent.id,
+            };
+          }
+        }
+      }
+
+      // Fallback for backward compatibility
       if (opts.ctx.agentId) {
         const agent = await db.getAgentById(opts.ctx.agentId);
         if (agent) {
-          // Return agent in User format for compatibility
           return {
             openId: `agent_${agent.id}`,
             appId: process.env.VITE_APP_ID || '',
@@ -30,6 +64,7 @@ export const appRouter = router({
           };
         }
       }
+
       // Otherwise return OAuth admin user
       return opts.ctx.user;
     }),

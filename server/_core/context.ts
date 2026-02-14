@@ -1,13 +1,14 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User } from "../../drizzle/schema";
 import { sdk } from "./sdk";
-import { verifyAgentSession } from "../telegram-login";
+import { verifyAgentSession, type SessionInfo } from "../telegram-login";
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
   res: CreateExpressContextOptions["res"];
   user: User | null;
   agentId: number | null;
+  session: SessionInfo | null;
 };
 
 export async function createContext(
@@ -15,6 +16,7 @@ export async function createContext(
 ): Promise<TrpcContext> {
   let user: User | null = null;
   let agentId: number | null = null;
+  let session: SessionInfo | null = null;
 
   try {
     user = await sdk.authenticateRequest(opts.req);
@@ -23,10 +25,15 @@ export async function createContext(
     user = null;
   }
 
-  // Check for agent session
+  // Check for agent/admin session
   try {
-    agentId = await verifyAgentSession(opts.req);
+    session = await verifyAgentSession(opts.req);
+    // For backward compatibility, set agentId if it's an agent session
+    if (session?.agentId) {
+      agentId = session.agentId;
+    }
   } catch (error) {
+    session = null;
     agentId = null;
   }
 
@@ -35,5 +42,6 @@ export async function createContext(
     res: opts.res,
     user,
     agentId,
+    session,
   };
 }
