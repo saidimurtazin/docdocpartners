@@ -197,24 +197,82 @@ export default function Login() {
                 </Button>
                 <div>
                   <CardTitle>Вход администратора</CardTitle>
-                  <CardDescription>Войдите через Telegram</CardDescription>
+                  <CardDescription>Введите email для получения кода</CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Для входа в админ-панель используйте Telegram.
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Вы будете перенаправлены на страницу входа через Telegram.
-              </p>
-              <Button
-                onClick={() => setLocation("/dashboard/login")}
-                className="w-full"
-              >
-                <Shield className="w-4 h-4 mr-2" />
-                Войти через Telegram
-              </Button>
+              {!otpSent ? (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="admin-email">Email</Label>
+                    <Input
+                      id="admin-email"
+                      type="email"
+                      placeholder="admin@docdocpartner.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <Button
+                    onClick={handleRequestOtp}
+                    disabled={!email || requestOtp.isPending}
+                    className="w-full"
+                  >
+                    {requestOtp.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Отправка...
+                      </>
+                    ) : (
+                      "Получить код"
+                    )}
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center">
+                    Код придёт в Telegram-бот
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="admin-otp">Код из Telegram</Label>
+                    <Input
+                      id="admin-otp"
+                      type="text"
+                      placeholder="000000"
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value)}
+                      maxLength={6}
+                      autoFocus
+                    />
+                  </div>
+                  <Button
+                    onClick={handleAdminVerifyOtp}
+                    disabled={!otpCode || verifyOtp.isPending}
+                    className="w-full"
+                  >
+                    {verifyOtp.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Проверка...
+                      </>
+                    ) : (
+                      "Войти"
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setOtpSent(false);
+                      setOtpCode("");
+                    }}
+                    className="w-full"
+                  >
+                    Назад
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
         )}
