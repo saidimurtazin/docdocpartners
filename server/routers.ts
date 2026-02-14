@@ -337,6 +337,91 @@ export const appRouter = router({
           }
         };
       }),
+
+    // Email + Password Login (for agents)
+    loginWithPassword: publicProcedure
+      .input(z.object({
+        email: z.string().email(),
+        password: z.string().min(6)
+      }))
+      .mutation(async ({ input, ctx }) => {
+        console.log("[LoginWithPassword] Attempt for email:", input.email);
+
+        // Find agent by email
+        const agent = await db.getAgentByEmail(input.email);
+        if (!agent || !agent.passwordHash) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Неверный email или пароль"
+          });
+        }
+
+        // Verify password
+        const bcrypt = await import('bcrypt');
+        const isValid = await bcrypt.compare(input.password, agent.passwordHash);
+        if (!isValid) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Неверный email или пароль"
+          });
+        }
+
+        console.log("[LoginWithPassword] Password verified for agent:", agent.id);
+
+        // Create JWT token
+        const secret = new TextEncoder().encode(process.env.JWT_SECRET || "");
+        const token = await new SignJWT({
+          agentId: agent.id,
+          role: "agent",
+          email: agent.email,
+        })
+          .setProtectedHeader({ alg: "HS256" })
+          .setIssuedAt()
+          .setExpirationTime("30d")
+          .sign(secret);
+
+        // Set cookie
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(AGENT_COOKIE_NAME, token, {
+          ...cookieOptions,
+          maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        });
+
+        console.log("[LoginWithPassword] Cookie set for agent:", agent.email);
+
+        // Create session in database
+        const deviceInfo = ctx.req.headers["user-agent"] || null;
+        const ipAddress = (ctx.req.headers["x-forwarded-for"] as string)?.split(",")[0] ||
+                          (ctx.req.headers["x-real-ip"] as string) ||
+                          ctx.req.socket.remoteAddress || null;
+
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 30);
+
+        await db.createSession({
+          agentId: agent.id,
+          sessionToken: token,
+          deviceInfo,
+          ipAddress,
+          loginMethod: "password",
+          lastActivityAt: new Date(),
+          expiresAt,
+          isRevoked: "no",
+        });
+
+        console.log("[LoginWithPassword] Session created successfully for:", agent.email);
+
+        return {
+          success: true,
+          role: "agent",
+          needPasswordChange: Boolean(agent.temporaryPassword),
+          user: {
+            id: agent.id,
+            name: agent.fullName,
+            email: agent.email,
+          }
+        };
+      }),
   }),
 
   // AI Assistant for DocDocPartner agents

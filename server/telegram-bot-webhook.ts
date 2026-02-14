@@ -1053,7 +1053,8 @@ bot.action('contract_accept', async (ctx) => {
       return;
     }
 
-    await db.insert(agents).values({
+    // Create agent in database
+    const [insertResult] = await db.insert(agents).values({
       telegramId: String(userId),
       fullName: data.fullName!,
       email: data.email!,
@@ -1064,6 +1065,22 @@ bot.action('contract_accept', async (ctx) => {
       status: 'pending'
     });
 
+    // Generate temporary password for web login
+    const crypto = await import('crypto');
+    const bcrypt = await import('bcrypt');
+    const tempPassword = crypto.randomBytes(4).toString('hex'); // 8 characters
+    const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+    // Update agent with password
+    await db.update(agents)
+      .set({
+        passwordHash,
+        temporaryPassword: tempPassword,
+        passwordSetAt: new Date()
+      })
+      .where(eq(agents.telegramId, String(userId)));
+
+    // Send registration confirmation with password
     await ctx.editMessageText(
       '🎉 <b>Регистрация завершена!</b>\n\n' +
       'Ваша заявка отправлена на проверку. Мы свяжемся с вами в течение 24 часов.\n\n' +
@@ -1071,6 +1088,16 @@ bot.action('contract_accept', async (ctx) => {
       '• Отправлять рекомендации пациентов\n' +
       '• Отслеживать статус рекомендаций\n' +
       '• Получать уведомления о выплатах',
+      { parse_mode: 'HTML' }
+    );
+
+    // Send password in separate message for web access
+    await ctx.reply(
+      '🔐 <b>Доступ к веб-кабинету</b>\n\n' +
+      `📧 Email: <code>${data.email}</code>\n` +
+      `🔑 Временный пароль: <code>${tempPassword}</code>\n\n` +
+      '🌐 Войдите на сайт: https://docdocpartners-production.up.railway.app/login\n\n' +
+      '⚠️ После первого входа рекомендуем сменить пароль!',
       { parse_mode: 'HTML' }
     );
 
