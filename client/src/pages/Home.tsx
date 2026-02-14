@@ -26,7 +26,6 @@ import {
   Globe
 } from "lucide-react";
 import { Link } from "wouter";
-import { getLoginUrl } from "@/const";
 import DoctorChatbot from "@/components/DoctorChatbot";
 import { useEffect, useRef } from "react";
 

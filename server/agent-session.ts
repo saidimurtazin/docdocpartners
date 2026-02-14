@@ -5,6 +5,8 @@
 
 import { SignJWT, jwtVerify } from 'jose';
 import { ENV } from './_core/env';
+import type { Request } from 'express';
+import { AGENT_COOKIE_NAME } from '@shared/const';
 
 const JWT_SECRET = new TextEncoder().encode(ENV.cookieSecret);
 const SESSION_DURATION = 30 * 24 * 60 * 60; // 30 days in seconds
@@ -14,6 +16,14 @@ export interface AgentSession {
   agentId: string;
   email: string;
   fullName: string;
+}
+
+export interface SessionInfo {
+  role: "admin" | "agent";
+  userId?: number;
+  agentId?: number;
+  email?: string;
+  telegramId?: string;
 }
 
 /**
@@ -46,11 +56,39 @@ export async function verifyAgentSession(token: string): Promise<AgentSession | 
  */
 export function getAgentSessionFromCookie(cookieHeader: string | null): string | null {
   if (!cookieHeader) return null;
-  
+
   const cookies = cookieHeader.split(';').map(c => c.trim());
   const sessionCookie = cookies.find(c => c.startsWith('agent_session='));
-  
+
   if (!sessionCookie) return null;
-  
+
   return sessionCookie.split('=')[1];
+}
+
+/**
+ * Verify session from Express request
+ * Extracts token from cookie and verifies it
+ */
+export async function verifyAgentSessionFromRequest(req: Request): Promise<SessionInfo | null> {
+  try {
+    // Extract token from cookie
+    const token = req.cookies?.[AGENT_COOKIE_NAME];
+    if (!token) {
+      return null;
+    }
+
+    // Verify and decode JWT
+    const { payload } = await jwtVerify(token, JWT_SECRET);
+
+    // Return SessionInfo structure
+    return {
+      role: (payload.role as "admin" | "agent") || "agent",
+      userId: payload.userId as number | undefined,
+      agentId: payload.agentId as number | undefined,
+      email: payload.email as string | undefined,
+      telegramId: payload.telegramId as string | undefined,
+    };
+  } catch (error) {
+    return null;
+  }
 }

@@ -1,7 +1,6 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User } from "../../drizzle/schema";
-import { sdk } from "./sdk";
-import { verifyAgentSession, type SessionInfo } from "../telegram-login";
+import { verifyAgentSessionFromRequest, type SessionInfo } from "../agent-session";
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
@@ -18,16 +17,9 @@ export async function createContext(
   let agentId: number | null = null;
   let session: SessionInfo | null = null;
 
-  try {
-    user = await sdk.authenticateRequest(opts.req);
-  } catch (error) {
-    // Authentication is optional for public procedures.
-    user = null;
-  }
-
   // Check for agent/admin session
   try {
-    session = await verifyAgentSession(opts.req);
+    session = await verifyAgentSessionFromRequest(opts.req);
     // For backward compatibility, set agentId if it's an agent session
     if (session?.agentId) {
       agentId = session.agentId;

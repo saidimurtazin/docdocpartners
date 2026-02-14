@@ -8,7 +8,6 @@ import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
 
 type LoginMode = "select" | "admin" | "agent";
 
@@ -18,7 +17,6 @@ export default function Login() {
   const [otpCode, setOtpCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [, setLocation] = useLocation();
-  const [isVerifying, setIsVerifying] = useState(false);
 
   const { user, logout } = useAuth();
   const requestOtp = trpc.auth.requestOtp.useMutation();
@@ -52,48 +50,10 @@ export default function Login() {
 
   const handleVerifyOtp = async () => {
     try {
-      setIsVerifying(true);
-      const response = await fetch("/api/agent/verify-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code: otpCode }),
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Неверный код");
-      }
-
-      const { token } = await response.json();
-      localStorage.setItem("agent_token", token);
-      
-      toast.success("Вход выполнен", {
-        description: "Перенаправление в личный кабинет...",
-      });
-      setTimeout(() => setLocation("/dashboard"), 1000);
-    } catch (error: any) {
-      toast.error("Ошибка", {
-        description: error.message || "Неверный код",
-      });
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
-  const handleAdminLogin = () => {
-    // Redirect to Manus OAuth for admin login
-    window.location.href = getLoginUrl();
-  };
-
-  const handleAdminVerifyOtp = async () => {
-    try {
       const result = await verifyOtp.mutateAsync({ email, code: otpCode });
-      toast.success("Вход выполнен", {
-        description: "Перенаправление в админ-панель...",
-      });
+      toast.success("Вход выполнен");
+
       // Redirect based on role returned from server
-      // Use window.location.href to force full page reload and ensure cookie is sent
       const redirectPath = result?.role === "admin" ? "/admin" : "/dashboard";
       setTimeout(() => {
         window.location.href = redirectPath;
@@ -253,7 +213,7 @@ export default function Login() {
                     />
                   </div>
                   <Button
-                    onClick={handleAdminVerifyOtp}
+                    onClick={handleVerifyOtp}
                     disabled={!otpCode || verifyOtp.isPending}
                     className="w-full"
                   >
@@ -346,11 +306,17 @@ export default function Login() {
                   </div>
                   <Button
                     onClick={handleVerifyOtp}
-                    disabled={!otpCode || isVerifying}
+                    disabled={!otpCode || verifyOtp.isPending}
                     className="w-full"
                   >
-                    {isVerifying && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    Войти
+                    {verifyOtp.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Проверка...
+                      </>
+                    ) : (
+                      "Войти"
+                    )}
                   </Button>
                   <Button
                     variant="ghost"

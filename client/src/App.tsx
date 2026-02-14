@@ -10,9 +10,7 @@ import AdminAgents from "./pages/admin/Agents";
 import AdminReferrals from "./pages/admin/Referrals";
 import AdminPayments from "./pages/admin/Payments";
 import AdminDoctors from "./pages/admin/Doctors";
-import AgentLogin from "./pages/AgentLogin";
 import AgentCabinet from "./pages/AgentCabinet";
-import TelegramLogin from "./pages/TelegramLogin";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import Clinics from "./pages/Clinics";
 import AgentSessions from "./pages/AgentSessions";
@@ -20,7 +18,6 @@ import AgentDashboard from "./pages/AgentDashboard";
 import AgentProfile from "./pages/AgentProfile";
 import AgentPayments from "./pages/AgentPayments";
 import AgentReferrals from "./pages/AgentReferrals";
-import DashboardLogin from "./pages/DashboardLogin";
 import Login from "./pages/Login";
 
 function Router() {
@@ -33,11 +30,9 @@ function Router() {
       <Route path={"/admin/referrals"} component={AdminReferrals} />
       <Route path={"/admin/payments"} component={AdminPayments} />
       <Route path={"/admin/doctors"} component={AdminDoctors} />
-      <Route path={"/agent/login"} component={AgentLogin} />
-      <Route path={"/agent/telegram-login"} component={TelegramLogin} />
       <Route path={"/agent/cabinet"} component={AgentCabinet} />
-      <Route path={"/agent/sessions"} component={AgentSessions} />      <Route path={"/login"} component={Login} />
-      <Route path={"/dashboard/login"} component={DashboardLogin} />
+      <Route path={"/agent/sessions"} component={AgentSessions} />
+      <Route path={"/login"} component={Login} />
       <Route path={"/dashboard"} component={AgentDashboard} />
       <Route path={"/dashboard/profile"} component={AgentProfile} />
       <Route path={"/dashboard/payments"} component={AgentPayments} />

@@ -3,13 +3,10 @@ import express from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
-import { registerAgentAuthRoutes } from "../agent-auth-routes";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { setupTelegramWebhook } from "../telegram-bot-webhook";
-import { handleTelegramLogin } from "../telegram-login";
 import cookieParser from "cookie-parser";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -38,8 +35,6 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use(cookieParser());
-  // OAuth callback under /api/oauth/callback
-  registerOAuthRoutes(app);
   // Setup Telegram bot webhook BEFORE other middleware
   const webhookDomain = process.env.WEBHOOK_DOMAIN;
   if (!webhookDomain) {
@@ -49,12 +44,6 @@ async function startServer() {
     throw new Error('WEBHOOK_DOMAIN is required');
   }
   await setupTelegramWebhook(app, '/telegram-webhook', webhookDomain);
-  
-  // Telegram Login Widget endpoint
-  app.post("/api/telegram-login", handleTelegramLogin);
-  
-  // Agent auth routes (OTP verification)
-  registerAgentAuthRoutes(app);
 
   // tRPC API
   app.use(

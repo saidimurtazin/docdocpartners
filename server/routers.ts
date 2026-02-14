@@ -1,4 +1,4 @@
-import { COOKIE_NAME, AGENT_COOKIE_NAME } from "@shared/const";
+import { AGENT_COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
@@ -6,7 +6,6 @@ import { invokeLLM } from "./_core/llm";
 import { z } from "zod";
 import * as db from "./db";
 import { TRPCError } from "@trpc/server";
-import { verifyTelegramAuth, formatTelegramUser, type TelegramAuthData } from "./telegram-widget-auth";
 import { SignJWT } from "jose";
 import { notifyNewDeviceLogin } from "./telegram-notifications";
 
@@ -70,109 +69,12 @@ export const appRouter = router({
     }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+      ctx.res.clearCookie(AGENT_COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return {
         success: true,
       } as const;
     }),
-    
-    // Telegram Widget Login
-    telegramLogin: publicProcedure
-      .input(z.object({
-        id: z.number(),
-        first_name: z.string(),
-        last_name: z.string().optional(),
-        username: z.string().optional(),
-        photo_url: z.string().optional(),
-        auth_date: z.number(),
-        hash: z.string(),
-      }))
-      .mutation(async ({ input, ctx }) => {
-        // Verify Telegram auth data
-        if (!verifyTelegramAuth(input as TelegramAuthData)) {
-          throw new TRPCError({
-            code: "UNAUTHORIZED",
-            message: "Invalid Telegram authentication data",
-          });
-        }
 
-        // Find agent by Telegram ID
-        const telegramId = input.id.toString();
-        const agent = await db.getAgentByTelegramId(telegramId);
-
-        if (!agent) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Agent not found. Please register through the Telegram bot first.",
-          });
-        }
-
-        // Update agent's Telegram data if changed
-        const telegramData = formatTelegramUser(input as TelegramAuthData);
-        await db.updateAgentTelegramData(agent.id, telegramData);
-
-        // Create session token
-        const secret = new TextEncoder().encode(process.env.JWT_SECRET || "");
-        const token = await new SignJWT({
-          userId: agent.id,
-          agentId: agent.id,
-          role: "agent",
-          telegramId: agent.telegramId,
-        })
-          .setProtectedHeader({ alg: "HS256" })
-          .setIssuedAt()
-          .setExpirationTime("30d")
-          .sign(secret);
-
-        // Set session cookie
-        const cookieOptions = getSessionCookieOptions(ctx.req);
-        ctx.res.cookie(AGENT_COOKIE_NAME, token, {
-          ...cookieOptions,
-          maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-        });
-
-        // Create session record in database
-        const deviceInfo = ctx.req.headers["user-agent"] || null;
-        const ipAddress = (ctx.req.headers["x-forwarded-for"] as string)?.split(",")[0] || 
-                          (ctx.req.headers["x-real-ip"] as string) ||
-                          ctx.req.socket.remoteAddress || null;
-        
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 30); // 30 days from now
-        
-        await db.createSession({
-          agentId: agent.id,
-          sessionToken: token,
-          deviceInfo,
-          ipAddress,
-          loginMethod: "telegram",
-          lastActivityAt: new Date(),
-          expiresAt,
-          isRevoked: "no",
-        });
-
-        // Send login notification to Telegram
-        // Run async without blocking response
-        notifyNewDeviceLogin(agent.telegramId, {
-          deviceInfo,
-          ipAddress,
-          loginMethod: "telegram",
-          timestamp: new Date(),
-        }).catch((error) => {
-          console.error("Failed to send login notification:", error);
-        });
-
-        return {
-          success: true,
-          agent: {
-            id: agent.id,
-            fullName: agent.fullName,
-            telegramId: agent.telegramId,
-            role: agent.role,
-          },
-        };
-      }),
-    
     // Email + OTP Login
     requestOtp: publicProcedure
       .input(z.object({ email: z.string().email() }))
@@ -675,58 +577,6 @@ DocDocPartner — B2B-платформа агентских рекомендац
 
   // BOT API - Public endpoints for Telegram bot integration
   bot: router({
-    // Request OTP for Telegram login
-    requestTelegramOTP: publicProcedure
-      .input(z.object({
-        telegramId: z.string(),
-      }))
-      .mutation(async ({ input }) => {
-        const { generateOTP, generateSessionId, sendTelegramOTP, storeOTP } = await import("./telegram-auth");
-        
-        // Find agent by telegram ID
-        const agent = await db.getAgentByTelegramId(input.telegramId);
-        if (!agent) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Agent not found" });
-        }
-
-        const code = generateOTP();
-        const sessionId = generateSessionId();
-        const telegramIdNum = parseInt(input.telegramId);
-        
-        const sent = await sendTelegramOTP(telegramIdNum, code);
-        if (!sent) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to send OTP" });
-        }
-
-        storeOTP(sessionId, telegramIdNum, code);
-        return { success: true, sessionId };
-      }),
-
-    // Verify Telegram OTP and create session
-    verifyTelegramOTP: publicProcedure
-      .input(z.object({
-        sessionId: z.string(),
-        code: z.string(),
-      }))
-      .mutation(async ({ input, ctx }) => {
-        const { verifyOTP } = await import("./telegram-auth");
-        
-        const result = verifyOTP(input.sessionId, input.code);
-        if (!result.valid || !result.telegramId) {
-          return { success: false };
-        }
-
-        // Find agent by telegram ID
-        const agent = await db.getAgentByTelegramId(result.telegramId.toString());
-        if (!agent) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Agent not found" });
-        }
-
-        // Create session cookie
-        // TODO: Implement proper session management
-        return { success: true, agent };
-      }),
-
     // Register new agent
     registerAgent: publicProcedure
       .input(z.object({
@@ -939,7 +789,7 @@ DocDocPartner — B2B-платформа агентских рекомендац
       }
 
       // Extract current session token from cookie
-      const sessionToken = ctx.req.cookies[COOKIE_NAME];
+      const sessionToken = ctx.req.cookies[AGENT_COOKIE_NAME];
       if (!sessionToken) {
         throw new TRPCError({ code: "UNAUTHORIZED", message: "No session token" });
       }
