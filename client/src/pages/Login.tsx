@@ -93,8 +93,11 @@ export default function Login() {
         description: "Перенаправление в админ-панель...",
       });
       // Redirect based on role returned from server
+      // Use window.location.href to force full page reload and ensure cookie is sent
       const redirectPath = result?.role === "admin" ? "/admin" : "/dashboard";
-      setTimeout(() => setLocation(redirectPath), 1000);
+      setTimeout(() => {
+        window.location.href = redirectPath;
+      }, 1000);
     } catch (error: any) {
       toast.error("Ошибка", {
         description: error.message || "Неверный код",
@@ -211,7 +214,7 @@ export default function Login() {
                     <Input
                       id="admin-email"
                       type="email"
-                      placeholder="admin@docdocpartner.com"
+                      placeholder="said.i.murtazin@gmail.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       autoFocus
@@ -232,7 +235,7 @@ export default function Login() {
                     )}
                   </Button>
                   <p className="text-xs text-muted-foreground text-center">
-                    Код придёт в Telegram-бот
+                    Код придёт в ваш зарегистрированный Telegram-аккаунт
                   </p>
                 </>
               ) : (

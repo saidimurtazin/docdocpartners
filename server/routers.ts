@@ -177,28 +177,72 @@ export const appRouter = router({
     requestOtp: publicProcedure
       .input(z.object({ email: z.string().email() }))
       .mutation(async ({ input }) => {
-        // Find agent by email
+        // PRIORITY 1: Check if user is admin
+        const adminUser = await db.getUserByEmail(input.email);
+
+        if (adminUser && adminUser.role === "admin") {
+          // Admin found - check if they have Telegram configured
+          if (!adminUser.telegramId) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: "Telegram не настроен для администратора. Обратитесь в поддержку.",
+            });
+          }
+
+          // Generate OTP for admin
+          const code = Math.floor(100000 + Math.random() * 900000).toString();
+          const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+          console.log('[RequestOTP] Admin:', code, 'for', input.email);
+
+          // Save OTP to database
+          const dbInstance = await db.getDb();
+          if (!dbInstance) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Database connection error",
+            });
+          }
+
+          const { otpCodes: otpCodesTable } = await import("../drizzle/schema");
+          await dbInstance.insert(otpCodesTable).values({
+            email: input.email,
+            code,
+            expiresAt,
+            used: "no",
+          });
+
+          // Send OTP to admin via Telegram
+          const { notifyAgent } = await import("./telegram-bot-webhook");
+          await notifyAgent(
+            adminUser.telegramId,
+            `🔐 <b>Код для входа в админ-панель:</b>\n\n<code>${code}</code>\n\nКод действителен 5 минут.\n\n⚠️ Никому не сообщайте этот код!`
+          );
+
+          return { success: true };
+        }
+
+        // PRIORITY 2: Check agents (existing logic)
         const agent = await db.getAgentByEmail(input.email);
-        
+
         if (!agent) {
           throw new TRPCError({
             code: "NOT_FOUND",
-            message: "Агент с таким email не найден. Зарегистрируйтесь в Telegram-боте.",
+            message: "Пользователь не найден. Зарегистрируйтесь в Telegram-боте.",
           });
         }
-        
+
         if (agent.status !== "active") {
           throw new TRPCError({
             code: "FORBIDDEN",
             message: "Ваш аккаунт не активирован. Обратитесь в поддержку.",
           });
         }
-        
-        // Generate OTP code
+
+        // Generate OTP code for agent
         const code = Math.floor(100000 + Math.random() * 900000).toString();
         const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-        console.log('[RequestOTP] Generated code:', code, 'for email:', input.email);
-        
+        console.log('[RequestOTP] Agent:', code, 'for email:', input.email);
+
         // Save OTP to database
         const dbInstance = await db.getDb();
         if (!dbInstance) {
@@ -207,7 +251,7 @@ export const appRouter = router({
             message: "Database connection error",
           });
         }
-        
+
         const { otpCodes: otpCodesTable } = await import("../drizzle/schema");
         console.log('[RequestOTP] Inserting OTP into database...');
         const insertResult = await dbInstance.insert(otpCodesTable).values({
@@ -217,15 +261,15 @@ export const appRouter = router({
           used: "no",
         });
         console.log('[RequestOTP] OTP inserted successfully:', insertResult);
-        
-        // Send OTP via Telegram bot
+
+        // Send OTP via Telegram bot to agent
         console.log('[RequestOTP] Sending Telegram notification...');
         const { notifyAgent } = await import("./telegram-bot-webhook");
         await notifyAgent(
           agent.telegramId,
           `🔐 <b>Код для входа в личный кабинет:</b>\n\n<code>${code}</code>\n\nКод действителен 5 минут.\n\n⚠️ Никому не сообщайте этот код!`
         );
-        
+
         return { success: true };
       }),
     
