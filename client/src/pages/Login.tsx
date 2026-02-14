@@ -197,20 +197,23 @@ export default function Login() {
                 </Button>
                 <div>
                   <CardTitle>Вход администратора</CardTitle>
-                  <CardDescription>Войдите через Manus OAuth</CardDescription>
+                  <CardDescription>Войдите через Telegram</CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Для входа в админ-панель используйте свой аккаунт Manus.
+                Для входа в админ-панель используйте Telegram.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Вы будете перенаправлены на страницу входа через Telegram.
               </p>
               <Button
-                onClick={handleAdminLogin}
+                onClick={() => setLocation("/dashboard/login")}
                 className="w-full"
               >
                 <Shield className="w-4 h-4 mr-2" />
-                Войти через Manus
+                Войти через Telegram
               </Button>
             </CardContent>
           </Card>
