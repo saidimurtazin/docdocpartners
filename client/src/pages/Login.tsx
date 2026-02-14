@@ -14,12 +14,14 @@ type LoginMode = "select" | "admin" | "agent";
 export default function Login() {
   const [mode, setMode] = useState<LoginMode>("select");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [, setLocation] = useLocation();
 
   const requestOtp = trpc.auth.requestOtp.useMutation();
   const verifyOtp = trpc.auth.verifyOtp.useMutation();
+  const loginWithPassword = trpc.auth.loginWithPassword.useMutation();
 
   const handleRequestOtp = async () => {
     try {
@@ -53,6 +55,23 @@ export default function Login() {
     } catch (error: any) {
       toast.error("Ошибка", {
         description: error.message || "Неверный код",
+      });
+    }
+  };
+
+  const handleAgentLogin = async () => {
+    try {
+      const result = await loginWithPassword.mutateAsync({ email, password });
+
+      if (result.needPasswordChange) {
+        toast.success("Вход выполнен! Рекомендуем сменить временный пароль.");
+      }
+
+      // Redirect to dashboard
+      window.location.replace("/dashboard");
+    } catch (error: any) {
+      toast.error("Ошибка входа", {
+        description: error.message || "Неверный email или пароль",
       });
     }
   };
@@ -233,81 +252,84 @@ export default function Login() {
                   onClick={() => {
                     setMode("select");
                     setEmail("");
-                    setOtpCode("");
-                    setOtpSent(false);
+                    setPassword("");
                   }}
                 >
                   <ArrowLeft className="w-4 h-4" />
                 </Button>
                 <div>
                   <CardTitle>Вход агента</CardTitle>
-                  <CardDescription>Введите email для получения кода</CardDescription>
+                  <CardDescription>Войдите с помощью email и пароля</CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {!otpSent ? (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="agent-email">Email</Label>
-                    <Input
-                      id="agent-email"
-                      type="email"
-                      placeholder="your@email.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      autoFocus
-                    />
-                  </div>
-                  <Button
-                    onClick={handleRequestOtp}
-                    disabled={!email || requestOtp.isPending}
-                    className="w-full"
-                  >
-                    {requestOtp.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    Получить код
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="agent-otp">Код из Telegram</Label>
-                    <Input
-                      id="agent-otp"
-                      type="text"
-                      placeholder="123456"
-                      value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value)}
-                      maxLength={6}
-                      autoFocus
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      Код отправлен в Telegram на {email}
-                    </p>
-                  </div>
-                  <Button
-                    onClick={handleVerifyOtp}
-                    disabled={!otpCode || verifyOtp.isPending}
-                    className="w-full"
-                  >
-                    {verifyOtp.isPending ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Проверка...
-                      </>
-                    ) : (
-                      "Войти"
-                    )}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => setOtpSent(false)}
-                    className="w-full"
-                  >
-                    Изменить email
-                  </Button>
-                </>
-              )}
+              <div className="space-y-2">
+                <Label htmlFor="agent-email">Email</Label>
+                <Input
+                  id="agent-email"
+                  type="email"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoFocus
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="agent-password">Пароль</Label>
+                <Input
+                  id="agent-password"
+                  type="password"
+                  placeholder="Введите пароль"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && email && password) {
+                      handleAgentLogin();
+                    }
+                  }}
+                />
+              </div>
+
+              <Button
+                onClick={handleAgentLogin}
+                disabled={!email || !password || loginWithPassword.isPending}
+                className="w-full"
+              >
+                {loginWithPassword.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Вход...
+                  </>
+                ) : (
+                  "Войти"
+                )}
+              </Button>
+
+              <p className="text-sm text-muted-foreground text-center">
+                Забыли пароль?{" "}
+                <a
+                  href="https://t.me/docpartnerbot"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  Напишите в Telegram-бот
+                </a>
+              </p>
+
+              <p className="text-xs text-muted-foreground text-center">
+                Еще не зарегистрированы?{" "}
+                <a
+                  href="https://t.me/docpartnerbot"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  Начните в Telegram-боте
+                </a>
+              </p>
             </CardContent>
           </Card>
         )}
