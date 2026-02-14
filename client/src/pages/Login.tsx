@@ -44,11 +44,12 @@ export default function Login() {
   const handleVerifyOtp = async () => {
     try {
       const result = await verifyOtp.mutateAsync({ email, code: otpCode });
-      toast.success("Вход выполнен");
 
-      // Redirect based on role returned from server
+      // Server returns role, redirect accordingly
       const redirectPath = result?.role === "admin" ? "/admin" : "/dashboard";
-      setLocation(redirectPath);
+
+      // Use replace() for reliable redirect without history entry
+      window.location.replace(redirectPath);
     } catch (error: any) {
       toast.error("Ошибка", {
         description: error.message || "Неверный код",
