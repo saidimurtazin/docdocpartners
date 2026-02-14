@@ -48,9 +48,7 @@ export default function Login() {
 
       // Redirect based on role returned from server
       const redirectPath = result?.role === "admin" ? "/admin" : "/dashboard";
-      setTimeout(() => {
-        window.location.href = redirectPath;
-      }, 1000);
+      setLocation(redirectPath);
     } catch (error: any) {
       toast.error("Ошибка", {
         description: error.message || "Неверный код",

@@ -327,7 +327,15 @@ export const appRouter = router({
 
         console.log("[VerifyOTP] Agent session created successfully for:", agent.email);
 
-        return { success: true, role: "agent" };
+        return {
+          success: true,
+          role: "agent",
+          user: {
+            id: agent.id,
+            name: agent.fullName,
+            email: agent.email,
+          }
+        };
       }),
   }),
 
