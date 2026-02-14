@@ -40,19 +40,30 @@ function verifyTelegramAuth(data: any): boolean {
  */
 export async function handleTelegramLogin(req: Request, res: Response) {
   try {
+    console.log('[Telegram Login] Received login request');
     const telegramData = req.body;
-    
+    console.log('[Telegram Login] Telegram ID:', telegramData.id);
+
     // Verify authentication data
     if (!verifyTelegramAuth(telegramData)) {
+      console.log('[Telegram Login] Auth verification failed');
       return res.status(401).json({ error: "Invalid authentication data" });
     }
-    
+
+    console.log('[Telegram Login] Auth verified successfully');
     const telegramId = String(telegramData.id);
 
     // Check if user is admin first
+    console.log('[Telegram Login] Checking for admin user with openId:', `telegram_${telegramId}`);
     const adminUser = await db.getUserByOpenId(`telegram_${telegramId}`);
+    console.log('[Telegram Login] Admin user found:', adminUser ? 'YES' : 'NO');
+
+    if (adminUser) {
+      console.log('[Telegram Login] Admin user role:', adminUser.role);
+    }
 
     if (adminUser && adminUser.role === 'admin') {
+      console.log('[Telegram Login] Processing admin login');
       // Admin login - create admin session
       const secret = new TextEncoder().encode(JWT_SECRET);
       const token = await new SignJWT({
@@ -72,6 +83,7 @@ export async function handleTelegramLogin(req: Request, res: Response) {
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
 
+      console.log('[Telegram Login] Admin login successful, returning response');
       return res.json({
         success: true,
         role: 'admin',
@@ -84,7 +96,9 @@ export async function handleTelegramLogin(req: Request, res: Response) {
     }
 
     // Find agent by Telegram ID
+    console.log('[Telegram Login] Checking for agent with telegramId:', telegramId);
     const agent = await db.getAgentByTelegramId(telegramId);
+    console.log('[Telegram Login] Agent found:', agent ? 'YES' : 'NO');
 
     if (!agent) {
       return res.status(404).json({
