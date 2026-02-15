@@ -46,6 +46,21 @@ async function startServer() {
   }
   await setupTelegramWebhook(app, '/telegram-webhook', webhookDomain);
 
+  // Debug endpoint — manually trigger email poll and return detailed results
+  app.get("/api/debug-poll", async (req, res) => {
+    if (req.query.key !== "medigate2025") {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+    try {
+      const { processNewClinicEmails } = await import("../clinic-report-processor");
+      const result = await processNewClinicEmails();
+      res.json({ ok: true, result });
+    } catch (error: any) {
+      res.json({ ok: false, error: error.message, stack: error.stack });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",

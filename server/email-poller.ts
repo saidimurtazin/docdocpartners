@@ -43,6 +43,17 @@ export async function pollNewEmails(): Promise<EmailMessage[]> {
 
     const lock = await client.getMailboxLock("INBOX");
     try {
+      // Log mailbox status for debugging
+      const status = await client.status("INBOX", { messages: true, unseen: true });
+      console.log(`[EmailPoller] Mailbox status: ${status.messages} total, ${status.unseen} unseen`);
+
+      if (!status.unseen || status.unseen === 0) {
+        console.log("[EmailPoller] No unseen messages, nothing to fetch");
+        lock.release();
+        await client.logout();
+        return emails;
+      }
+
       // Use fetch iterator to get all unseen messages with full source
       for await (const msg of client.fetch({ seen: false }, { source: true, uid: true })) {
         try {
