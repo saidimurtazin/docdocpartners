@@ -122,7 +122,8 @@ export default function Home() {
               Клиники
             </Link>
             <a href="#how-it-works" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">Как работает</a>
-            <a href="#map" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">Карта</a>
+            {/* Map link hidden while map section is hidden */}
+            {/* <a href="#map" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">Карта</a> */}
             <a href="#benefits" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">Преимущества</a>
             <Link href="/knowledge-base" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">
               База знаний
@@ -157,6 +158,7 @@ export default function Home() {
         <div className="absolute top-20 left-10 w-72 h-72 bg-[oklch(0.55_0.12_250)] rounded-full mix-blend-multiply filter blur-[120px] opacity-20 animate-float" />
         <div className="absolute bottom-20 right-10 w-96 h-96 bg-[oklch(0.70_0.15_75)] rounded-full mix-blend-multiply filter blur-[120px] opacity-15 animate-float" style={{ animationDelay: "1.5s" }} />
 
+        {/* Hero text with parallax — only heading and subheading fade on scroll */}
         <motion.div style={{ y: heroY, opacity: heroOpacity }} className="container relative z-10">
           <div className="max-w-7xl mx-auto">
             {/* Badge */}
@@ -204,7 +206,7 @@ export default function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.45 }}
-              className="flex flex-col sm:flex-row gap-4 justify-center mb-16"
+              className="flex flex-col sm:flex-row gap-4 justify-center"
             >
               <Button
                 size="lg"
@@ -225,7 +227,12 @@ export default function Home() {
                 <ChevronRight className="w-5 h-5 ml-2" />
               </Button>
             </motion.div>
+          </div>
+        </motion.div>
 
+        {/* Stats and Country Expansion — outside parallax container so they stay visible */}
+        <div className="container relative z-10 mt-16">
+          <div className="max-w-7xl mx-auto">
             {/* Stats Grid with Animated Counters */}
             <motion.div
               initial={{ opacity: 0, y: 30 }}
@@ -287,7 +294,7 @@ export default function Home() {
               </div>
             </motion.div>
           </div>
-        </motion.div>
+        </div>
       </section>
 
       {/* ============== ABOUT SECTION ============== */}
@@ -546,7 +553,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ============== MAP SECTION ============== */}
+      {/* ============== MAP SECTION (hidden, can be re-enabled later) ============== */}
+      {/*
       <section id="map" className="py-24 mesh-bg">
         <div className="container">
           <AnimatedSection className="max-w-3xl mx-auto text-center space-y-6 mb-16">
@@ -571,6 +579,7 @@ export default function Home() {
           </AnimatedSection>
         </div>
       </section>
+      */}
 
       {/* ============== FINAL CTA ============== */}
       <section className="py-32 bg-gradient-to-br from-[oklch(0.35_0.08_250)] to-[oklch(0.55_0.12_250)] text-white relative overflow-hidden">
