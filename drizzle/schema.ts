@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { boolean, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -96,6 +96,7 @@ export const referrals = mysqlTable("referrals", {
   status: mysqlEnum("status", ["pending", "contacted", "scheduled", "completed", "cancelled"]).default("pending").notNull(),
   treatmentAmount: int("treatmentAmount").default(0), // сумма лечения в копейках
   commissionAmount: int("commissionAmount").default(0), // вознаграждение агенту в копейках
+  contactConsent: boolean("contactConsent"), // согласие пациента на связь от DocDoc
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

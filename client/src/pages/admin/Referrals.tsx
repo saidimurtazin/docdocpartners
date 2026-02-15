@@ -206,6 +206,7 @@ export default function AdminReferrals() {
                     <TableHead>Пациент</TableHead>
                     <TableHead>Дата рождения</TableHead>
                     <TableHead>Телефон</TableHead>
+                    <TableHead>Связь DocDoc</TableHead>
                     <TableHead>Клиника</TableHead>
                     <TableHead>Статус</TableHead>
                     <TableHead>Сумма лечения</TableHead>
@@ -222,6 +223,13 @@ export default function AdminReferrals() {
                       <TableCell className="font-medium">{referral.patientFullName}</TableCell>
                       <TableCell>{referral.patientBirthdate}</TableCell>
                       <TableCell>{referral.patientPhone || "—"}</TableCell>
+                      <TableCell>
+                        {referral.contactConsent === true ? (
+                          <Badge variant="default" className="bg-green-600">✅ Да</Badge>
+                        ) : referral.contactConsent === false ? (
+                          <Badge variant="destructive">❌ Нет</Badge>
+                        ) : "—"}
+                      </TableCell>
                       <TableCell>{referral.clinic || "—"}</TableCell>
                       <TableCell>{getStatusBadge(referral.status)}</TableCell>
                       <TableCell>

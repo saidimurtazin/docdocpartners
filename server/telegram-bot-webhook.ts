@@ -16,7 +16,7 @@ const bot = new Telegraf(ENV.telegramBotToken);
 
 // Session interface
 interface SessionData {
-  registrationStep?: 'fullName' | 'email' | 'phone' | 'role' | 'specialization' | 'city' | 'contract' | 'patient_name' | 'patient_birthdate' | 'patient_phone' | 'patient_consent';
+  registrationStep?: 'fullName' | 'email' | 'phone' | 'role' | 'specialization' | 'city' | 'contract' | 'patient_name' | 'patient_birthdate' | 'patient_phone' | 'patient_contact_consent' | 'patient_consent';
   tempData?: {
     fullName?: string;
     email?: string;
@@ -28,6 +28,7 @@ interface SessionData {
     patientName?: string;
     patientBirthdate?: string;
     patientPhone?: string;
+    contactConsent?: boolean;
     referredBy?: string;
   };
   lastMessageTime?: number;
@@ -952,21 +953,18 @@ bot.on(message('text'), async (ctx) => {
     const phone = validation.normalized!;
     if (!session.tempData) { await ctx.reply('❌ Сессия истекла. Начните заново: /patient'); return; }
     session.tempData.patientPhone = phone;
-    session.registrationStep = 'patient_consent';
+    session.registrationStep = 'patient_contact_consent';
 
-    // Show preview with consent buttons
-    const consentKeyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('✅ Да, согласие получено', 'patient_consent_yes')],
-      [Markup.button.callback('❌ Отменить', 'patient_consent_no')]
+    // Ask if patient wants DocDoc to contact them
+    const contactConsentKeyboard = Markup.inlineKeyboard([
+      [Markup.button.callback('✅ Да, хочет', 'contact_consent_yes')],
+      [Markup.button.callback('❌ Нет', 'contact_consent_no')]
     ]);
 
     await ctx.reply(
-      '📋 <b>Проверьте данные пациента:</b>\n\n' +
-      `👤 <b>ФИО:</b> ${escapeHtml(session.tempData.patientName || '')}\n` +
-      `🎂 <b>Дата рождения:</b> ${escapeHtml(session.tempData.patientBirthdate || '')}\n` +
-      `📞 <b>Телефон:</b> ${escapeHtml(phone)}\n\n` +
-      '⚠️ <b>ВАЖНО:</b> Подтвердите, что пациент дал согласие на передачу его персональных данных в клиники-партнеры DocDocPartner.',
-      { parse_mode: 'HTML', ...consentKeyboard }
+      '📞 <b>Согласие на связь</b>\n\n' +
+      'Хочет ли пациент, чтобы сервис DocDoc связался с ним, помог <b>бесплатно записаться</b> к врачу и <b>проконсультировал</b>?',
+      { parse_mode: 'HTML', ...contactConsentKeyboard }
     );
     return;
   }
@@ -1225,6 +1223,65 @@ bot.action('contract_decline', async (ctx) => {
   sessions.delete(userId);
 });
 
+// Handle contact consent (wants DocDoc to call)
+bot.action('contact_consent_yes', async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+  if (isCallbackSpamming(userId)) { await ctx.answerCbQuery(); return; }
+
+  const session = getSession(userId);
+  if (!session.tempData) { await ctx.answerCbQuery(); await ctx.editMessageText('❌ Сессия истекла. Начните заново: /patient'); sessions.delete(userId); return; }
+
+  session.tempData.contactConsent = true;
+  session.registrationStep = 'patient_consent';
+  await ctx.answerCbQuery();
+
+  // Show preview with final consent buttons
+  const consentKeyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('✅ Да, согласие получено', 'patient_consent_yes')],
+    [Markup.button.callback('❌ Отменить', 'patient_consent_no')]
+  ]);
+
+  await ctx.editMessageText(
+    '📋 <b>Проверьте данные пациента:</b>\n\n' +
+    `👤 <b>ФИО:</b> ${escapeHtml(session.tempData.patientName || '')}\n` +
+    `🎂 <b>Дата рождения:</b> ${escapeHtml(session.tempData.patientBirthdate || '')}\n` +
+    `📞 <b>Телефон:</b> ${escapeHtml(session.tempData.patientPhone || '')}\n` +
+    `📲 <b>Связь DocDoc:</b> ✅ Да, хочет\n\n` +
+    '⚠️ <b>ВАЖНО:</b> Подтвердите, что пациент дал согласие на передачу его персональных данных в клиники-партнеры DocDocPartner.',
+    { parse_mode: 'HTML', ...consentKeyboard }
+  );
+});
+
+bot.action('contact_consent_no', async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+  if (isCallbackSpamming(userId)) { await ctx.answerCbQuery(); return; }
+
+  const session = getSession(userId);
+  if (!session.tempData) { await ctx.answerCbQuery(); await ctx.editMessageText('❌ Сессия истекла. Начните заново: /patient'); sessions.delete(userId); return; }
+
+  session.tempData.contactConsent = false;
+  session.registrationStep = 'patient_consent';
+  await ctx.answerCbQuery();
+
+  // Show preview with final consent buttons
+  const consentKeyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('✅ Да, согласие получено', 'patient_consent_yes')],
+    [Markup.button.callback('❌ Отменить', 'patient_consent_no')]
+  ]);
+
+  await ctx.editMessageText(
+    '📋 <b>Проверьте данные пациента:</b>\n\n' +
+    `👤 <b>ФИО:</b> ${escapeHtml(session.tempData.patientName || '')}\n` +
+    `🎂 <b>Дата рождения:</b> ${escapeHtml(session.tempData.patientBirthdate || '')}\n` +
+    `📞 <b>Телефон:</b> ${escapeHtml(session.tempData.patientPhone || '')}\n` +
+    `📲 <b>Связь DocDoc:</b> ❌ Нет\n\n` +
+    '⚠️ <b>ВАЖНО:</b> Подтвердите, что пациент дал согласие на передачу его персональных данных в клиники-партнеры DocDocPartner.',
+    { parse_mode: 'HTML', ...consentKeyboard }
+  );
+});
+
 // Handle patient consent confirmation
 bot.action('patient_consent_yes', async (ctx) => {
   const userId = ctx.from?.id;
@@ -1262,6 +1319,7 @@ bot.action('patient_consent_yes', async (ctx) => {
       patientFullName: data.patientName,
       patientBirthdate: data.patientBirthdate,
       patientPhone: data.patientPhone,
+      contactConsent: data.contactConsent ?? null,
       status: 'pending'
     });
 
@@ -1272,8 +1330,11 @@ bot.action('patient_consent_yes', async (ctx) => {
       '🎉 <b>Пациент успешно отправлен!</b>\n\n' +
       `👤 <b>ФИО:</b> ${escapeHtml(data.patientName)}\n` +
       `🎂 <b>Дата рождения:</b> ${escapeHtml(data.patientBirthdate)}\n` +
-      `📞 <b>Телефон:</b> ${escapeHtml(data.patientPhone)}\n\n` +
-      '✅ Клиника свяжется с пациентом в течение 24 часов\n' +
+      `📞 <b>Телефон:</b> ${escapeHtml(data.patientPhone)}\n` +
+      `📲 <b>Связь DocDoc:</b> ${data.contactConsent ? '✅ Да' : '❌ Нет'}\n\n` +
+      (data.contactConsent
+        ? '✅ Наш сервис бесплатно свяжется с пациентом, поможет записаться и проконсультирует\n'
+        : '✅ Данные пациента переданы\n') +
       '🔔 Вы получите уведомление о статусе рекомендации\n\n' +
       '📝 Используйте /patient для отправки еще одного пациента',
       { parse_mode: 'HTML' }
