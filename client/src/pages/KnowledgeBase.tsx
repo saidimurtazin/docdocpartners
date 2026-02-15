@@ -357,21 +357,21 @@ export default function KnowledgeBase() {
                   <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
                     <h4 className="font-semibold mb-2 text-green-700 dark:text-green-400">Самозанятый</h4>
                     <div className="text-2xl font-bold mb-1">7%</div>
-                    <p className="text-sm text-muted-foreground mb-3">от суммы лечения</p>
-                    <p className="text-xs text-muted-foreground">Налог 6% платите сами</p>
+                    <p className="text-sm text-muted-foreground mb-3">от стоимости лечения</p>
+                    <p className="text-xs text-muted-foreground">Налог 6% от выплаты платите сами</p>
                   </div>
 
                   <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
                     <h4 className="font-semibold mb-2 text-yellow-700 dark:text-yellow-400">Не самозанятый</h4>
                     <div className="text-2xl font-bold mb-1">~4%</div>
                     <p className="text-sm text-muted-foreground mb-3">после вычетов</p>
-                    <p className="text-xs text-muted-foreground">Минус НДФЛ 13% и соц. 30%</p>
+                    <p className="text-xs text-muted-foreground">Уже за вычетом НДФЛ 13% и соц. отчислений 30%</p>
                   </div>
 
                   <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
                     <h4 className="font-semibold mb-2 text-primary">Бонус &gt;1M ₽/мес</h4>
                     <div className="text-2xl font-bold mb-1">10%</div>
-                    <p className="text-sm text-muted-foreground mb-3">от суммы лечения</p>
+                    <p className="text-sm text-muted-foreground mb-3">от стоимости лечения</p>
                     <p className="text-xs text-muted-foreground">Для самозанятых</p>
                   </div>
                 </div>
