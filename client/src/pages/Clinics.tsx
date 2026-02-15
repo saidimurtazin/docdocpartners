@@ -174,7 +174,7 @@ export default function Clinics() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
               <a 
-                href="https://t.me/maruspartnersbot" 
+                href="https://t.me/docpartnerbot" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="inline-flex items-center justify-center rounded-md bg-primary px-8 py-3 text-lg font-medium text-primary-foreground hover:bg-primary/90 transition-colors"

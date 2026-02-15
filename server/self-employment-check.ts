@@ -66,7 +66,7 @@ export const SELF_EMPLOYMENT_GUIDE = `
 - Если нет - система автоматически создаст
 
 **Шаг 4:** Добавьте ИНН в профиль DocDocPartner
-- Откройте бот @maruspartnersbot
+- Откройте бот @docpartnerbot
 - Перейдите в "Профиль" → "Реквизиты"
 - Укажите ваш ИНН
 
@@ -76,5 +76,5 @@ export const SELF_EMPLOYMENT_GUIDE = `
 - Отчетность **не требуется** - все делает приложение
 
 ### Нужна помощь?
-Напишите в поддержку: @marus_support
+Напишите в поддержку: @docdocpartner_support
 `;

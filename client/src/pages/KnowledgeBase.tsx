@@ -439,7 +439,7 @@ export default function KnowledgeBase() {
                 Открыть бот
               </a>
               <a 
-                href="mailto:info@medigate.ru"
+                href="mailto:info@docdocpartner.ru"
                 className="inline-flex items-center justify-center px-6 py-3 rounded-lg border border-border font-medium hover:bg-muted transition-colors"
               >
                 Написать на email

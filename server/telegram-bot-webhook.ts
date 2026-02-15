@@ -241,19 +241,6 @@ function capitalizeWords(str: string): string {
     .join(' ');
 }
 
-// Legacy validators for backward compatibility
-function validateCyrillic(text: string): boolean {
-  return /^[А-Яа-яЁё\s-]+$/.test(text);
-}
-
-function validateEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-function validatePhone(phone: string): boolean {
-  return /^\+7\d{10}$/.test(phone);
-}
-
 // ===============================
 // SPAM PROTECTION
 // ===============================
@@ -730,8 +717,8 @@ bot.on(message('text'), async (ctx) => {
       '• Все договоры оформляются официально\n' +
       '• Персональные данные защищены согласно 152-ФЗ\n' +
       '• Многоуровневая система проверок\n\n' +
-      '🌐 Сайт: https://marus.partners\n' +
-      '📧 Email: info@medigate.ru',
+      '🌐 Сайт: ' + ENV.appUrl + '\n' +
+      '📧 Email: info@docdocpartner.ru',
       { parse_mode: 'HTML' }
     );
     return;
@@ -854,7 +841,7 @@ bot.on(message('text'), async (ctx) => {
       '• Выплаты производятся после подтверждения лечения клиникой\n' +
       '• Все рекомендации фиксируются в системе\n' +
       '• Персональные данные защищены согласно 152-ФЗ\n\n' +
-      'Полный текст договора: https://marus.partners/contract\n\n' +
+      'Полный текст договора: ' + ENV.appUrl + '/contract\n\n' +
       'Принимаете условия договора?',
       { ...contractKeyboard, parse_mode: 'HTML' }
     );
@@ -863,7 +850,7 @@ bot.on(message('text'), async (ctx) => {
 
   // Handle specialization text input (for "Other")
   if (session.registrationStep === 'specialization' && session.tempData?.role === 'Врач') {
-    if (!validateCyrillic(text)) {
+    if (!/^[А-Яа-яЁё\s\-,.]+$/.test(text)) {
       await ctx.reply('❌ Пожалуйста, используйте только кириллицу. Введите вашу специальность:');
       return;
     }
@@ -1369,8 +1356,8 @@ bot.command('help', async (ctx) => {
         '/status - Проверить статус регистрации\n' +
         '/help - Показать эту справку\n\n' +
         '<b>💬 По вопросам:</b>\n' +
-        '📧 Email: support@marus.partners\n' +
-        '📱 Telegram: @marus_support\n\n' +
+        '📧 Email: support@docdocpartner.ru\n' +
+        '📱 Telegram: @docdocpartner_support\n\n' +
         '<i>После активации вашей заявки вам станут доступны дополнительные функции.</i>',
         { parse_mode: 'HTML' }
       );
@@ -1395,8 +1382,8 @@ bot.command('help', async (ctx) => {
         '2. Клиника свяжется с пациентом\n' +
         '3. После лечения вы получите вознаграждение\n\n' +
         '<b>💬 По вопросам:</b>\n' +
-        '📧 Email: support@marus.partners\n' +
-        '📱 Telegram: @marus_support',
+        '📧 Email: support@docdocpartner.ru\n' +
+        '📱 Telegram: @docdocpartner_support',
         { parse_mode: 'HTML' }
       );
     }
@@ -1945,7 +1932,7 @@ bot.action('cmd_request_payout', async (ctx) => {
     if (!agent.inn || !agent.bankAccount) {
       message += '⚠️ <b>Внимание!</b> У вас не указаны все реквизиты.\n';
       message += 'Для обновления реквизитов напишите:\n';
-      message += '📧 info@medigate.ru';
+      message += '📧 info@docdocpartner.ru';
     } else {
       message += '✅ Заявка отправлена! Проверьте почту для подписания документов.';
     }
@@ -1991,7 +1978,7 @@ bot.action('cmd_requisites', async (ctx) => {
       message += 'Используйте Базу знаний → "Как стать самозанятым"\n\n';
     }
     
-    message += '📝 Для изменения реквизитов напишите в поддержку: info@medigate.ru';
+    message += '📝 Для изменения реквизитов напишите в поддержку: info@docdocpartner.ru';
 
     await ctx.reply(message, { parse_mode: 'HTML' });
   } catch (error) {
@@ -2019,8 +2006,8 @@ bot.action('cmd_about', async (ctx) => {
     '• Все договоры оформляются официально\n' +
     '• Персональные данные защищены согласно 152-ФЗ\n' +
     '• Многоуровневая система проверок\n\n' +
-    '🌐 Сайт: https://marus.partners\n' +
-    '📧 Email: info@medigate.ru',
+    '🌐 Сайт: ' + ENV.appUrl + '\n' +
+    '📧 Email: info@docdocpartner.ru',
     { parse_mode: 'HTML' }
   );
 });

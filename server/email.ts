@@ -129,7 +129,7 @@ export async function sendReferralNotification(params: {
           
           <div class="footer">
             <p>Это автоматическое уведомление от системы DocDocPartner</p>
-            <p>По вопросам обращайтесь: support@marus.partners</p>
+            <p>По вопросам обращайтесь: support@docdocpartner.ru</p>
           </div>
         </div>
       </div>

@@ -74,10 +74,6 @@ export const agents = mysqlTable("agents", {
   bankAccount: varchar("bankAccount", { length: 20 }), // номер счета
   bankName: varchar("bankName", { length: 255 }), // название банка
   bankBik: varchar("bankBik", { length: 9 }), // БИК банка
-  // Password authentication fields
-  passwordHash: varchar("passwordHash", { length: 255 }), // bcrypt hash
-  temporaryPassword: varchar("temporaryPassword", { length: 32 }), // temp password for first login
-  passwordSetAt: timestamp("passwordSetAt"), // when password was set
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

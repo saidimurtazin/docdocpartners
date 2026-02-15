@@ -261,7 +261,7 @@ export default function AgentCabinet() {
               <Button 
                 className="h-auto py-4 flex-col items-start" 
                 variant="outline"
-                onClick={() => window.open("https://t.me/maruspartnersbot", "_blank")}
+                onClick={() => window.open("https://t.me/docpartnerbot", "_blank")}
               >
                 <div className="font-semibold mb-1">📝 Отправить пациента</div>
                 <div className="text-sm text-muted-foreground">Создать новую рекомендацию</div>
@@ -269,7 +269,7 @@ export default function AgentCabinet() {
               <Button 
                 className="h-auto py-4 flex-col items-start" 
                 variant="outline"
-                onClick={() => window.open("https://t.me/maruspartnersbot", "_blank")}
+                onClick={() => window.open("https://t.me/docpartnerbot", "_blank")}
               >
                 <div className="font-semibold mb-1">📊 Моя статистика</div>
                 <div className="text-sm text-muted-foreground">Просмотр всех рекомендаций</div>
@@ -277,7 +277,7 @@ export default function AgentCabinet() {
               <Button 
                 className="h-auto py-4 flex-col items-start" 
                 variant="outline"
-                onClick={() => window.open("https://t.me/maruspartnersbot", "_blank")}
+                onClick={() => window.open("https://t.me/docpartnerbot", "_blank")}
               >
                 <div className="font-semibold mb-1">💰 Запросить выплату</div>
                 <div className="text-sm text-muted-foreground">Минимум 1 000 ₽</div>
@@ -285,7 +285,7 @@ export default function AgentCabinet() {
               <Button 
                 className="h-auto py-4 flex-col items-start" 
                 variant="outline"
-                onClick={() => window.open("https://t.me/maruspartnersbot", "_blank")}
+                onClick={() => window.open("https://t.me/docpartnerbot", "_blank")}
               >
                 <div className="font-semibold mb-1">📚 База знаний</div>
                 <div className="text-sm text-muted-foreground">Ответы на вопросы</div>
@@ -294,7 +294,7 @@ export default function AgentCabinet() {
             <div className="pt-4 border-t">
               <p className="text-sm text-muted-foreground text-center">
                 Все функции доступны в Telegram-боте{" "}
-                <a href="https://t.me/maruspartnersbot" className="text-primary hover:underline">
+                <a href="https://t.me/docpartnerbot" className="text-primary hover:underline">
                   @docpartnerbot
                 </a>
               </p>
