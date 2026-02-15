@@ -1,20 +1,13 @@
-import { useEffect } from 'react';
-import { useLocation } from 'wouter';
+import { useAuth } from '@/_core/hooks/useAuth';
 
 /**
- * Hook to require authentication for dashboard pages
- * Redirects to /login if agent is not authenticated
+ * Hook to require authentication for dashboard pages.
+ * Redirects to /login if agent is not authenticated.
+ * Uses server-side auth.me check (cookie-based).
  */
 export function useRequireAuth() {
-  const [, setLocation] = useLocation();
-
-  useEffect(() => {
-    // Check if agent token exists in localStorage
-    const hasToken = Boolean(localStorage.getItem('agent_token'));
-    
-    if (!hasToken) {
-      // Redirect to login page
-      setLocation('/login');
-    }
-  }, [setLocation]);
+  return useAuth({
+    redirectOnUnauthenticated: true,
+    redirectPath: '/login',
+  });
 }

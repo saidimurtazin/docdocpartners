@@ -4,24 +4,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Shield, Users, ArrowLeft, Loader2 } from "lucide-react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { useAuth } from "@/_core/hooks/useAuth";
 
 type LoginMode = "select" | "admin" | "agent";
 
 export default function Login() {
   const [mode, setMode] = useState<LoginMode>("select");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
-  const [, setLocation] = useLocation();
 
   const requestOtp = trpc.auth.requestOtp.useMutation();
   const verifyOtp = trpc.auth.verifyOtp.useMutation();
-  const loginWithPassword = trpc.auth.loginWithPassword.useMutation();
 
   const handleRequestOtp = async () => {
     try {
@@ -31,9 +27,9 @@ export default function Login() {
         description: "Проверьте Telegram для получения кода",
       });
     } catch (error: any) {
-      if (error.message.includes("not found")) {
-        toast.error("Агент не найден", {
-          description: "Вам нужно сначала зарегистрироваться через Telegram-бот",
+      if (error.message?.includes("not found") || error.message?.includes("не найден")) {
+        toast.error("Пользователь не найден", {
+          description: "Зарегистрируйтесь через Telegram-бот @docpartnerbot",
         });
       } else {
         toast.error("Ошибка", {
@@ -46,35 +42,104 @@ export default function Login() {
   const handleVerifyOtp = async () => {
     try {
       const result = await verifyOtp.mutateAsync({ email, code: otpCode });
-
-      // Server returns role, redirect accordingly
       const redirectPath = result?.role === "admin" ? "/admin" : "/dashboard";
-
-      // Use replace() for reliable redirect without history entry
       window.location.replace(redirectPath);
     } catch (error: any) {
       toast.error("Ошибка", {
-        description: error.message || "Неверный код",
+        description: error.message || "Неверный или истекший код",
       });
     }
   };
 
-  const handleAgentLogin = async () => {
-    try {
-      const result = await loginWithPassword.mutateAsync({ email, password });
-
-      if (result.needPasswordChange) {
-        toast.success("Вход выполнен! Рекомендуем сменить временный пароль.");
-      }
-
-      // Redirect to dashboard
-      window.location.replace("/dashboard");
-    } catch (error: any) {
-      toast.error("Ошибка входа", {
-        description: error.message || "Неверный email или пароль",
-      });
-    }
+  const resetForm = () => {
+    setMode("select");
+    setEmail("");
+    setOtpCode("");
+    setOtpSent(false);
   };
+
+  // OTP form — shared between admin and agent
+  const renderOtpForm = (title: string, description: string) => (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" onClick={resetForm}>
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <div>
+            <CardTitle>{title}</CardTitle>
+            <CardDescription>{description}</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {!otpSent ? (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="your@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && email) handleRequestOtp(); }}
+                autoFocus
+              />
+            </div>
+            <Button
+              onClick={handleRequestOtp}
+              disabled={!email || requestOtp.isPending}
+              className="w-full"
+            >
+              {requestOtp.isPending ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Отправка...</>
+              ) : (
+                "Получить код в Telegram"
+              )}
+            </Button>
+            <p className="text-xs text-muted-foreground text-center">
+              Код придёт в Telegram, привязанный к этому email
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="otp">Код из Telegram</Label>
+              <Input
+                id="otp"
+                type="text"
+                placeholder="000000"
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                onKeyDown={(e) => { if (e.key === "Enter" && otpCode.length === 6) handleVerifyOtp(); }}
+                maxLength={6}
+                autoFocus
+              />
+            </div>
+            <Button
+              onClick={handleVerifyOtp}
+              disabled={otpCode.length !== 6 || verifyOtp.isPending}
+              className="w-full"
+            >
+              {verifyOtp.isPending ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Проверка...</>
+              ) : (
+                "Войти"
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => { setOtpSent(false); setOtpCode(""); }}
+              className="w-full"
+            >
+              Отправить код повторно
+            </Button>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/20 p-4">
@@ -82,9 +147,9 @@ export default function Login() {
         <div className="text-center mb-8">
           <Link href="/">
             <div className="inline-flex items-center gap-3 mb-4 cursor-pointer hover:opacity-80 transition-opacity">
-              <img 
-                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663256942923/xohsFKyBQyuhihyR.png" 
-                alt="DocDocPartner Logo" 
+              <img
+                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663256942923/xohsFKyBQyuhihyR.png"
+                alt="DocDocPartner Logo"
                 className="w-12 h-12 rounded-lg"
               />
               <div className="flex flex-col leading-tight text-left">
@@ -110,7 +175,7 @@ export default function Login() {
               >
                 <Shield className="w-8 h-8 text-primary" />
                 <div>
-                  <div className="font-semibold text-lg">Войти как администратор</div>
+                  <div className="font-semibold text-lg">Администратор</div>
                   <div className="text-sm text-muted-foreground">Доступ к админ-панели</div>
                 </div>
               </Button>
@@ -122,14 +187,14 @@ export default function Login() {
               >
                 <Users className="w-8 h-8 text-primary" />
                 <div>
-                  <div className="font-semibold text-lg">Войти как агент</div>
+                  <div className="font-semibold text-lg">Агент</div>
                   <div className="text-sm text-muted-foreground">Личный кабинет агента</div>
                 </div>
               </Button>
 
               <div className="text-center pt-4">
                 <p className="text-sm text-muted-foreground">
-                  Еще не зарегистрированы?{" "}
+                  Ещё не зарегистрированы?{" "}
                   <a
                     href="https://t.me/docpartnerbot"
                     target="_blank"
@@ -144,195 +209,8 @@ export default function Login() {
           </Card>
         )}
 
-        {mode === "admin" && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => {
-                    setMode("select");
-                    setEmail("");
-                    setOtpCode("");
-                    setOtpSent(false);
-                  }}
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                </Button>
-                <div>
-                  <CardTitle>Вход администратора</CardTitle>
-                  <CardDescription>Введите email для получения кода</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {!otpSent ? (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="admin-email">Email</Label>
-                    <Input
-                      id="admin-email"
-                      type="email"
-                      placeholder="said.i.murtazin@gmail.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      autoFocus
-                    />
-                  </div>
-                  <Button
-                    onClick={handleRequestOtp}
-                    disabled={!email || requestOtp.isPending}
-                    className="w-full"
-                  >
-                    {requestOtp.isPending ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Отправка...
-                      </>
-                    ) : (
-                      "Получить код"
-                    )}
-                  </Button>
-                  <p className="text-xs text-muted-foreground text-center">
-                    Код придёт в ваш зарегистрированный Telegram-аккаунт
-                  </p>
-                </>
-              ) : (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="admin-otp">Код из Telegram</Label>
-                    <Input
-                      id="admin-otp"
-                      type="text"
-                      placeholder="000000"
-                      value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value)}
-                      maxLength={6}
-                      autoFocus
-                    />
-                  </div>
-                  <Button
-                    onClick={handleVerifyOtp}
-                    disabled={!otpCode || verifyOtp.isPending}
-                    className="w-full"
-                  >
-                    {verifyOtp.isPending ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Проверка...
-                      </>
-                    ) : (
-                      "Войти"
-                    )}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      setOtpSent(false);
-                      setOtpCode("");
-                    }}
-                    className="w-full"
-                  >
-                    Назад
-                  </Button>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {mode === "agent" && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => {
-                    setMode("select");
-                    setEmail("");
-                    setPassword("");
-                  }}
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                </Button>
-                <div>
-                  <CardTitle>Вход агента</CardTitle>
-                  <CardDescription>Войдите с помощью email и пароля</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="agent-email">Email</Label>
-                <Input
-                  id="agent-email"
-                  type="email"
-                  placeholder="your@email.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoFocus
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="agent-password">Пароль</Label>
-                <Input
-                  id="agent-password"
-                  type="password"
-                  placeholder="Введите пароль"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && email && password) {
-                      handleAgentLogin();
-                    }
-                  }}
-                />
-              </div>
-
-              <Button
-                onClick={handleAgentLogin}
-                disabled={!email || !password || loginWithPassword.isPending}
-                className="w-full"
-              >
-                {loginWithPassword.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Вход...
-                  </>
-                ) : (
-                  "Войти"
-                )}
-              </Button>
-
-              <p className="text-sm text-muted-foreground text-center">
-                Забыли пароль?{" "}
-                <a
-                  href="https://t.me/docpartnerbot"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  Напишите в Telegram-бот
-                </a>
-              </p>
-
-              <p className="text-xs text-muted-foreground text-center">
-                Еще не зарегистрированы?{" "}
-                <a
-                  href="https://t.me/docpartnerbot"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  Начните в Telegram-боте
-                </a>
-              </p>
-            </CardContent>
-          </Card>
-        )}
+        {mode === "admin" && renderOtpForm("Вход администратора", "Введите email для получения кода")}
+        {mode === "agent" && renderOtpForm("Вход агента", "Введите email, указанный при регистрации")}
       </div>
     </div>
   );

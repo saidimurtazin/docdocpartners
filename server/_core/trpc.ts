@@ -27,6 +27,24 @@ const requireUser = t.middleware(async opts => {
 
 export const protectedProcedure = t.procedure.use(requireUser);
 
+// Requires authenticated agent (checks ctx.agentId from JWT)
+export const agentProcedure = t.procedure.use(
+  t.middleware(async opts => {
+    const { ctx, next } = opts;
+
+    if (!ctx.agentId) {
+      throw new TRPCError({ code: "UNAUTHORIZED", message: "Войдите в личный кабинет" });
+    }
+
+    return next({
+      ctx: {
+        ...ctx,
+        agentId: ctx.agentId,
+      },
+    });
+  }),
+);
+
 export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;

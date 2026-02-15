@@ -1,13 +1,24 @@
 import { AGENT_COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, agentProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
 import { z } from "zod";
 import * as db from "./db";
 import { TRPCError } from "@trpc/server";
 import { SignJWT } from "jose";
 import { notifyNewDeviceLogin } from "./telegram-notifications";
+
+function getJwtSecret(): Uint8Array {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "JWT_SECRET is not configured",
+    });
+  }
+  return new TextEncoder().encode(secret);
+}
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -94,7 +105,8 @@ export const appRouter = router({
           // Generate OTP for admin
           const code = Math.floor(100000 + Math.random() * 900000).toString();
           const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-          console.log('[RequestOTP] Admin:', code, 'for', input.email);
+          // OTP code logged only in dev
+          if (process.env.NODE_ENV !== "production") console.log('[RequestOTP] Admin code generated for', input.email);
 
           // Save OTP to database
           const dbInstance = await db.getDb();
@@ -114,11 +126,19 @@ export const appRouter = router({
           });
 
           // Send OTP to admin via Telegram
-          const { notifyAgent } = await import("./telegram-bot-webhook");
-          await notifyAgent(
-            adminUser.telegramId,
-            `🔐 <b>Код для входа в админ-панель:</b>\n\n<code>${code}</code>\n\nКод действителен 5 минут.\n\n⚠️ Никому не сообщайте этот код!`
-          );
+          try {
+            const { notifyAgent } = await import("./telegram-bot-webhook");
+            await notifyAgent(
+              adminUser.telegramId,
+              `🔐 <b>Код для входа в админ-панель:</b>\n\n<code>${code}</code>\n\nКод действителен 5 минут.\n\n⚠️ Никому не сообщайте этот код!`
+            );
+          } catch (err) {
+            console.error("[RequestOTP] Failed to send Telegram notification to admin:", err);
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Не удалось отправить код. Проверьте настройки Telegram.",
+            });
+          }
 
           return { success: true };
         }
@@ -143,7 +163,7 @@ export const appRouter = router({
         // Generate OTP code for agent
         const code = Math.floor(100000 + Math.random() * 900000).toString();
         const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-        console.log('[RequestOTP] Agent:', code, 'for email:', input.email);
+        if (process.env.NODE_ENV !== "production") console.log('[RequestOTP] Agent code generated for', input.email);
 
         // Save OTP to database
         const dbInstance = await db.getDb();
@@ -155,22 +175,27 @@ export const appRouter = router({
         }
 
         const { otpCodes: otpCodesTable } = await import("../drizzle/schema");
-        console.log('[RequestOTP] Inserting OTP into database...');
-        const insertResult = await dbInstance.insert(otpCodesTable).values({
+        await dbInstance.insert(otpCodesTable).values({
           email: input.email,
           code,
           expiresAt,
           used: "no",
         });
-        console.log('[RequestOTP] OTP inserted successfully:', insertResult);
 
         // Send OTP via Telegram bot to agent
-        console.log('[RequestOTP] Sending Telegram notification...');
-        const { notifyAgent } = await import("./telegram-bot-webhook");
-        await notifyAgent(
-          agent.telegramId,
-          `🔐 <b>Код для входа в личный кабинет:</b>\n\n<code>${code}</code>\n\nКод действителен 5 минут.\n\n⚠️ Никому не сообщайте этот код!`
-        );
+        try {
+          const { notifyAgent } = await import("./telegram-bot-webhook");
+          await notifyAgent(
+            agent.telegramId,
+            `🔐 <b>Код для входа в личный кабинет:</b>\n\n<code>${code}</code>\n\nКод действителен 5 минут.\n\n⚠️ Никому не сообщайте этот код!`
+          );
+        } catch (err) {
+          console.error("[RequestOTP] Failed to send Telegram notification to agent:", err);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Не удалось отправить код в Telegram. Попробуйте позже.",
+          });
+        }
 
         return { success: true };
       }),
@@ -178,10 +203,10 @@ export const appRouter = router({
     verifyOtp: publicProcedure
       .input(z.object({
         email: z.string().email(),
-        code: z.string().length(6)
+        code: z.string().regex(/^\d{6}$/, "OTP must be 6 digits")
       }))
       .mutation(async ({ input, ctx }) => {
-        console.log("[VerifyOTP] Attempt for email:", input.email, "code:", input.code);
+        if (process.env.NODE_ENV !== "production") console.log("[VerifyOTP] Attempt for:", input.email);
 
         const dbInstance = await db.getDb();
         if (!dbInstance) {
@@ -234,10 +259,9 @@ export const appRouter = router({
           .limit(1);
 
         if (adminUser) {
-          console.log("[VerifyOTP] Admin user found, creating admin session");
 
           // Create admin session token
-          const secret = new TextEncoder().encode(process.env.JWT_SECRET || "");
+          const secret = getJwtSecret();
           const token = await new SignJWT({
             userId: adminUser.id,
             role: "admin",
@@ -255,7 +279,6 @@ export const appRouter = router({
             maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
           });
 
-          console.log("[VerifyOTP] Admin session created successfully");
 
           return {
             success: true,
@@ -269,20 +292,16 @@ export const appRouter = router({
         }
 
         // Find agent
-        console.log("[VerifyOTP] Searching for agent with email:", input.email);
         const agent = await db.getAgentByEmail(input.email);
         if (!agent) {
-          console.log("[VerifyOTP] Agent not found for email:", input.email);
           throw new TRPCError({
             code: "NOT_FOUND",
             message: "Agent not found",
           });
         }
 
-        console.log("[VerifyOTP] Agent found:", agent.id, agent.fullName);
-
         // Create session token
-        const secret = new TextEncoder().encode(process.env.JWT_SECRET || "");
+        const secret = getJwtSecret();
         const token = await new SignJWT({
           userId: agent.id,
           agentId: agent.id,
@@ -296,14 +315,10 @@ export const appRouter = router({
 
         // Set session cookie
         const cookieOptions = getSessionCookieOptions(ctx.req);
-        console.log("[VerifyOTP] Setting cookie with options:", cookieOptions);
-
         ctx.res.cookie(AGENT_COOKIE_NAME, token, {
           ...cookieOptions,
           maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
         });
-
-        console.log("[VerifyOTP] Cookie set for agent:", agent.email);
 
         // Create session record in database
         const deviceInfo = ctx.req.headers["user-agent"] || null;
@@ -325,8 +340,6 @@ export const appRouter = router({
           isRevoked: "no",
         });
 
-        console.log("[VerifyOTP] Agent session created successfully for:", agent.email);
-
         return {
           success: true,
           role: "agent",
@@ -338,90 +351,6 @@ export const appRouter = router({
         };
       }),
 
-    // Email + Password Login (for agents)
-    loginWithPassword: publicProcedure
-      .input(z.object({
-        email: z.string().email(),
-        password: z.string().min(6)
-      }))
-      .mutation(async ({ input, ctx }) => {
-        console.log("[LoginWithPassword] Attempt for email:", input.email);
-
-        // Find agent by email
-        const agent = await db.getAgentByEmail(input.email);
-        if (!agent || !agent.passwordHash) {
-          throw new TRPCError({
-            code: "UNAUTHORIZED",
-            message: "Неверный email или пароль"
-          });
-        }
-
-        // Verify password
-        const bcrypt = await import('bcrypt');
-        const isValid = await bcrypt.compare(input.password, agent.passwordHash);
-        if (!isValid) {
-          throw new TRPCError({
-            code: "UNAUTHORIZED",
-            message: "Неверный email или пароль"
-          });
-        }
-
-        console.log("[LoginWithPassword] Password verified for agent:", agent.id);
-
-        // Create JWT token
-        const secret = new TextEncoder().encode(process.env.JWT_SECRET || "");
-        const token = await new SignJWT({
-          agentId: agent.id,
-          role: "agent",
-          email: agent.email,
-        })
-          .setProtectedHeader({ alg: "HS256" })
-          .setIssuedAt()
-          .setExpirationTime("30d")
-          .sign(secret);
-
-        // Set cookie
-        const cookieOptions = getSessionCookieOptions(ctx.req);
-        ctx.res.cookie(AGENT_COOKIE_NAME, token, {
-          ...cookieOptions,
-          maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-        });
-
-        console.log("[LoginWithPassword] Cookie set for agent:", agent.email);
-
-        // Create session in database
-        const deviceInfo = ctx.req.headers["user-agent"] || null;
-        const ipAddress = (ctx.req.headers["x-forwarded-for"] as string)?.split(",")[0] ||
-                          (ctx.req.headers["x-real-ip"] as string) ||
-                          ctx.req.socket.remoteAddress || null;
-
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 30);
-
-        await db.createSession({
-          agentId: agent.id,
-          sessionToken: token,
-          deviceInfo,
-          ipAddress,
-          loginMethod: "password",
-          lastActivityAt: new Date(),
-          expiresAt,
-          isRevoked: "no",
-        });
-
-        console.log("[LoginWithPassword] Session created successfully for:", agent.email);
-
-        return {
-          success: true,
-          role: "agent",
-          needPasswordChange: Boolean(agent.temporaryPassword),
-          user: {
-            id: agent.id,
-            name: agent.fullName,
-            email: agent.email,
-          }
-        };
-      }),
   }),
 
   // AI Assistant for DocDocPartner agents
@@ -531,9 +460,9 @@ DocDocPartner — B2B-платформа агентских рекомендац
         }),
       updateAmounts: protectedProcedure
         .input(z.object({ 
-          id: z.number(), 
-          treatmentAmount: z.number(), 
-          commissionAmount: z.number() 
+          id: z.number(),
+          treatmentAmount: z.number().min(0),
+          commissionAmount: z.number().min(0)
         }))
         .mutation(async ({ ctx, input }) => {
           if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
@@ -818,11 +747,11 @@ DocDocPartner — B2B-платформа агентских рекомендац
           throw new TRPCError({ code: "NOT_FOUND", message: "Agent not found" });
         }
 
-        // Check if agent has requisites
-        if (!agent.inn || !agent.bankAccount) {
-          throw new TRPCError({ 
-            code: "PRECONDITION_FAILED", 
-            message: "Please add your INN and bank details first" 
+        // Check if agent has complete requisites
+        if (!agent.inn || !agent.bankAccount || !agent.bankName || !agent.bankBik) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Заполните все реквизиты (ИНН, банк, счёт, БИК) перед запросом выплаты"
           });
         }
 
@@ -859,83 +788,49 @@ DocDocPartner — B2B-платформа агентских рекомендац
 
   // Agent-specific endpoints (requires agent authentication)
   agent: router({
-    // Get all sessions for current agent
-    getSessions: protectedProcedure.query(async ({ ctx }) => {
-      // Find agent by user's open ID or session token
-      // For now, we'll use a placeholder - this needs proper agent auth
-      // In production, you'd extract agent ID from JWT token
-      
-      // Temporary: get agent from context if available
-      if (!ctx.user) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "Not authenticated" });
-      }
-
-      // For demo purposes, return empty array
-      // In production, extract agentId from JWT and call db.getSessionsByAgentId(agentId)
-      return [];
+    getSessions: agentProcedure.query(async ({ ctx }) => {
+      return db.getSessionsByAgentId(ctx.agentId);
     }),
 
-    // Revoke a specific session
-    revokeSession: protectedProcedure
+    revokeSession: agentProcedure
       .input(z.object({ sessionId: z.number() }))
       .mutation(async ({ input, ctx }) => {
-        if (!ctx.user) {
-          throw new TRPCError({ code: "UNAUTHORIZED", message: "Not authenticated" });
+        const sessions = await db.getSessionsByAgentId(ctx.agentId);
+        const ownSession = sessions.find(s => s.id === input.sessionId);
+        if (!ownSession) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Сессия не принадлежит вам" });
         }
-
         await db.revokeSession(input.sessionId);
         return { success: true };
       }),
 
-    // Revoke all other sessions except current
-    revokeAllOtherSessions: protectedProcedure.mutation(async ({ ctx }) => {
-      if (!ctx.user) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "Not authenticated" });
-      }
-
-      // Extract current session token from cookie
+    revokeAllOtherSessions: agentProcedure.mutation(async ({ ctx }) => {
       const sessionToken = ctx.req.cookies[AGENT_COOKIE_NAME];
       if (!sessionToken) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "No session token" });
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Нет активной сессии" });
       }
-
-      // Get agent ID from session (placeholder)
-      // In production, decode JWT to get agentId
-      // await db.revokeAllSessionsExceptCurrent(agentId, sessionToken);
-      
+      await db.revokeAllSessionsExceptCurrent(ctx.agentId, sessionToken);
       return { success: true };
     }),
   }),
 
   // Agent Dashboard Router (for logged-in agents)
   dashboard: router({
-    // Get dashboard statistics
-    stats: publicProcedure.query(async ({ ctx }) => {
-      if (!ctx.agentId) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "Please login" });
-      }
-      const mockAgentId = ctx.agentId;
-      
-      const agent = await db.getAgentById(mockAgentId);
-      if (!agent) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Agent not found" });
-      }
+    stats: agentProcedure.query(async ({ ctx }) => {
+      const agent = await db.getAgentById(ctx.agentId);
+      if (!agent) throw new TRPCError({ code: "NOT_FOUND", message: "Агент не найден" });
 
-      const referrals = await db.getReferralsByAgentId(mockAgentId);
+      const referrals = await db.getReferralsByAgentId(ctx.agentId);
       const activeReferrals = referrals.filter(r => r.status === "pending" || r.status === "contacted" || r.status === "scheduled");
       const completedReferrals = referrals.filter(r => r.status === "completed");
-      
-      // Calculate this month earnings
+
       const now = new Date();
       const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const thisMonthReferrals = referrals.filter(r => {
-        const createdAt = new Date(r.createdAt);
-        return createdAt >= firstDayOfMonth && r.status === "completed";
-      });
-      const thisMonthEarnings = thisMonthReferrals.reduce((sum, r) => sum + (r.commissionAmount || 0), 0);
+      const thisMonthEarnings = referrals
+        .filter(r => new Date(r.createdAt) >= firstDayOfMonth && r.status === "completed")
+        .reduce((sum, r) => sum + (r.commissionAmount || 0), 0);
 
-      // Calculate conversion rate
-      const conversionRate = referrals.length > 0 
+      const conversionRate = referrals.length > 0
         ? Math.round((completedReferrals.length / referrals.length) * 100)
         : 0;
 
@@ -949,60 +844,34 @@ DocDocPartner — B2B-платформа агентских рекомендац
       };
     }),
 
-    // Get monthly earnings for chart (last 6 months)
-    monthlyEarnings: publicProcedure.query(async ({ ctx }) => {
-      if (!ctx.agentId) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "Please login" });
-      }
-      const mockAgentId = ctx.agentId;
-      
-      const referrals = await db.getReferralsByAgentId(mockAgentId);
+    monthlyEarnings: agentProcedure.query(async ({ ctx }) => {
+      const referrals = await db.getReferralsByAgentId(ctx.agentId);
       const now = new Date();
       const months = [];
-      
+
       for (let i = 5; i >= 0; i--) {
         const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const monthName = date.toLocaleDateString('ru-RU', { month: 'short' });
         const nextMonth = new Date(date.getFullYear(), date.getMonth() + 1, 1);
-        
-        const monthReferrals = referrals.filter(r => {
-          const createdAt = new Date(r.createdAt);
-          return createdAt >= date && createdAt < nextMonth && r.status === "completed";
-        });
-        
-        const earnings = monthReferrals.reduce((sum, r) => sum + (r.commissionAmount || 0), 0);
-        
-        months.push({
-          month: monthName,
-          earnings: earnings / 100, // convert from kopecks to rubles
-        });
+
+        const earnings = referrals
+          .filter(r => {
+            const createdAt = new Date(r.createdAt);
+            return createdAt >= date && createdAt < nextMonth && r.status === "completed";
+          })
+          .reduce((sum, r) => sum + (r.commissionAmount || 0), 0);
+
+        months.push({ month: monthName, earnings: earnings / 100 });
       }
-      
       return months;
     }),
 
-    // Get referral status distribution
-    referralsByStatus: publicProcedure.query(async ({ ctx }) => {
-      if (!ctx.agentId) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "Please login" });
-      }
-      const mockAgentId = ctx.agentId;
-      const referrals = await db.getReferralsByAgentId(mockAgentId);
-      
-      const statusCounts = {
-        pending: 0,
-        contacted: 0,
-        scheduled: 0,
-        completed: 0,
-        cancelled: 0,
-      };
-      
+    referralsByStatus: agentProcedure.query(async ({ ctx }) => {
+      const referrals = await db.getReferralsByAgentId(ctx.agentId);
+      const statusCounts = { pending: 0, contacted: 0, scheduled: 0, completed: 0, cancelled: 0 };
       referrals.forEach(r => {
-        if (r.status in statusCounts) {
-          statusCounts[r.status as keyof typeof statusCounts]++;
-        }
+        if (r.status in statusCounts) statusCounts[r.status as keyof typeof statusCounts]++;
       });
-      
       return [
         { status: 'Ожидание', count: statusCounts.pending },
         { status: 'Контакт', count: statusCounts.contacted },
@@ -1012,30 +881,17 @@ DocDocPartner — B2B-платформа агентских рекомендац
       ];
     }),
 
-    // Get all referrals
-    referrals: publicProcedure.query(async ({ ctx }) => {
-      if (!ctx.agentId) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "Please login" });
-      }
-      const mockAgentId = ctx.agentId;
-      return db.getReferralsByAgentId(mockAgentId);
+    referrals: agentProcedure.query(async ({ ctx }) => {
+      return db.getReferralsByAgentId(ctx.agentId);
     }),
 
-    // Get agent profile
-    profile: publicProcedure.query(async ({ ctx }) => {
-      if (!ctx.agentId) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "Please login" });
-      }
-      const mockAgentId = ctx.agentId;
-      const agent = await db.getAgentById(mockAgentId);
-      if (!agent) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Agent not found" });
-      }
+    profile: agentProcedure.query(async ({ ctx }) => {
+      const agent = await db.getAgentById(ctx.agentId);
+      if (!agent) throw new TRPCError({ code: "NOT_FOUND", message: "Агент не найден" });
       return agent;
     }),
 
-    // Update agent profile/requisites
-    updateProfile: publicProcedure
+    updateProfile: agentProcedure
       .input(z.object({
         inn: z.string().optional(),
         bankAccount: z.string().optional(),
@@ -1044,22 +900,15 @@ DocDocPartner — B2B-платформа агентских рекомендац
         isSelfEmployed: z.enum(["yes", "no", "unknown"]).optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        if (!ctx.agentId) {
-          throw new TRPCError({ code: "UNAUTHORIZED", message: "Please login" });
-        }
-        const mockAgentId = ctx.agentId;
-        await db.updateAgentRequisites(mockAgentId, input);
+        await db.updateAgentRequisites(ctx.agentId, input);
         return { success: true };
       }),
 
-    // Get payment history
-    payments: publicProcedure.query(async () => {
-      const mockAgentId = 1;
-      return db.getPaymentsByAgentId(mockAgentId);
+    payments: agentProcedure.query(async ({ ctx }) => {
+      return db.getPaymentsByAgentId(ctx.agentId);
     }),
 
-    // Update personal information
-    updatePersonalInfo: publicProcedure
+    updatePersonalInfo: agentProcedure
       .input(z.object({
         fullName: z.string().optional(),
         email: z.string().email().optional(),
@@ -1069,25 +918,16 @@ DocDocPartner — B2B-платформа агентских рекомендац
         role: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        if (!ctx.agentId) {
-          throw new TRPCError({ code: "UNAUTHORIZED", message: "Please login" });
-        }
-        const mockAgentId = ctx.agentId;
-        await db.updateAgentPersonalInfo(mockAgentId, input);
+        await db.updateAgentPersonalInfo(ctx.agentId, input);
         return { success: true };
       }),
 
-    // Request payment withdrawal
-    requestPayment: publicProcedure
+    requestPayment: agentProcedure
       .input(z.object({
-        amount: z.number().min(100000), // minimum 1000 rubles in kopecks
+        amount: z.number().min(100000),
       }))
       .mutation(async ({ input, ctx }) => {
-        if (!ctx.agentId) {
-          throw new TRPCError({ code: "UNAUTHORIZED", message: "Please login" });
-        }
-        const mockAgentId = ctx.agentId;
-        await db.createPaymentRequest(mockAgentId, input.amount);
+        await db.createPaymentRequest(ctx.agentId, input.amount);
         return { success: true };
       }),
   }),

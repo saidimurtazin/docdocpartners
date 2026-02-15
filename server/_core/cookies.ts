@@ -21,25 +21,36 @@ function isSecureRequest(req: Request) {
   return protoList.some(proto => proto.trim().toLowerCase() === "https");
 }
 
+/**
+ * Extract the parent domain for cookie sharing across subdomains.
+ * e.g. "admin.docdocpartners.ru" → ".docdocpartners.ru"
+ * For Railway/localhost/IP addresses, returns undefined (browser default).
+ */
+function getParentDomain(hostname: string): string | undefined {
+  if (LOCAL_HOSTS.has(hostname) || isIpAddress(hostname)) return undefined;
+
+  // Railway default domain — no subdomain sharing needed
+  if (hostname.endsWith(".up.railway.app")) return undefined;
+
+  // For custom domains like admin.docdocpartners.ru or docdocpartners.ru,
+  // set cookie on the parent domain so it works across subdomains
+  const parts = hostname.split(".");
+  if (parts.length >= 2) {
+    // Take last 2 parts: "docdocpartners.ru" → ".docdocpartners.ru"
+    const parent = parts.slice(-2).join(".");
+    return `.${parent}`;
+  }
+
+  return undefined;
+}
+
 export function getSessionCookieOptions(
   req: Request
 ): Pick<CookieOptions, "domain" | "httpOnly" | "path" | "sameSite" | "secure"> {
-  // const hostname = req.hostname;
-  // const shouldSetDomain =
-  //   hostname &&
-  //   !LOCAL_HOSTS.has(hostname) &&
-  //   !isIpAddress(hostname) &&
-  //   hostname !== "127.0.0.1" &&
-  //   hostname !== "::1";
-
-  // const domain =
-  //   shouldSetDomain && !hostname.startsWith(".")
-  //     ? `.${hostname}`
-  //     : shouldSetDomain
-  //       ? hostname
-  //       : undefined;
+  const domain = getParentDomain(req.hostname);
 
   return {
+    ...(domain ? { domain } : {}),
     httpOnly: true,
     path: "/",
     sameSite: "lax",

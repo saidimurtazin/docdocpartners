@@ -19,16 +19,7 @@ export async function createContext(
 
   // Check for agent/admin session
   try {
-    const cookieHeader = opts.req.headers.cookie;
-    console.log("[Context] Cookie header:", cookieHeader ? "present" : "missing");
-
     session = await verifyAgentSessionFromRequest(opts.req);
-
-    if (session) {
-      console.log("[Context] Session found - role:", session.role, "agentId:", session.agentId, "userId:", session.userId);
-    } else {
-      console.log("[Context] No valid session found");
-    }
 
     // For backward compatibility, set agentId if it's an agent session
     if (session?.agentId) {
@@ -43,7 +34,7 @@ export async function createContext(
       }
     }
   } catch (error) {
-    console.log("[Context] Error verifying session:", error);
+    console.error("[Context] Session verification error");
     session = null;
     agentId = null;
   }

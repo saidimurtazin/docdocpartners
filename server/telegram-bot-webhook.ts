@@ -28,6 +28,7 @@ interface SessionData {
     patientName?: string;
     patientBirthdate?: string;
     patientPhone?: string;
+    referredBy?: string;
   };
   lastMessageTime?: number; // For spam protection
 }
@@ -343,6 +344,10 @@ bot.command('start', async (ctx) => {
   // Clear any existing session for new registration
   sessions.delete(userId);
 
+  // Parse referral code from deep link (e.g. /start ref_123)
+  const startPayload = (ctx.message?.text || '').split(' ')[1];
+  const referredBy = startPayload && startPayload.startsWith('ref_') ? startPayload.replace('ref_', '') : undefined;
+
   await ctx.reply(
     '👋 <b>Добро пожаловать в DocDocPartner!</b>\n\n' +
     'Я помогу вам зарегистрироваться в партнерской программе для врачей и медицинских специалистов.\n\n' +
@@ -355,18 +360,26 @@ bot.command('start', async (ctx) => {
 
   const session = getSession(userId);
   session.registrationStep = 'fullName';
-  session.tempData = {};
+  session.tempData = { referredBy };
 });
 
 // Handle full name input
 bot.on(message('text'), async (ctx) => {
-  console.log('[Telegram Bot] Received text message:', ctx.message.text);
   const userId = ctx.from?.id;
   if (!userId) return;
 
   const session = getSession(userId);
-  console.log('[Telegram Bot] Session step:', session.registrationStep);
   const text = ctx.message.text;
+
+  // Handle cancel command in any flow
+  if (text.toLowerCase() === 'отмена' || text.toLowerCase() === '/cancel') {
+    if (session.registrationStep) {
+      session.registrationStep = undefined;
+      session.tempData = {};
+      await ctx.reply('❌ Действие отменено.', Markup.removeKeyboard());
+      return;
+    }
+  }
 
   // Handle menu button clicks (ReplyKeyboardMarkup)
   if (text === '📋 Отправить пациента') {
@@ -1053,6 +1066,10 @@ bot.action('contract_accept', async (ctx) => {
       return;
     }
 
+    // Generate unique referral code
+    const crypto = await import('crypto');
+    const referralCode = crypto.randomBytes(6).toString('hex');
+
     // Create agent in database
     const [insertResult] = await db.insert(agents).values({
       telegramId: String(userId),
@@ -1062,25 +1079,12 @@ bot.action('contract_accept', async (ctx) => {
       role: data.role!,
       specialization: data.specialization || null,
       city: data.city!,
-      status: 'pending'
+      status: 'pending',
+      referralCode,
+      referredBy: data.referredBy ? parseInt(data.referredBy, 10) || null : null,
     });
 
-    // Generate temporary password for web login
-    const crypto = await import('crypto');
-    const bcrypt = await import('bcrypt');
-    const tempPassword = crypto.randomBytes(4).toString('hex'); // 8 characters
-    const passwordHash = await bcrypt.hash(tempPassword, 10);
-
-    // Update agent with password
-    await db.update(agents)
-      .set({
-        passwordHash,
-        temporaryPassword: tempPassword,
-        passwordSetAt: new Date()
-      })
-      .where(eq(agents.telegramId, String(userId)));
-
-    // Send registration confirmation with password
+    // Send registration confirmation
     await ctx.editMessageText(
       '🎉 <b>Регистрация завершена!</b>\n\n' +
       'Ваша заявка отправлена на проверку. Мы свяжемся с вами в течение 24 часов.\n\n' +
@@ -1091,13 +1095,12 @@ bot.action('contract_accept', async (ctx) => {
       { parse_mode: 'HTML' }
     );
 
-    // Send password in separate message for web access
+    // Send web access info (OTP-based login, no password needed)
     await ctx.reply(
       '🔐 <b>Доступ к веб-кабинету</b>\n\n' +
-      `📧 Email: <code>${data.email}</code>\n` +
-      `🔑 Временный пароль: <code>${tempPassword}</code>\n\n` +
-      '🌐 Войдите на сайт: https://docdocpartners-production.up.railway.app/login\n\n' +
-      '⚠️ После первого входа рекомендуем сменить пароль!',
+      `📧 Ваш email: <code>${data.email}</code>\n\n` +
+      '🌐 Войдите на сайт: https://docdocpartners.ru/login\n' +
+      '💡 Для входа используйте код, который придёт в этот Telegram.',
       { parse_mode: 'HTML' }
     );
 
@@ -1529,7 +1532,7 @@ bot.command('referral_program', async (ctx) => {
     const referralCount = referredAgents.length;
     const bonusPoints = agent.bonusPoints || 0;
 
-    const referralLink = `https://t.me/maruspartnersbot?start=${agent.referralCode}`;
+    const referralLink = `https://t.me/docpartnerbot?start=${agent.referralCode}`;
 
     let message = '🎁 <b>Реферальная программа</b>\n\n';
     message += '📢 Приглашайте коллег и получайте бонусы!\n\n';
@@ -1738,7 +1741,7 @@ bot.action('cmd_referral_program', async (ctx) => {
       return;
     }
 
-    const referralLink = `https://t.me/maruspartnersbot?start=ref_${agent.id}`;
+    const referralLink = `https://t.me/docpartnerbot?start=ref_${agent.id}`;
     const referredCount = 0; // TODO: implement referredAgentsCount tracking
     const bonusPoints = agent.bonusPoints || 0;
 
