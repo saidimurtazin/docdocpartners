@@ -13,18 +13,26 @@ export default function AgentReferrals() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const statusLabels: Record<string, string> = {
-    pending: "Ожидает",
-    contacted: "Связались",
-    scheduled: "Запланировано",
-    completed: "Завершено",
-    cancelled: "Отменено",
+    new: "🆕 Новая",
+    in_progress: "⚙️ В работе",
+    contacted: "📞 Связались",
+    scheduled: "📅 Записан",
+    visited: "✅ Приём состоялся",
+    paid: "💰 Оплачено",
+    duplicate: "🔁 Дубликат",
+    no_answer: "📵 Не дозвонились",
+    cancelled: "❌ Отменена",
   };
 
   const statusColors: Record<string, string> = {
-    pending: "bg-amber-100 text-amber-800 border-amber-200",
-    contacted: "bg-blue-100 text-blue-800 border-blue-200",
+    new: "bg-amber-100 text-amber-800 border-amber-200",
+    in_progress: "bg-blue-100 text-blue-800 border-blue-200",
+    contacted: "bg-sky-100 text-sky-800 border-sky-200",
     scheduled: "bg-purple-100 text-purple-800 border-purple-200",
-    completed: "bg-green-100 text-green-800 border-green-200",
+    visited: "bg-emerald-100 text-emerald-800 border-emerald-200",
+    paid: "bg-green-100 text-green-800 border-green-200",
+    duplicate: "bg-gray-100 text-gray-800 border-gray-200",
+    no_answer: "bg-orange-100 text-orange-800 border-orange-200",
     cancelled: "bg-red-100 text-red-800 border-red-200",
   };
 
@@ -101,11 +109,15 @@ export default function AgentReferrals() {
                     className="w-full pl-10 pr-3 py-2 border border-input rounded-md bg-background"
                   >
                     <option value="all">Все статусы</option>
-                    <option value="pending">Ожидает</option>
-                    <option value="contacted">Связались</option>
-                    <option value="scheduled">Запланировано</option>
-                    <option value="completed">Завершено</option>
-                    <option value="cancelled">Отменено</option>
+                    <option value="new">🆕 Новая</option>
+                    <option value="in_progress">⚙️ В работе</option>
+                    <option value="contacted">📞 Связались</option>
+                    <option value="scheduled">📅 Записан</option>
+                    <option value="visited">✅ Приём состоялся</option>
+                    <option value="paid">💰 Оплачено</option>
+                    <option value="duplicate">🔁 Дубликат</option>
+                    <option value="no_answer">📵 Не дозвонились</option>
+                    <option value="cancelled">❌ Отменена</option>
                   </select>
                 </div>
               </div>

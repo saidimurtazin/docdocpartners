@@ -607,19 +607,14 @@ bot.on(message('text'), async (ctx) => {
       }
 
       const statusEmoji: Record<string, string> = {
-        pending: '📤',
-        contacted: '📞',
-        scheduled: '📅',
-        completed: '✅',
-        cancelled: '❌'
+        new: '🆕', in_progress: '⚙️', contacted: '📞', scheduled: '📅',
+        visited: '✅', paid: '💰', duplicate: '🔁', no_answer: '📵', cancelled: '❌'
       };
 
       const statusNames: Record<string, string> = {
-        pending: 'Отправлена',
-        contacted: 'Клиника связалась',
-        scheduled: 'Записан на прием',
-        completed: 'Лечение завершено',
-        cancelled: 'Отменена'
+        new: 'Новая', in_progress: 'В работе', contacted: 'Связались',
+        scheduled: 'Записан на приём', visited: 'Приём состоялся',
+        paid: 'Оплачено', duplicate: 'Дубликат', no_answer: 'Не дозвонились', cancelled: 'Отменена'
       };
 
       let message = '📊 <b>Мои рекомендации</b>\n\n';
@@ -1320,7 +1315,7 @@ bot.action('patient_consent_yes', async (ctx) => {
       patientBirthdate: data.patientBirthdate,
       patientPhone: data.patientPhone,
       contactConsent: data.contactConsent ?? null,
-      status: 'pending'
+      status: 'new'
     });
 
     // Clear session before messages (prevents double-submit)
@@ -1573,19 +1568,14 @@ bot.command('referrals', async (ctx) => {
     }
 
     const statusEmoji: Record<string, string> = {
-      pending: '📤',
-      contacted: '📞',
-      scheduled: '📅',
-      completed: '✅',
-      cancelled: '❌'
+      new: '🆕', in_progress: '⚙️', contacted: '📞', scheduled: '📅',
+      visited: '✅', paid: '💰', duplicate: '🔁', no_answer: '📵', cancelled: '❌'
     };
 
     const statusNames: Record<string, string> = {
-      pending: 'Отправлена',
-      contacted: 'Клиника связалась',
-      scheduled: 'Записан на прием',
-      completed: 'Лечение завершено',
-      cancelled: 'Отменена'
+      new: 'Новая', in_progress: 'В работе', contacted: 'Связались',
+      scheduled: 'Записан на приём', visited: 'Приём состоялся',
+      paid: 'Оплачено', duplicate: 'Дубликат', no_answer: 'Не дозвонились', cancelled: 'Отменена'
     };
 
     let message = '📊 <b>Мои рекомендации</b>\n\n';
@@ -1814,11 +1804,20 @@ bot.action('cmd_referrals', async (ctx) => {
       return;
     }
 
+    const emojiMap: Record<string, string> = {
+      new: '🆕', in_progress: '⚙️', contacted: '📞', scheduled: '📅',
+      visited: '✅', paid: '💰', duplicate: '🔁', no_answer: '📵', cancelled: '❌'
+    };
+    const nameMap: Record<string, string> = {
+      new: 'Новая', in_progress: 'В работе', contacted: 'Связались',
+      scheduled: 'Записан', visited: 'Приём состоялся',
+      paid: 'Оплачено', duplicate: 'Дубликат', no_answer: 'Не дозвонились', cancelled: 'Отменена'
+    };
     let message = '📊 <b>Мои рекомендации</b>\n\n';
     referrals.slice(0, 10).forEach((ref, idx) => {
-      const statusEmoji = ref.status === 'completed' ? '✅' : ref.status === 'pending' ? '⏳' : '📅';
-      message += `${statusEmoji} <b>${escapeHtml(ref.patientFullName)}</b>\n`;
-      message += `   Статус: ${ref.status}\n\n`;
+      const emoji = emojiMap[ref.status] || '📋';
+      message += `${emoji} <b>${escapeHtml(ref.patientFullName)}</b>\n`;
+      message += `   Статус: ${nameMap[ref.status] || ref.status}\n\n`;
     });
     
     if (referrals.length > 10) {

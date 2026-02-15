@@ -59,11 +59,15 @@ function formatAmount(kopecks: number): string {
  */
 function getReferralStatusInfo(status: string): { emoji: string; text: string } {
   const statusMap: Record<string, { emoji: string; text: string }> = {
-    pending: { emoji: "⏳", text: "Ожидает обработки" },
-    contacted: { emoji: "📞", text: "Пациент связан" },
-    scheduled: { emoji: "📅", text: "Запись назначена" },
-    completed: { emoji: "✅", text: "Завершено" },
-    cancelled: { emoji: "❌", text: "Отменено" },
+    new: { emoji: "🆕", text: "Новая заявка" },
+    in_progress: { emoji: "⚙️", text: "В работе" },
+    contacted: { emoji: "📞", text: "Связались с пациентом" },
+    scheduled: { emoji: "📅", text: "Записан на приём" },
+    visited: { emoji: "✅", text: "Приём состоялся" },
+    paid: { emoji: "💰", text: "Оплачено" },
+    duplicate: { emoji: "🔁", text: "Дубликат — пациент уже в базе клиники" },
+    no_answer: { emoji: "📵", text: "Не дозвонились" },
+    cancelled: { emoji: "❌", text: "Отменена" },
   };
   return statusMap[status] || { emoji: "📋", text: status };
 }
@@ -109,15 +113,23 @@ export async function notifyReferralStatusChange(
   message += `\n<b>Новый статус:</b> ${text}\n`;
   
   // Add special messages for certain statuses
-  if (referralData.newStatus === "completed" && referralData.commissionAmount) {
+  if (referralData.newStatus === "paid" && referralData.commissionAmount) {
     message += `\n💰 <b>Ваше вознаграждение:</b> ${formatAmount(referralData.commissionAmount)}\n`;
     if (referralData.treatmentAmount) {
       message += `<b>Сумма лечения:</b> ${formatAmount(referralData.treatmentAmount)}\n`;
     }
+  } else if (referralData.newStatus === "visited") {
+    message += `\n✅ Пациент посетил приём. Ожидайте подтверждения оплаты для начисления вознаграждения.\n`;
   } else if (referralData.newStatus === "scheduled") {
-    message += `\n📅 Пациент записан на прием. Ожидайте завершения лечения для начисления вознаграждения.\n`;
+    message += `\n📅 Пациент записан на приём. Ожидайте информации о визите.\n`;
   } else if (referralData.newStatus === "contacted") {
     message += `\n📞 Наш координатор связался с пациентом. Скоро будет назначена консультация.\n`;
+  } else if (referralData.newStatus === "in_progress") {
+    message += `\n⚙️ Ваша рекомендация взята в работу.\n`;
+  } else if (referralData.newStatus === "duplicate") {
+    message += `\n🔁 Пациент уже был в базе клиники. Вознаграждение не начисляется.\n`;
+  } else if (referralData.newStatus === "no_answer") {
+    message += `\n📵 Не удалось дозвониться до пациента. Попробуем ещё раз.\n`;
   } else if (referralData.newStatus === "cancelled") {
     message += `\n❌ К сожалению, рекомендация отменена. Вознаграждение не начисляется.\n`;
   }

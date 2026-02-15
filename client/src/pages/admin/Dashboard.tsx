@@ -39,11 +39,8 @@ export default function AdminDashboard() {
     if (!allReferrals) return [];
     
     const statusCounts: Record<string, number> = {
-      pending: 0,
-      contacted: 0,
-      scheduled: 0,
-      completed: 0,
-      cancelled: 0,
+      new: 0, in_progress: 0, contacted: 0, scheduled: 0,
+      visited: 0, paid: 0, duplicate: 0, no_answer: 0, cancelled: 0,
     };
 
     allReferrals.forEach((ref: any) => {
@@ -51,11 +48,15 @@ export default function AdminDashboard() {
     });
 
     return [
-      { status: "Ожидает", count: statusCounts.pending, color: "bg-yellow-500" },
-      { status: "Связались", count: statusCounts.contacted, color: "bg-blue-500" },
-      { status: "Запланировано", count: statusCounts.scheduled, color: "bg-purple-500" },
-      { status: "Завершено", count: statusCounts.completed, color: "bg-green-500" },
-      { status: "Отменено", count: statusCounts.cancelled, color: "bg-red-500" },
+      { status: "🆕 Новая", count: statusCounts.new, color: "bg-yellow-500" },
+      { status: "⚙️ В работе", count: statusCounts.in_progress, color: "bg-blue-400" },
+      { status: "📞 Связались", count: statusCounts.contacted, color: "bg-blue-500" },
+      { status: "📅 Записан", count: statusCounts.scheduled, color: "bg-purple-500" },
+      { status: "✅ Приём", count: statusCounts.visited, color: "bg-emerald-500" },
+      { status: "💰 Оплачено", count: statusCounts.paid, color: "bg-green-500" },
+      { status: "🔁 Дубликат", count: statusCounts.duplicate, color: "bg-gray-400" },
+      { status: "📵 Нет ответа", count: statusCounts.no_answer, color: "bg-orange-500" },
+      { status: "❌ Отменена", count: statusCounts.cancelled, color: "bg-red-500" },
     ];
   }, [allReferrals]);
 
@@ -73,7 +74,7 @@ export default function AdminDashboard() {
       }
       
       clinicCounts[ref.clinic].count++;
-      if (ref.status === "completed") {
+      if (ref.status === "paid" || ref.status === "visited") {
         clinicCounts[ref.clinic].completed++;
         clinicCounts[ref.clinic].revenue += ref.treatmentAmount || 0;
       }

@@ -98,26 +98,33 @@ export default function AdminReferrals() {
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-      pending: "secondary",
+      new: "secondary",
+      in_progress: "default",
       contacted: "default",
       scheduled: "default",
-      completed: "default",
+      visited: "default",
+      paid: "default",
+      duplicate: "outline",
+      no_answer: "outline",
       cancelled: "destructive",
     };
     const labels: Record<string, string> = {
-      pending: "Ожидает",
-      contacted: "Связались",
-      scheduled: "Назначено",
-      completed: "Завершено",
-      cancelled: "Отменено",
+      new: "🆕 Новая",
+      in_progress: "⚙️ В работе",
+      contacted: "📞 Связались",
+      scheduled: "📅 Записан",
+      visited: "✅ Приём состоялся",
+      paid: "💰 Оплачено",
+      duplicate: "🔁 Дубликат",
+      no_answer: "📵 Не дозвонились",
+      cancelled: "❌ Отменена",
     };
     return <Badge variant={variants[status] || "outline"}>{labels[status] || status}</Badge>;
   };
 
-  const handleStatusChange = async (
-    id: number,
-    status: "pending" | "contacted" | "scheduled" | "completed" | "cancelled"
-  ) => {
+  type ReferralStatus = "new" | "in_progress" | "contacted" | "scheduled" | "visited" | "paid" | "duplicate" | "no_answer" | "cancelled";
+
+  const handleStatusChange = async (id: number, status: ReferralStatus) => {
     await updateStatus.mutateAsync({ id, status });
   };
 
@@ -186,11 +193,15 @@ export default function AdminReferrals() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Все статусы</SelectItem>
-                    <SelectItem value="pending">Ожидает</SelectItem>
-                    <SelectItem value="contacted">Связались</SelectItem>
-                    <SelectItem value="scheduled">Назначено</SelectItem>
-                    <SelectItem value="completed">Завершено</SelectItem>
-                    <SelectItem value="cancelled">Отменено</SelectItem>
+                    <SelectItem value="new">🆕 Новая</SelectItem>
+                    <SelectItem value="in_progress">⚙️ В работе</SelectItem>
+                    <SelectItem value="contacted">📞 Связались</SelectItem>
+                    <SelectItem value="scheduled">📅 Записан</SelectItem>
+                    <SelectItem value="visited">✅ Приём состоялся</SelectItem>
+                    <SelectItem value="paid">💰 Оплачено</SelectItem>
+                    <SelectItem value="duplicate">🔁 Дубликат</SelectItem>
+                    <SelectItem value="no_answer">📵 Не дозвонились</SelectItem>
+                    <SelectItem value="cancelled">❌ Отменена</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -264,7 +275,7 @@ export default function AdminReferrals() {
                               <Select
                                 value={referral.status}
                                 onValueChange={(value) =>
-                                  handleStatusChange(referral.id, value as "pending" | "contacted" | "scheduled" | "completed" | "cancelled")
+                                  handleStatusChange(referral.id, value as ReferralStatus)
                                 }
                                 disabled={updateStatus.isPending}
                               >
@@ -272,11 +283,15 @@ export default function AdminReferrals() {
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="pending">Ожидает</SelectItem>
-                                  <SelectItem value="contacted">Связались</SelectItem>
-                                  <SelectItem value="scheduled">Назначено</SelectItem>
-                                  <SelectItem value="completed">Завершено</SelectItem>
-                                  <SelectItem value="cancelled">Отменено</SelectItem>
+                                  <SelectItem value="new">🆕 Новая</SelectItem>
+                                  <SelectItem value="in_progress">⚙️ В работе</SelectItem>
+                                  <SelectItem value="contacted">📞 Связались</SelectItem>
+                                  <SelectItem value="scheduled">📅 Записан</SelectItem>
+                                  <SelectItem value="visited">✅ Приём состоялся</SelectItem>
+                                  <SelectItem value="paid">💰 Оплачено</SelectItem>
+                                  <SelectItem value="duplicate">🔁 Дубликат</SelectItem>
+                                  <SelectItem value="no_answer">📵 Не дозвонились</SelectItem>
+                                  <SelectItem value="cancelled">❌ Отменена</SelectItem>
                                 </SelectContent>
                               </Select>
                             </>

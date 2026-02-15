@@ -93,7 +93,7 @@ export const referrals = mysqlTable("referrals", {
   patientPhone: varchar("patientPhone", { length: 50 }),
   patientEmail: varchar("patientEmail", { length: 320 }),
   clinic: varchar("clinic", { length: 255 }), // какая клиника
-  status: mysqlEnum("status", ["pending", "contacted", "scheduled", "completed", "cancelled"]).default("pending").notNull(),
+  status: mysqlEnum("status", ["new", "in_progress", "contacted", "scheduled", "visited", "paid", "duplicate", "no_answer", "cancelled"]).default("new").notNull(),
   treatmentAmount: int("treatmentAmount").default(0), // сумма лечения в копейках
   commissionAmount: int("commissionAmount").default(0), // вознаграждение агенту в копейках
   contactConsent: boolean("contactConsent"), // согласие пациента на связь от DocDoc

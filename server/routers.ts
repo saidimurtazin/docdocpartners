@@ -451,7 +451,7 @@ DocDocPartner — B2B-платформа агентских рекомендац
       updateStatus: protectedProcedure
         .input(z.object({
           id: z.number(),
-          status: z.enum(["pending", "contacted", "scheduled", "completed", "cancelled"])
+          status: z.enum(["new", "in_progress", "contacted", "scheduled", "visited", "paid", "duplicate", "no_answer", "cancelled"])
         }))
         .mutation(async ({ ctx, input }) => {
           if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
@@ -870,13 +870,13 @@ DocDocPartner — B2B-платформа агентских рекомендац
       if (!agent) throw new TRPCError({ code: "NOT_FOUND", message: "Агент не найден" });
 
       const referrals = await db.getReferralsByAgentId(ctx.agentId);
-      const activeReferrals = referrals.filter(r => r.status === "pending" || r.status === "contacted" || r.status === "scheduled");
-      const completedReferrals = referrals.filter(r => r.status === "completed");
+      const activeReferrals = referrals.filter(r => ["new", "in_progress", "contacted", "scheduled"].includes(r.status));
+      const completedReferrals = referrals.filter(r => r.status === "paid" || r.status === "visited");
 
       const now = new Date();
       const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const thisMonthEarnings = referrals
-        .filter(r => new Date(r.createdAt) >= firstDayOfMonth && r.status === "completed")
+        .filter(r => new Date(r.createdAt) >= firstDayOfMonth && (r.status === "paid" || r.status === "visited"))
         .reduce((sum, r) => sum + (r.commissionAmount || 0), 0);
 
       const conversionRate = referrals.length > 0
@@ -906,7 +906,7 @@ DocDocPartner — B2B-платформа агентских рекомендац
         const earnings = referrals
           .filter(r => {
             const createdAt = new Date(r.createdAt);
-            return createdAt >= date && createdAt < nextMonth && r.status === "completed";
+            return createdAt >= date && createdAt < nextMonth && (r.status === "paid" || r.status === "visited");
           })
           .reduce((sum, r) => sum + (r.commissionAmount || 0), 0);
 
@@ -917,16 +917,20 @@ DocDocPartner — B2B-платформа агентских рекомендац
 
     referralsByStatus: agentProcedure.query(async ({ ctx }) => {
       const referrals = await db.getReferralsByAgentId(ctx.agentId);
-      const statusCounts = { pending: 0, contacted: 0, scheduled: 0, completed: 0, cancelled: 0 };
+      const statusCounts: Record<string, number> = { new: 0, in_progress: 0, contacted: 0, scheduled: 0, visited: 0, paid: 0, duplicate: 0, no_answer: 0, cancelled: 0 };
       referrals.forEach(r => {
-        if (r.status in statusCounts) statusCounts[r.status as keyof typeof statusCounts]++;
+        if (r.status in statusCounts) statusCounts[r.status]++;
       });
       return [
-        { status: 'Ожидание', count: statusCounts.pending },
-        { status: 'Контакт', count: statusCounts.contacted },
+        { status: 'Новая', count: statusCounts.new },
+        { status: 'В работе', count: statusCounts.in_progress },
+        { status: 'Связались', count: statusCounts.contacted },
         { status: 'Записан', count: statusCounts.scheduled },
-        { status: 'Завершено', count: statusCounts.completed },
-        { status: 'Отменено', count: statusCounts.cancelled },
+        { status: 'Приём состоялся', count: statusCounts.visited },
+        { status: 'Оплачено', count: statusCounts.paid },
+        { status: 'Дубликат', count: statusCounts.duplicate },
+        { status: 'Не дозвонились', count: statusCounts.no_answer },
+        { status: 'Отменена', count: statusCounts.cancelled },
       ];
     }),
 

@@ -241,7 +241,7 @@ export async function createReferral(data: any) {
 
 export async function updateReferralStatus(
   id: number, 
-  status: "pending" | "contacted" | "scheduled" | "completed" | "cancelled"
+  status: "new" | "in_progress" | "contacted" | "scheduled" | "visited" | "paid" | "duplicate" | "no_answer" | "cancelled"
 ) {
   const db = await getDb();
   if (!db) return;
@@ -461,7 +461,7 @@ export async function getStatistics() {
   const [totalReferrals] = await db.select({ count: sql<number>`count(*)` }).from(referrals);
   const [completedReferrals] = await db.select({ count: sql<number>`count(*)` })
     .from(referrals)
-    .where(eq(referrals.status, "completed"));
+    .where(sql`${referrals.status} IN ('paid', 'visited')`);
   const [totalPayments] = await db.select({ 
     sum: sql<number>`COALESCE(SUM(amount), 0)` 
   }).from(payments).where(eq(payments.status, "completed"));
@@ -534,7 +534,7 @@ export async function getAgentStatistics(agentId: number) {
   
   const [completedReferrals] = await db.select({ count: sql<number>`count(*)` })
     .from(referrals)
-    .where(and(eq(referrals.agentId, agentId), eq(referrals.status, "completed")));
+    .where(and(eq(referrals.agentId, agentId), sql`${referrals.status} IN ('paid', 'visited')`));
   
   const [totalEarnings] = await db.select({ 
     sum: sql<number>`COALESCE(SUM(amount), 0)` 
