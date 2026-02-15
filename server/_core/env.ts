@@ -18,4 +18,6 @@ export const ENV = {
   imapPort: parseInt(process.env.IMAP_PORT ?? "993"),
   imapUser: process.env.IMAP_USER ?? "",
   imapPass: process.env.IMAP_PASS ?? "",
+  /** Google Gemini API key for AI parsing of clinic emails */
+  geminiApiKey: process.env.GEMINI_API_KEY ?? "",
 };

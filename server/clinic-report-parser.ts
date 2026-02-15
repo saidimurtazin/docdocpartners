@@ -1,7 +1,8 @@
 /**
- * AI Clinic Report Parser — uses Gemini 2.5 Flash to extract structured data from clinic emails
+ * AI Clinic Report Parser — uses Google Gemini 2.5 Flash to extract structured data from clinic emails
  */
-import { invokeLLM } from "./_core/llm";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { ENV } from "./_core/env";
 
 export interface ParsedPatientReport {
   patientName: string | null;
@@ -46,7 +47,7 @@ const SYSTEM_PROMPT = `Ты — AI-ассистент для обработки 
 }`;
 
 /**
- * Parse a clinic email body and extract patient visit data using AI
+ * Parse a clinic email body and extract patient visit data using Google Gemini
  */
 export async function parseClinicEmail(
   emailBody: string,
@@ -58,25 +59,31 @@ export async function parseClinicEmail(
     return [];
   }
 
-  // Truncate very long emails (Gemini context limit)
+  if (!ENV.geminiApiKey) {
+    console.error("[ClinicParser] GEMINI_API_KEY not configured, skipping AI parsing");
+    return [];
+  }
+
+  // Truncate very long emails
   const truncatedBody = emailBody.length > 15000 ? emailBody.substring(0, 15000) + "\n...(обрезано)" : emailBody;
 
   try {
-    const result = await invokeLLM({
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        {
-          role: "user",
-          content: `Проанализируй это письмо от клиники:\n\nОт: ${emailFrom}\nТема: ${emailSubject}\n\nТекст письма:\n${truncatedBody}`,
-        },
-      ],
-      responseFormat: { type: "json_object" },
+    const genAI = new GoogleGenerativeAI(ENV.geminiApiKey);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash-preview-05-20",
+      generationConfig: {
+        responseMimeType: "application/json",
+        maxOutputTokens: 4096,
+      },
     });
 
-    // Extract content from LLM response
-    const content = result.choices?.[0]?.message?.content;
-    if (!content || typeof content !== "string") {
-      console.log("[ClinicParser] No content in LLM response");
+    const prompt = `${SYSTEM_PROMPT}\n\nПроанализируй это письмо от клиники:\n\nОт: ${emailFrom}\nТема: ${emailSubject}\n\nТекст письма:\n${truncatedBody}`;
+
+    const result = await model.generateContent(prompt);
+    const content = result.response.text();
+
+    if (!content) {
+      console.log("[ClinicParser] No content in Gemini response");
       return [];
     }
 
