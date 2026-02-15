@@ -16,7 +16,7 @@ const bot = new Telegraf(ENV.telegramBotToken);
 
 // Session interface
 interface SessionData {
-  registrationStep?: 'fullName' | 'email' | 'phone' | 'role' | 'specialization' | 'city' | 'contract' | 'patient_name' | 'patient_birthdate' | 'patient_phone' | 'patient_contact_consent' | 'patient_consent';
+  registrationStep?: 'fullName' | 'email' | 'phone' | 'role' | 'specialization' | 'city' | 'contract' | 'patient_name' | 'patient_birthdate' | 'patient_phone' | 'patient_contact_consent' | 'patient_consent' | 'payout_inn' | 'payout_bank_name' | 'payout_bank_account' | 'payout_bank_bik';
   tempData?: {
     fullName?: string;
     email?: string;
@@ -30,6 +30,11 @@ interface SessionData {
     patientPhone?: string;
     contactConsent?: boolean;
     referredBy?: string;
+    // Payout requisites input
+    payoutInn?: string;
+    payoutBankName?: string;
+    payoutBankAccount?: string;
+    payoutBankBik?: string;
   };
   lastMessageTime?: number;
   lastCallbackTime?: number; // Prevent double-click on inline buttons
@@ -517,7 +522,7 @@ bot.on(message('text'), async (ctx) => {
     return;
   }
   if (text === '💰 Запросить выплату') {
-    // Request payout directly
+    // Request payout — new multi-step flow
     try {
       const db = await getDb();
       if (!db) {
@@ -536,42 +541,56 @@ bot.on(message('text'), async (ctx) => {
       const availableBalance = availableBalanceKop / 100; // копейки → рубли
       const minPayout = 1000; // 1000 рублей
 
+      // Step 1: General info
+      let message = '💰 <b>Запрос выплаты</b>\n\n';
+      message += `💵 Доступно к выводу: <b>${availableBalance.toLocaleString('ru-RU')} ₽</b>\n`;
+      message += `📊 Минимальная сумма: <b>${minPayout.toLocaleString('ru-RU')} ₽</b>\n\n`;
+
       if (availableBalance < minPayout) {
-        await ctx.reply(
-          '💰 <b>Запрос выплаты</b>\n\n' +
-          `Доступно к выводу: <b>${availableBalance.toLocaleString('ru-RU')} ₽</b>\n\n` +
-          `⚠️ Минимальная сумма вывода: ${minPayout.toLocaleString('ru-RU')} ₽\n\n` +
-          'Продолжайте отправлять рекомендации для накопления суммы.',
-          { parse_mode: 'HTML' }
-        );
+        message += '⚠️ Недостаточно средств для вывода.\n';
+        message += 'Продолжайте отправлять рекомендации для накопления суммы.';
+        await ctx.reply(message, { parse_mode: 'HTML' });
         return;
       }
 
-      let message = '💰 <b>Запрос выплаты</b>\n\n';
-      message += `💵 Доступно к выводу: <b>${availableBalance.toLocaleString('ru-RU')} ₽</b>\n\n`;
-      message += '<b>📋 Ваши реквизиты:</b>\n';
-      message += `👤 ФИО: ${escapeHtml(agent.fullName || '')}\n`;
-      message += `📧 Email: ${escapeHtml(agent.email || '')}\n`;
-      message += `📞 Телефон: ${escapeHtml(agent.phone || '')}\n`;
-      if (agent.inn) {
-        message += `💼 ИНН: ${agent.inn}\n`;
-      }
-      if (agent.bankAccount) {
-        message += `🏦 Счет: ${agent.bankAccount}\n`;
-      }
-      message += '\n<b>📝 Процесс выплаты:</b>\n';
-      message += '1️⃣ Запрос обрабатывается автоматически\n';
-      message += '2️⃣ На ваш email отправляется письмо\n';
-      message += '3️⃣ Подписываете документы в Контур.Сайн\n';
-      message += '4️⃣ Выплата в течение 3 рабочих дней\n\n';
-      
-      if (!agent.inn || !agent.bankAccount) {
-        message += '⚠️ <b>Внимание:</b> Для выплаты необходимо заполнить ИНН и банковский счет. Свяжитесь с поддержкой.\n\n';
-      } else {
-        message += '✅ Запрос на выплату отправлен! Ожидайте письмо на email.';
+      // Step 2: Check requisites
+      const hasRequisites = agent.inn && agent.bankAccount && agent.bankName && agent.bankBik;
+
+      if (!hasRequisites) {
+        // No requisites — ask to fill them
+        message += '⚠️ <b>Для оформления выплаты необходимо заполнить реквизиты.</b>\n\n';
+        message += 'Нужно указать:\n';
+        message += `${agent.inn ? '✅' : '❌'} ИНН (12 цифр)\n`;
+        message += `${agent.bankName ? '✅' : '❌'} Название банка\n`;
+        message += `${agent.bankAccount ? '✅' : '❌'} Номер счёта (20 цифр)\n`;
+        message += `${agent.bankBik ? '✅' : '❌'} БИК банка (9 цифр)\n`;
+
+        await ctx.reply(message, {
+          parse_mode: 'HTML',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('📝 Заполнить реквизиты', 'payout_fill_requisites')],
+            [Markup.button.callback('❌ Отмена', 'payout_cancel')]
+          ])
+        });
+        return;
       }
 
-      await ctx.reply(message, { parse_mode: 'HTML' });
+      // Has requisites — show them for confirmation
+      message += '📋 <b>Ваши реквизиты:</b>\n';
+      message += `• ИНН: <code>${agent.inn}</code>\n`;
+      message += `• Банк: ${escapeHtml(agent.bankName || '')}\n`;
+      message += `• Счёт: <code>${agent.bankAccount}</code>\n`;
+      message += `• БИК: <code>${agent.bankBik}</code>\n\n`;
+      message += 'Проверьте данные и выберите действие:';
+
+      await ctx.reply(message, {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('✅ Всё верно — запросить выплату', 'payout_confirm_request')],
+          [Markup.button.callback('✏️ Скорректировать реквизиты', 'payout_fill_requisites')],
+          [Markup.button.callback('❌ Отмена', 'payout_cancel')]
+        ])
+      });
     } catch (error) {
       console.error('[Telegram Bot] Request payout error:', error);
       await ctx.reply('❌ Произошла ошибка.');
@@ -619,7 +638,7 @@ bot.on(message('text'), async (ctx) => {
       };
 
       let message = '📊 <b>Мои рекомендации</b>\n\n';
-      const displayReferrals = referrals.slice(-10).reverse();
+      const displayReferrals = referrals.slice(-5).reverse();
 
       for (const ref of displayReferrals) {
         const emoji = statusEmoji[ref.status] || '📋';
@@ -629,8 +648,10 @@ bot.on(message('text'), async (ctx) => {
         message += `   Дата: ${new Date(ref.createdAt).toLocaleDateString('ru-RU')}\n\n`;
       }
 
-      if (referrals.length > 10) {
-        message += `\n<i>Показаны последние 10 из ${referrals.length} рекомендаций</i>`;
+      if (referrals.length > 5) {
+        message += `<i>Показаны последние 5 из ${referrals.length} рекомендаций</i>\n\n`;
+        message += `🔗 <b>Больше информации в личном кабинете:</b>\n`;
+        message += `${ENV.appUrl}/dashboard/referrals`;
       }
 
       await ctx.reply(message, { parse_mode: 'HTML' });
@@ -661,17 +682,49 @@ bot.on(message('text'), async (ctx) => {
       message += `📧 <b>Email:</b> ${escapeHtml(agent.email || '')}\n`;
       message += `📞 <b>Телефон:</b> ${escapeHtml(agent.phone || '')}\n`;
       message += `🏙️ <b>Город:</b> ${escapeHtml(agent.city || '')}\n\n`;
-      
+
+      message += '<b>💳 Платёжные реквизиты:</b>\n';
       if (agent.inn) {
-        message += `💼 <b>ИНН:</b> ${agent.inn}\n`;
-        message += `✅ <b>Статус:</b> Самозанятый\n\n`;
+        message += `• ИНН: <code>${agent.inn}</code>\n`;
       } else {
-        message += `⚠️ <b>Статус:</b> Не самозанятый\n\n`;
-        message += '💡 Рекомендуем оформить самозанятость для получения полной суммы вознаграждения (7% вместо ~4%).\n';
-        message += '\n📚 Подробнее: База знаний → Как стать самозанятым';
+        message += '• ИНН: <i>не указан</i>\n';
+      }
+      if (agent.bankName) {
+        message += `• Банк: ${escapeHtml(agent.bankName)}\n`;
+      } else {
+        message += '• Банк: <i>не указан</i>\n';
+      }
+      if (agent.bankAccount) {
+        message += `• Счёт: <code>${agent.bankAccount}</code>\n`;
+      } else {
+        message += '• Счёт: <i>не указан</i>\n';
+      }
+      if (agent.bankBik) {
+        message += `• БИК: <code>${agent.bankBik}</code>\n`;
+      } else {
+        message += '• БИК: <i>не указан</i>\n';
       }
 
-      await ctx.reply(message, { parse_mode: 'HTML' });
+      message += '\n';
+      const selfEmployedStatus = agent.isSelfEmployed === 'yes' ? '✅ Самозанятый' :
+        agent.isSelfEmployed === 'no' ? '❌ Не самозанятый' : '❓ Не указано';
+      message += `<b>Статус:</b> ${selfEmployedStatus}\n\n`;
+
+      if (agent.isSelfEmployed !== 'yes') {
+        message += '💡 Рекомендуем оформить самозанятость для получения максимального вознаграждения (10% вместо 7%).\n\n';
+      }
+
+      message += `🔗 Изменить реквизиты: ${ENV.appUrl}/dashboard/profile`;
+
+      const hasAllRequisites = agent.inn && agent.bankAccount && agent.bankName && agent.bankBik;
+      const buttons = [];
+      if (!hasAllRequisites) {
+        buttons.push([Markup.button.callback('📝 Заполнить реквизиты', 'payout_fill_requisites')]);
+      } else {
+        buttons.push([Markup.button.callback('✏️ Скорректировать реквизиты', 'payout_fill_requisites')]);
+      }
+
+      await ctx.reply(message, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
     } catch (error) {
       console.error('[Telegram Bot] Requisites error:', error);
       await ctx.reply('❌ Произошла ошибка.');
@@ -961,6 +1014,115 @@ bot.on(message('text'), async (ctx) => {
       '📞 <b>Согласие на связь</b>\n\n' +
       'Хочет ли пациент, чтобы сервис DocDoc связался с ним, помог <b>бесплатно записаться</b> к врачу и <b>проконсультировал</b>?',
       { parse_mode: 'HTML', ...contactConsentKeyboard }
+    );
+    return;
+  }
+
+  // ===============================
+  // PAYOUT REQUISITES INPUT STEPS
+  // ===============================
+
+  if (session.registrationStep === 'payout_inn') {
+    const cleaned = text.trim();
+    if (!/^\d{12}$/.test(cleaned)) {
+      await ctx.reply(
+        '❌ <b>ИНН должен содержать ровно 12 цифр.</b>\n\n' +
+        '💡 Пример: 771234567890\n\nПопробуйте еще раз:',
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
+    if (!session.tempData) session.tempData = {};
+    session.tempData.payoutInn = cleaned;
+    session.registrationStep = 'payout_bank_name';
+
+    await ctx.reply(
+      '✅ ИНН сохранён!\n\n' +
+      '2️⃣ Введите <b>название банка</b>:',
+      { parse_mode: 'HTML' }
+    );
+    return;
+  }
+
+  if (session.registrationStep === 'payout_bank_name') {
+    const cleaned = text.trim();
+    if (cleaned.length < 2 || cleaned.length > 255) {
+      await ctx.reply(
+        '❌ <b>Название банка должно быть от 2 до 255 символов.</b>\n\n' +
+        '💡 Пример: Сбербанк\n\nПопробуйте еще раз:',
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
+    if (!session.tempData) session.tempData = {};
+    session.tempData.payoutBankName = cleaned;
+    session.registrationStep = 'payout_bank_account';
+
+    await ctx.reply(
+      '✅ Банк сохранён!\n\n' +
+      '3️⃣ Введите <b>номер расчётного счёта</b> (20 цифр):',
+      { parse_mode: 'HTML' }
+    );
+    return;
+  }
+
+  if (session.registrationStep === 'payout_bank_account') {
+    const cleaned = text.trim();
+    if (!/^\d{20}$/.test(cleaned)) {
+      await ctx.reply(
+        '❌ <b>Номер счёта должен содержать ровно 20 цифр.</b>\n\n' +
+        '💡 Пример: 40817810099910004312\n\nПопробуйте еще раз:',
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
+    if (!session.tempData) session.tempData = {};
+    session.tempData.payoutBankAccount = cleaned;
+    session.registrationStep = 'payout_bank_bik';
+
+    await ctx.reply(
+      '✅ Счёт сохранён!\n\n' +
+      '4️⃣ Введите <b>БИК банка</b> (9 цифр):',
+      { parse_mode: 'HTML' }
+    );
+    return;
+  }
+
+  if (session.registrationStep === 'payout_bank_bik') {
+    const cleaned = text.trim();
+    if (!/^\d{9}$/.test(cleaned)) {
+      await ctx.reply(
+        '❌ <b>БИК должен содержать ровно 9 цифр.</b>\n\n' +
+        '💡 Пример: 044525225\n\nПопробуйте еще раз:',
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
+    if (!session.tempData) session.tempData = {};
+    session.tempData.payoutBankBik = cleaned;
+    session.registrationStep = undefined;
+
+    // Show summary for confirmation
+    const data = session.tempData;
+    await ctx.reply(
+      '📋 <b>Проверьте ваши реквизиты:</b>\n\n' +
+      `• ИНН: <code>${data.payoutInn}</code>\n` +
+      `• Банк: ${escapeHtml(data.payoutBankName || '')}\n` +
+      `• Счёт: <code>${data.payoutBankAccount}</code>\n` +
+      `• БИК: <code>${data.payoutBankBik}</code>\n\n` +
+      'Всё верно?',
+      {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('✅ Подтвердить и сохранить', 'payout_confirm_requisites')],
+          [Markup.button.callback('✏️ Заполнить заново', 'payout_edit_requisites')],
+          [Markup.button.callback('❌ Отмена', 'payout_cancel')]
+        ])
+      }
     );
     return;
   }
@@ -1581,8 +1743,8 @@ bot.command('referrals', async (ctx) => {
 
     let message = '📊 <b>Мои рекомендации</b>\n\n';
 
-    // Show last 10 referrals
-    const displayReferrals = referrals.slice(-10).reverse();
+    // Show last 5 referrals
+    const displayReferrals = referrals.slice(-5).reverse();
 
     for (const ref of displayReferrals) {
       const emoji = statusEmoji[ref.status] || '❓';
@@ -1601,11 +1763,13 @@ bot.command('referrals', async (ctx) => {
       message += `   Дата: ${date}\n\n`;
     }
 
-    if (referrals.length > 10) {
-      message += `... и еще ${referrals.length - 10} рекомендаций\n\n`;
+    if (referrals.length > 5) {
+      message += `<i>Показаны последние 5 из ${referrals.length}</i>\n\n`;
+      message += `🔗 <b>Больше информации в личном кабинете:</b>\n`;
+      message += `${ENV.appUrl}/dashboard/referrals`;
+    } else {
+      message += `Всего рекомендаций: ${referrals.length}`;
     }
-
-    message += `Всего рекомендаций: ${referrals.length}`;
 
     await ctx.reply(message, { parse_mode: 'HTML' });
   } catch (error) {
@@ -1815,14 +1979,16 @@ bot.action('cmd_referrals', async (ctx) => {
       paid: 'Оплачено', duplicate: 'Дубликат', no_answer: 'Не дозвонились', cancelled: 'Отменена'
     };
     let message = '📊 <b>Мои рекомендации</b>\n\n';
-    referrals.slice(0, 10).forEach((ref, idx) => {
+    referrals.slice(0, 5).forEach((ref) => {
       const emoji = emojiMap[ref.status] || '📋';
       message += `${emoji} <b>${escapeHtml(ref.patientFullName)}</b>\n`;
       message += `   Статус: ${nameMap[ref.status] || ref.status}\n\n`;
     });
-    
-    if (referrals.length > 10) {
-      message += `\nИ еще ${referrals.length - 10} рекомендаций...`;
+
+    if (referrals.length > 5) {
+      message += `<i>Показаны последние 5 из ${referrals.length}</i>\n\n`;
+      message += `🔗 <b>Больше информации в личном кабинете:</b>\n`;
+      message += `${ENV.appUrl}/dashboard/referrals`;
     }
 
     await ctx.reply(message, { parse_mode: 'HTML' });
@@ -1931,86 +2097,270 @@ bot.action('cmd_referral_program', async (ctx) => {
   }
 });
 
-// New callback handlers for updated menu
+// ===============================
+// PAYOUT FLOW CALLBACKS
+// ===============================
+
+// Callback from inline menu "Запросить выплату"
 bot.action('cmd_request_payout', async (ctx) => {
   const userId = ctx.from?.id;
   if (!userId) return;
   await ctx.answerCbQuery();
-  
+
   try {
     const db = await getDb();
-    if (!db) {
-      await ctx.reply('❌ Ошибка подключения к базе данных.');
-      return;
-    }
+    if (!db) { await ctx.reply('❌ Ошибка подключения к базе данных.'); return; }
 
     const [agent] = await db.select().from(agents).where(eq(agents.telegramId, userId.toString()));
+    if (!agent) { await ctx.reply('Вы еще не зарегистрированы. Используйте /start'); return; }
 
-    if (!agent) {
-      await ctx.reply('Вы еще не зарегистрированы. Используйте /start');
-      return;
-    }
-
-    const availableBalanceKop = agent.totalEarnings || 0;
-    const availableBalance = availableBalanceKop / 100; // копейки → рубли
+    const availableBalance = (agent.totalEarnings || 0) / 100;
     const minPayout = 1000;
 
+    let message = '💰 <b>Запрос выплаты</b>\n\n';
+    message += `💵 Доступно к выводу: <b>${availableBalance.toLocaleString('ru-RU')} ₽</b>\n`;
+    message += `📊 Минимальная сумма: <b>${minPayout.toLocaleString('ru-RU')} ₽</b>\n\n`;
+
     if (availableBalance < minPayout) {
-      await ctx.reply(
-        '💰 <b>Запрос выплаты</b>\n\n' +
-        `Доступно к выводу: <b>${availableBalance.toLocaleString('ru-RU')} ₽</b>\n\n` +
-        `⚠️ Минимальная сумма вывода: ${minPayout.toLocaleString('ru-RU')} ₽\n\n` +
-        'Продолжайте отправлять рекомендации для накопления суммы.',
-        { parse_mode: 'HTML' }
-      );
+      message += '⚠️ Недостаточно средств для вывода.\nПродолжайте отправлять рекомендации.';
+      await ctx.reply(message, { parse_mode: 'HTML' });
       return;
     }
 
-    // Show requisites and payout process
-    let message = '💰 <b>Запрос выплаты</b>\n\n';
-    message += `Доступно к выводу: <b>${availableBalance.toLocaleString('ru-RU')} ₽</b>\n\n`;
-    message += '✅ Вы можете запросить выплату!\n\n';
-    
-    message += '📝 <b>Ваши реквизиты:</b>\n';
-    message += `• ФИО: ${agent.fullName}\n`;
-    message += `• Email: ${agent.email}\n`;
-    message += `• Телефон: ${agent.phone}\n`;
-    if (agent.inn) {
-      message += `• ИНН: ${agent.inn}\n`;
+    const hasRequisites = agent.inn && agent.bankAccount && agent.bankName && agent.bankBik;
+    if (!hasRequisites) {
+      message += '⚠️ <b>Необходимо заполнить реквизиты.</b>\n\n';
+      message += `${agent.inn ? '✅' : '❌'} ИНН\n`;
+      message += `${agent.bankName ? '✅' : '❌'} Банк\n`;
+      message += `${agent.bankAccount ? '✅' : '❌'} Счёт\n`;
+      message += `${agent.bankBik ? '✅' : '❌'} БИК\n`;
+      await ctx.reply(message, {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('📝 Заполнить реквизиты', 'payout_fill_requisites')],
+          [Markup.button.callback('❌ Отмена', 'payout_cancel')]
+        ])
+      });
+      return;
     }
-    if (agent.bankAccount) {
-      message += `• Счет: ${agent.bankAccount}\n`;
-    }
-    message += '\n';
-    
-    message += '🚀 <b>Процесс выплаты:</b>\n';
-    message += '1️⃣ Мы отправили заявку на получение выплаты\n';
-    message += '2️⃣ Вам придет письмо на <b>' + agent.email + '</b>\n';
-    message += '3️⃣ Подпишите документы в <b>Контур.Сайн</b>\n';
-    message += '4️⃣ Выплата производится в течение <b>3 рабочих дней</b>\n\n';
-    
-    message += 'ℹ️ <b>Контур.Сайн</b> — это сервис электронной подписи документов. Подписанные документы имеют юридическую силу.\n\n';
-    
-    if (!agent.inn || !agent.bankAccount) {
-      message += '⚠️ <b>Внимание!</b> У вас не указаны все реквизиты.\n';
-      message += 'Для обновления реквизитов напишите:\n';
-      message += '📧 info@docdocpartner.ru';
-    } else {
-      message += '✅ Заявка отправлена! Проверьте почту для подписания документов.';
-    }
-    
-    await ctx.reply(message, { parse_mode: 'HTML' });
+
+    message += '📋 <b>Ваши реквизиты:</b>\n';
+    message += `• ИНН: <code>${agent.inn}</code>\n`;
+    message += `• Банк: ${escapeHtml(agent.bankName || '')}\n`;
+    message += `• Счёт: <code>${agent.bankAccount}</code>\n`;
+    message += `• БИК: <code>${agent.bankBik}</code>\n\n`;
+    message += 'Проверьте данные и выберите действие:';
+
+    await ctx.reply(message, {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('✅ Всё верно — запросить выплату', 'payout_confirm_request')],
+        [Markup.button.callback('✏️ Скорректировать реквизиты', 'payout_fill_requisites')],
+        [Markup.button.callback('❌ Отмена', 'payout_cancel')]
+      ])
+    });
   } catch (error) {
     console.error('[Telegram Bot] Request payout callback error:', error);
     await ctx.reply('❌ Произошла ошибка.');
   }
 });
 
+// Start filling requisites (from payout flow)
+bot.action('payout_fill_requisites', async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+  await ctx.answerCbQuery();
+
+  const session = getSession(userId);
+  session.registrationStep = 'payout_inn';
+  if (!session.tempData) session.tempData = {};
+
+  await ctx.reply(
+    '📝 <b>Заполнение реквизитов</b>\n\n' +
+    '1️⃣ Введите ваш <b>ИНН</b> (12 цифр):',
+    { parse_mode: 'HTML' }
+  );
+});
+
+// Cancel payout
+bot.action('payout_cancel', async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+  await ctx.answerCbQuery();
+
+  const session = getSession(userId);
+  session.registrationStep = undefined;
+  session.tempData = {};
+
+  await ctx.reply('❌ Запрос выплаты отменён.', mainMenuKeyboard);
+});
+
+// Confirm payout request — create payment + show self-employment notice
+bot.action('payout_confirm_request', async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+  if (isCallbackSpamming(userId)) { await ctx.answerCbQuery(); return; }
+  await ctx.answerCbQuery();
+
+  try {
+    const db = await getDb();
+    if (!db) { await ctx.reply('❌ Ошибка подключения к базе данных.'); return; }
+
+    const [agent] = await db.select().from(agents).where(eq(agents.telegramId, userId.toString()));
+    if (!agent) { await ctx.reply('Вы еще не зарегистрированы.'); return; }
+
+    const availableBalanceKop = agent.totalEarnings || 0;
+    if (availableBalanceKop < 100000) { // 1000 руб в копейках
+      await ctx.reply('⚠️ Недостаточно средств для вывода.');
+      return;
+    }
+
+    if (!agent.inn || !agent.bankAccount || !agent.bankName || !agent.bankBik) {
+      await ctx.reply('⚠️ Заполните все реквизиты перед запросом выплаты.');
+      return;
+    }
+
+    // Check for existing pending payments
+    const existingPayments = await db.select().from(schema.payments)
+      .where(eq(schema.payments.agentId, agent.id));
+    const hasPending = existingPayments.some(p => p.status === 'pending' || p.status === 'processing');
+    if (hasPending) {
+      await ctx.reply(
+        '⚠️ <b>У вас уже есть необработанная заявка на выплату.</b>\n\n' +
+        'Дождитесь её обработки перед созданием новой.',
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
+    // Create payment request
+    await db.insert(schema.payments).values({
+      agentId: agent.id,
+      amount: availableBalanceKop,
+      status: 'pending',
+      createdAt: new Date(),
+    });
+
+    const availableBalance = availableBalanceKop / 100;
+
+    // Success message + self-employment notice
+    let message = '✅ <b>Заявка на выплату создана!</b>\n\n';
+    message += `💵 Сумма: <b>${availableBalance.toLocaleString('ru-RU')} ₽</b>\n\n`;
+    message += '📝 <b>Процесс выплаты:</b>\n';
+    message += '1️⃣ Мы проверим вашу заявку\n';
+    message += '2️⃣ На email придёт письмо для подписания\n';
+    message += '3️⃣ Подпишите документы в Контур.Сайн\n';
+    message += '4️⃣ Выплата в течение 3 рабочих дней\n\n';
+
+    // Self-employment notice
+    message += '⚠️ <b>Важная информация о самозанятости:</b>\n\n';
+    message += 'Для выплаты мы проверяем статус самозанятости.\n\n';
+    message += '👤 <b>Если вы самозанятый:</b>\n';
+    message += '• Вознаграждение: <b>10%</b> от суммы лечения\n';
+    message += '• Налог НПД (6%) оплачиваете самостоятельно\n';
+    message += '• Чистыми получаете ~9.4% от суммы лечения\n\n';
+    message += '👤 <b>Если вы НЕ самозанятый:</b>\n';
+    message += '• Вознаграждение: <b>7%</b> от суммы лечения\n';
+    message += '• Мы удерживаем НДФЛ (13%) + взносы\n';
+    message += '• Чистыми получаете ~4.5% от суммы лечения\n\n';
+    message += '💡 <b>Рекомендуем оформить самозанятость</b> для получения максимального вознаграждения.\n';
+    message += 'Подробнее: База знаний → "Как стать самозанятым"';
+
+    // Notify admin
+    try {
+      const { notifyAdminsNewPaymentRequest } = await import('./telegram-notifications');
+      await notifyAdminsNewPaymentRequest(agent, availableBalanceKop);
+    } catch (notifyErr) {
+      console.error('[Telegram Bot] Failed to notify admins about payment:', notifyErr);
+    }
+
+    await ctx.reply(message, { parse_mode: 'HTML', ...mainMenuKeyboard });
+  } catch (error) {
+    console.error('[Telegram Bot] Payout confirm error:', error);
+    await ctx.reply('❌ Произошла ошибка при создании заявки.');
+  }
+});
+
+// Confirm requisites after filling — save and return to payout flow
+bot.action('payout_confirm_requisites', async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+  if (isCallbackSpamming(userId)) { await ctx.answerCbQuery(); return; }
+  await ctx.answerCbQuery();
+
+  try {
+    const session = getSession(userId);
+    const data = session.tempData;
+    if (!data?.payoutInn || !data?.payoutBankName || !data?.payoutBankAccount || !data?.payoutBankBik) {
+      await ctx.reply('❌ Данные реквизитов утеряны. Попробуйте снова: нажмите "Запросить выплату".');
+      return;
+    }
+
+    const db = await getDb();
+    if (!db) { await ctx.reply('❌ Ошибка подключения к базе данных.'); return; }
+
+    const [agent] = await db.select().from(agents).where(eq(agents.telegramId, userId.toString()));
+    if (!agent) { await ctx.reply('Вы еще не зарегистрированы.'); return; }
+
+    // Save requisites to agent profile
+    await db.update(agents).set({
+      inn: data.payoutInn,
+      bankName: data.payoutBankName,
+      bankAccount: data.payoutBankAccount,
+      bankBik: data.payoutBankBik,
+    }).where(eq(agents.id, agent.id));
+
+    // Clear temp data
+    session.registrationStep = undefined;
+    session.tempData = {};
+
+    const availableBalance = (agent.totalEarnings || 0) / 100;
+
+    await ctx.reply(
+      '✅ <b>Реквизиты сохранены!</b>\n\n' +
+      '📋 <b>Ваши реквизиты:</b>\n' +
+      `• ИНН: <code>${data.payoutInn}</code>\n` +
+      `• Банк: ${escapeHtml(data.payoutBankName)}\n` +
+      `• Счёт: <code>${data.payoutBankAccount}</code>\n` +
+      `• БИК: <code>${data.payoutBankBik}</code>\n\n` +
+      `💵 Доступно к выводу: <b>${availableBalance.toLocaleString('ru-RU')} ₽</b>\n\n` +
+      'Теперь вы можете запросить выплату:',
+      {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('✅ Запросить выплату', 'payout_confirm_request')],
+          [Markup.button.callback('❌ Отмена', 'payout_cancel')]
+        ])
+      }
+    );
+  } catch (error) {
+    console.error('[Telegram Bot] Confirm requisites error:', error);
+    await ctx.reply('❌ Произошла ошибка при сохранении реквизитов.');
+  }
+});
+
+// Edit requisites — restart filling
+bot.action('payout_edit_requisites', async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+  await ctx.answerCbQuery();
+
+  const session = getSession(userId);
+  session.registrationStep = 'payout_inn';
+  if (!session.tempData) session.tempData = {};
+
+  await ctx.reply(
+    '📝 <b>Корректировка реквизитов</b>\n\n' +
+    '1️⃣ Введите ваш <b>ИНН</b> (12 цифр):',
+    { parse_mode: 'HTML' }
+  );
+});
+
 bot.action('cmd_requisites', async (ctx) => {
   const userId = ctx.from?.id;
   if (!userId) return;
   await ctx.answerCbQuery();
-  
+
   try {
     const db = await getDb();
     if (!db) {
@@ -2026,23 +2376,37 @@ bot.action('cmd_requisites', async (ctx) => {
     }
 
     let message = '💳 <b>Мои реквизиты</b>\n\n';
-    message += `👤 <b>ФИО:</b> ${agent.fullName}\n`;
-    message += `📧 <b>Email:</b> ${agent.email}\n`;
-    message += `📞 <b>Телефон:</b> ${agent.phone}\n`;
-    message += `🏙️ <b>Город:</b> ${agent.city}\n\n`;
-    
-    if (agent.inn) {
-      message += `💼 <b>ИНН:</b> ${agent.inn}\n`;
-      message += `✅ <b>Статус:</b> Самозанятый\n\n`;
-    } else {
-      message += `⚠️ <b>Статус:</b> Не самозанятый\n\n`;
-      message += '💡 Рекомендуем оформить самозанятость для получения полной суммы вознаграждения (7% вместо ~4%).\n';
-      message += 'Используйте Базу знаний → "Как стать самозанятым"\n\n';
-    }
-    
-    message += '📝 Для изменения реквизитов напишите в поддержку: info@docdocpartner.ru';
+    message += `👤 <b>ФИО:</b> ${escapeHtml(agent.fullName || '')}\n`;
+    message += `📧 <b>Email:</b> ${escapeHtml(agent.email || '')}\n`;
+    message += `📞 <b>Телефон:</b> ${escapeHtml(agent.phone || '')}\n`;
+    message += `🏙️ <b>Город:</b> ${escapeHtml(agent.city || '')}\n\n`;
 
-    await ctx.reply(message, { parse_mode: 'HTML' });
+    message += '<b>💳 Платёжные реквизиты:</b>\n';
+    message += agent.inn ? `• ИНН: <code>${agent.inn}</code>\n` : '• ИНН: <i>не указан</i>\n';
+    message += agent.bankName ? `• Банк: ${escapeHtml(agent.bankName)}\n` : '• Банк: <i>не указан</i>\n';
+    message += agent.bankAccount ? `• Счёт: <code>${agent.bankAccount}</code>\n` : '• Счёт: <i>не указан</i>\n';
+    message += agent.bankBik ? `• БИК: <code>${agent.bankBik}</code>\n` : '• БИК: <i>не указан</i>\n';
+
+    message += '\n';
+    const selfEmployedStatus = agent.isSelfEmployed === 'yes' ? '✅ Самозанятый' :
+      agent.isSelfEmployed === 'no' ? '❌ Не самозанятый' : '❓ Не указано';
+    message += `<b>Статус:</b> ${selfEmployedStatus}\n\n`;
+
+    if (agent.isSelfEmployed !== 'yes') {
+      message += '💡 Рекомендуем оформить самозанятость для максимального вознаграждения (10% вместо 7%).\n\n';
+    }
+
+    message += `🔗 Изменить реквизиты: ${ENV.appUrl}/dashboard/profile`;
+
+    const hasAllRequisites = agent.inn && agent.bankAccount && agent.bankName && agent.bankBik;
+    const buttons = [];
+    if (!hasAllRequisites) {
+      buttons.push([Markup.button.callback('📝 Заполнить реквизиты', 'payout_fill_requisites')]);
+    } else {
+      buttons.push([Markup.button.callback('✏️ Скорректировать реквизиты', 'payout_fill_requisites')]);
+    }
+
+    await ctx.reply(message, { parse_mode: 'HTML', ...Markup.inlineKeyboard(buttons) });
   } catch (error) {
     console.error('[Telegram Bot] Requisites callback error:', error);
     await ctx.reply('❌ Произошла ошибка.');

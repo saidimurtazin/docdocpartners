@@ -202,10 +202,13 @@ export default function AdminAgents() {
                         {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB" }).format((agent.totalEarnings || 0) / 100)}
                       </TableCell>
                       <TableCell>
-                        {agent.inn && agent.bankAccount ? (
-                          <div className="text-xs">
-                            <div>ИНН: {agent.inn}</div>
-                            <div>Счёт: ...{agent.bankAccount?.slice(-4)}</div>
+                        {agent.inn || agent.bankAccount ? (
+                          <div className="text-xs space-y-0.5">
+                            <div>ИНН: {agent.inn || "—"}</div>
+                            <div>Банк: {agent.bankName || "—"}</div>
+                            <div>Счёт: {agent.bankAccount || "—"}</div>
+                            <div>БИК: {agent.bankBik || "—"}</div>
+                            <div>СЗ: {agent.isSelfEmployed === "yes" ? "Да" : agent.isSelfEmployed === "no" ? "Нет" : "?"}</div>
                           </div>
                         ) : (
                           <span className="text-muted-foreground">Не указаны</span>

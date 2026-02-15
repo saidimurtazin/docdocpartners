@@ -230,6 +230,34 @@ export async function notifyBonusPointsEarned(
 }
 
 /**
+ * Send notification to admin about new payment request
+ */
+export async function notifyAdminsNewPaymentRequest(
+  agent: {
+    id: number;
+    fullName: string;
+    email: string | null;
+    telegramId: string;
+  },
+  amountKopecks: number
+): Promise<void> {
+  // Get admin telegram IDs from environment or users table
+  const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
+  if (!adminTelegramId) {
+    console.warn("[Notifications] ADMIN_TELEGRAM_ID not set, skipping payment request notification");
+    return;
+  }
+
+  let message = `💰 <b>Новая заявка на выплату</b>\n\n`;
+  message += `<b>Агент:</b> ${agent.fullName} (#${agent.id})\n`;
+  message += `<b>Email:</b> ${agent.email || "—"}\n`;
+  message += `<b>Сумма:</b> ${formatAmount(amountKopecks)}\n\n`;
+  message += `Проверьте заявку в админ-панели → Выплаты`;
+
+  await sendTelegramMessage(adminTelegramId, message);
+}
+
+/**
  * Send notification when agent logs in from a new device
  */
 export async function notifyNewDeviceLogin(
