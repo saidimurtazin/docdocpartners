@@ -655,6 +655,18 @@ DocDocPartner — B2B-платформа агентских рекомендац
           const buffer = await exportAgentsToExcel(input);
           return { data: buffer.toString('base64') };
         }),
+      paymentRegistry: protectedProcedure
+        .input(z.object({
+          periodStart: z.string(),
+          periodEnd: z.string(),
+          status: z.string().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          const { exportPaymentRegistryToExcel } = await import("./export");
+          const buffer = await exportPaymentRegistryToExcel(input);
+          return { data: buffer.toString('base64') };
+        }),
     }),
   }),
 

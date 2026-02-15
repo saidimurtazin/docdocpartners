@@ -2,6 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -19,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, ArrowLeft, Download, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, ArrowLeft, Download, Search, ChevronLeft, ChevronRight, FileSpreadsheet } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -36,11 +37,20 @@ export default function AdminPayments() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
 
+  // Registry period state
+  const [periodStart, setPeriodStart] = useState(() => {
+    const d = new Date();
+    d.setDate(1); // first day of current month
+    return format(d, "yyyy-MM-dd");
+  });
+  const [periodEnd, setPeriodEnd] = useState(() => format(new Date(), "yyyy-MM-dd"));
+
   const { data: payments, isLoading, refetch } = trpc.admin.payments.list.useQuery();
   const updateStatus = trpc.admin.payments.updateStatus.useMutation({
     onSuccess: () => { refetch(); setEditingId(null); setTransactionId(""); },
   });
   const exportPayments = trpc.admin.export.payments.useMutation();
+  const exportRegistry = trpc.admin.export.paymentRegistry.useMutation();
 
   // Filter + search
   const filtered = useMemo(() => {
@@ -49,6 +59,7 @@ export default function AdminPayments() {
       const matchSearch = !search ||
         String(p.id).includes(search) ||
         String(p.agentId).includes(search) ||
+        (p.agentFullName?.toLowerCase().includes(search.toLowerCase())) ||
         (p.transactionId?.toLowerCase().includes(search.toLowerCase()));
       const matchStatus = statusFilter === "all" || p.status === statusFilter;
       return matchSearch && matchStatus;
@@ -77,6 +88,27 @@ export default function AdminPayments() {
       URL.revokeObjectURL(url);
     } catch {
       alert("Ошибка экспорта");
+    }
+  };
+
+  const handleExportRegistry = async () => {
+    try {
+      const result = await exportRegistry.mutateAsync({
+        periodStart,
+        periodEnd,
+        status: statusFilter !== "all" ? statusFilter : undefined,
+      });
+      const blob = new Blob([Uint8Array.from(atob(result.data), c => c.charCodeAt(0))], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `registry_${periodStart}_${periodEnd}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Ошибка формирования реестра");
     }
   };
 
@@ -142,7 +174,53 @@ export default function AdminPayments() {
         </div>
       </header>
 
-      <div className="container py-8">
+      <div className="container py-8 space-y-6">
+        {/* Registry generation card */}
+        <Card className="border-primary/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <FileSpreadsheet className="w-5 h-5 text-primary" />
+              Сформировать реестр на оплату
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row items-end gap-4">
+              <div className="flex-1 w-full sm:w-auto">
+                <Label htmlFor="periodStart" className="text-sm text-muted-foreground">Начало периода</Label>
+                <Input
+                  id="periodStart"
+                  type="date"
+                  value={periodStart}
+                  onChange={(e) => setPeriodStart(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div className="flex-1 w-full sm:w-auto">
+                <Label htmlFor="periodEnd" className="text-sm text-muted-foreground">Конец периода</Label>
+                <Input
+                  id="periodEnd"
+                  type="date"
+                  value={periodEnd}
+                  onChange={(e) => setPeriodEnd(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <Button
+                onClick={handleExportRegistry}
+                disabled={exportRegistry.isPending || !periodStart || !periodEnd}
+                className="bg-primary hover:bg-primary/90 w-full sm:w-auto"
+              >
+                <FileSpreadsheet className="w-4 h-4 mr-2" />
+                {exportRegistry.isPending ? "Формирование..." : "Сформировать реестр"}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Реестр содержит: ФИО агента, дата выплаты, период, сумма, реквизиты (ИНН, банк, счёт, БИК)
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Payments table */}
         <Card>
           <CardHeader>
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -178,7 +256,7 @@ export default function AdminPayments() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>ID</TableHead>
-                    <TableHead>ID Агента</TableHead>
+                    <TableHead>Агент</TableHead>
                     <TableHead>Сумма</TableHead>
                     <TableHead>Статус</TableHead>
                     <TableHead>Метод</TableHead>
@@ -192,7 +270,12 @@ export default function AdminPayments() {
                   {paginated.map((payment) => (
                     <TableRow key={payment.id}>
                       <TableCell>{payment.id}</TableCell>
-                      <TableCell>{payment.agentId}</TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{payment.agentFullName || "—"}</div>
+                          <div className="text-xs text-muted-foreground">ID: {payment.agentId}</div>
+                        </div>
+                      </TableCell>
                       <TableCell className="font-medium">{formatCurrency(payment.amount)}</TableCell>
                       <TableCell>{getStatusBadge(payment.status)}</TableCell>
                       <TableCell>{payment.method || "—"}</TableCell>

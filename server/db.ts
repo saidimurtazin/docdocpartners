@@ -316,7 +316,44 @@ export async function updateReferralAmounts(id: number, treatmentAmount: number,
 export async function getAllPayments() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(payments).orderBy(desc(payments.createdAt));
+  // Join with agents to get agent name
+  const result = await db.select({
+    id: payments.id,
+    agentId: payments.agentId,
+    agentFullName: agents.fullName,
+    amount: payments.amount,
+    status: payments.status,
+    method: payments.method,
+    transactionId: payments.transactionId,
+    notes: payments.notes,
+    requestedAt: payments.requestedAt,
+    completedAt: payments.completedAt,
+    createdAt: payments.createdAt,
+    updatedAt: payments.updatedAt,
+  })
+    .from(payments)
+    .leftJoin(agents, eq(payments.agentId, agents.id))
+    .orderBy(desc(payments.createdAt));
+  return result;
+}
+
+export async function getPaymentsWithAgents() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    payment: payments,
+    agentFullName: agents.fullName,
+    agentEmail: agents.email,
+    agentPhone: agents.phone,
+    agentInn: agents.inn,
+    agentBankName: agents.bankName,
+    agentBankAccount: agents.bankAccount,
+    agentBankBik: agents.bankBik,
+    agentIsSelfEmployed: agents.isSelfEmployed,
+  })
+    .from(payments)
+    .leftJoin(agents, eq(payments.agentId, agents.id))
+    .orderBy(desc(payments.createdAt));
 }
 
 export async function getPaymentById(id: number) {

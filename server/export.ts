@@ -289,3 +289,103 @@ export async function exportAgentsToExcel(filters?: {
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);
 }
+
+/**
+ * Export payment registry to Excel
+ * Format: ФИО агента | Дата выплаты | Период | Сумма | Реквизиты (ИНН, банк, счёт, БИК)
+ */
+export async function exportPaymentRegistryToExcel(filters: {
+  periodStart: string;
+  periodEnd: string;
+  status?: string;
+}): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Реестр на оплату');
+
+  worksheet.columns = [
+    { header: '№', key: 'num', width: 6 },
+    { header: 'ФИО агента', key: 'agentName', width: 30 },
+    { header: 'Дата выплаты', key: 'paymentDate', width: 18 },
+    { header: 'Период', key: 'period', width: 25 },
+    { header: 'Сумма (₽)', key: 'amount', width: 15 },
+    { header: 'ИНН', key: 'inn', width: 15 },
+    { header: 'Банк', key: 'bankName', width: 25 },
+    { header: 'Номер счёта', key: 'bankAccount', width: 25 },
+    { header: 'БИК', key: 'bankBik', width: 12 },
+    { header: 'Самозанятый', key: 'selfEmployed', width: 14 },
+    { header: 'Email', key: 'email', width: 25 },
+    { header: 'Телефон', key: 'phone', width: 18 },
+  ];
+
+  worksheet.getRow(1).font = { color: { argb: 'FFFFFFFF' }, bold: true };
+  worksheet.getRow(1).fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FF10b981' }
+  };
+
+  const paymentsWithAgents = await db.getPaymentsWithAgents();
+
+  const startDate = new Date(filters.periodStart);
+  const endDate = new Date(filters.periodEnd);
+  endDate.setHours(23, 59, 59, 999);
+
+  let filtered = paymentsWithAgents.filter(row => {
+    const paymentDate = new Date(row.payment.requestedAt || row.payment.createdAt);
+    return paymentDate >= startDate && paymentDate <= endDate;
+  });
+
+  if (filters.status && filters.status !== 'all') {
+    filtered = filtered.filter(row => row.payment.status === filters.status);
+  }
+
+  const fmtDate = (d: Date) => {
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    return `${dd}.${mm}.${d.getFullYear()}`;
+  };
+
+  const periodStr = `${fmtDate(startDate)} — ${fmtDate(endDate)}`;
+
+  filtered.forEach((row, idx) => {
+    const payDate = row.payment.completedAt
+      ? fmtDate(new Date(row.payment.completedAt))
+      : fmtDate(new Date(row.payment.requestedAt || row.payment.createdAt));
+
+    worksheet.addRow({
+      num: idx + 1,
+      agentName: row.agentFullName || `Агент #${row.payment.agentId}`,
+      paymentDate: payDate,
+      period: periodStr,
+      amount: (row.payment.amount || 0) / 100,
+      inn: row.agentInn || '',
+      bankName: row.agentBankName || '',
+      bankAccount: row.agentBankAccount || '',
+      bankBik: row.agentBankBik || '',
+      selfEmployed: row.agentIsSelfEmployed === 'yes' ? 'Да' : row.agentIsSelfEmployed === 'no' ? 'Нет' : '—',
+      email: row.agentEmail || '',
+      phone: row.agentPhone || '',
+    });
+  });
+
+  const totalAmount = filtered.reduce((sum, row) => sum + (Number(row.payment.amount) || 0), 0);
+  const regSummaryRow = worksheet.addRow({
+    num: '',
+    agentName: `ИТОГО (${filtered.length} записей):`,
+    paymentDate: '',
+    period: '',
+    amount: totalAmount / 100,
+    inn: '', bankName: '', bankAccount: '', bankBik: '', selfEmployed: '', email: '', phone: '',
+  });
+  regSummaryRow.font = { bold: true };
+  regSummaryRow.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FFf3f4f6' }
+  };
+
+  worksheet.getColumn('amount').numFmt = '#,##0.00';
+
+  const regBuffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(regBuffer);
+}
