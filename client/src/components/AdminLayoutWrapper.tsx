@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import {
   Home, Users, FileText, Wallet, Stethoscope, Building2, LogOut, Menu, X,
-  BarChart3
+  BarChart3, Mail
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -23,6 +23,7 @@ export default function AdminLayoutWrapper({ children }: AdminLayoutWrapperProps
     { path: "/admin/payments", label: "Выплаты", icon: Wallet },
     { path: "/admin/doctors", label: "База врачей", icon: Stethoscope },
     { path: "/admin/clinics", label: "Клиники", icon: Building2 },
+    { path: "/admin/clinic-reports", label: "Отчёты клиник", icon: Mail },
   ];
 
   return (

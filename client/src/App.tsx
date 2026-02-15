@@ -11,6 +11,7 @@ import AdminReferrals from "./pages/admin/Referrals";
 import AdminPayments from "./pages/admin/Payments";
 import AdminDoctors from "./pages/admin/Doctors";
 import AdminClinics from "./pages/admin/Clinics";
+import AdminClinicReports from "./pages/admin/ClinicReports";
 import AgentClinics from "./pages/AgentClinics";
 import AdminLogin from "./pages/AdminLogin";
 import AgentCabinet from "./pages/AgentCabinet";
@@ -34,6 +35,7 @@ function Router() {
       <Route path={"/admin/payments"} component={AdminPayments} />
       <Route path={"/admin/doctors"} component={AdminDoctors} />
       <Route path={"/admin/clinics"} component={AdminClinics} />
+      <Route path={"/admin/clinic-reports"} component={AdminClinicReports} />
 
       {/* Agent panel routes */}
       <Route path={"/"} component={Home} />

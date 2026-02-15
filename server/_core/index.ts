@@ -8,6 +8,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { setupTelegramWebhook } from "../telegram-bot-webhook";
 import cookieParser from "cookie-parser";
+import cron from "node-cron";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -70,6 +71,21 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
   });
+
+  // Clinic reports email polling — every 5 minutes
+  cron.schedule("*/5 * * * *", async () => {
+    try {
+      console.log("[Cron] Starting clinic email poll...");
+      const { processNewClinicEmails } = await import("../clinic-report-processor");
+      const result = await processNewClinicEmails();
+      if (result.created > 0 || result.errors > 0) {
+        console.log(`[Cron] Email poll done: created=${result.created}, errors=${result.errors}`);
+      }
+    } catch (error) {
+      console.error("[Cron] Email poll failed:", error);
+    }
+  });
+  console.log("[Cron] Clinic email polling scheduled (every 5 minutes)");
 }
 
 startServer().catch(console.error);

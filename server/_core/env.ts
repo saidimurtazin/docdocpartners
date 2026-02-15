@@ -13,4 +13,9 @@ export const ENV = {
   /** Public-facing URL of the app (e.g. https://docdocpartners-production.up.railway.app) */
   appUrl: process.env.APP_URL
     || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "http://localhost:5173"),
+  /** IMAP credentials for clinic reports email polling */
+  imapHost: process.env.IMAP_HOST ?? "imap.mail.ru",
+  imapPort: parseInt(process.env.IMAP_PORT ?? "993"),
+  imapUser: process.env.IMAP_USER ?? "",
+  imapPass: process.env.IMAP_PASS ?? "",
 };

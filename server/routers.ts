@@ -740,6 +740,125 @@ DocDocPartner — B2B-платформа агентских рекомендац
           return { data: buffer.toString('base64') };
         }),
     }),
+
+    // CLINIC REPORTS
+    clinicReports: router({
+      list: protectedProcedure
+        .input(z.object({
+          status: z.string().optional(),
+          search: z.string().optional(),
+          page: z.number().default(1),
+          pageSize: z.number().default(20),
+        }).optional())
+        .query(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          return db.getAllClinicReports(input || undefined);
+        }),
+
+      getById: protectedProcedure
+        .input(z.object({ id: z.number() }))
+        .query(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          return db.getClinicReportById(input.id);
+        }),
+
+      stats: protectedProcedure.query(async ({ ctx }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        return db.getClinicReportsStats();
+      }),
+
+      approve: protectedProcedure
+        .input(z.object({
+          id: z.number(),
+          referralId: z.number().optional(),
+          treatmentAmount: z.number().optional(), // kopecks
+          notes: z.string().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+
+          const report = await db.getClinicReportById(input.id);
+          if (!report) throw new TRPCError({ code: "NOT_FOUND" });
+
+          // Update report status
+          await db.updateClinicReportStatus(input.id, "approved", ctx.user.id, input.notes);
+
+          // Link to referral if provided
+          const refId = input.referralId || report.referralId;
+          if (refId) {
+            await db.linkClinicReportToReferral(input.id, refId);
+
+            // Update referral amounts
+            const amount = input.treatmentAmount || report.treatmentAmount || 0;
+            if (amount > 0) {
+              const commission = Math.round(amount * 0.1); // 10%
+              await db.updateReferralAmounts(refId, amount, commission);
+              await db.updateReferralStatus(refId, "visited");
+            }
+          }
+
+          return { success: true };
+        }),
+
+      reject: protectedProcedure
+        .input(z.object({
+          id: z.number(),
+          notes: z.string().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          await db.updateClinicReportStatus(input.id, "rejected", ctx.user.id, input.notes);
+          return { success: true };
+        }),
+
+      update: protectedProcedure
+        .input(z.object({
+          id: z.number(),
+          patientName: z.string().optional(),
+          visitDate: z.string().optional(),
+          treatmentAmount: z.number().optional(),
+          services: z.string().optional(),
+          clinicName: z.string().optional(),
+          referralId: z.number().nullable().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          const { id, ...data } = input;
+          await db.updateClinicReport(id, data);
+          return { success: true };
+        }),
+
+      linkToReferral: protectedProcedure
+        .input(z.object({
+          id: z.number(),
+          referralId: z.number(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          await db.linkClinicReportToReferral(input.id, input.referralId);
+          return { success: true };
+        }),
+
+      triggerPoll: protectedProcedure.mutation(async ({ ctx }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        const { processNewClinicEmails } = await import("./clinic-report-processor");
+        return processNewClinicEmails();
+      }),
+
+      searchReferrals: protectedProcedure
+        .input(z.object({
+          search: z.string().optional(),
+        }))
+        .query(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          const allRefs = await db.getAllReferrals();
+          if (!input?.search) return allRefs.slice(0, 20);
+          const term = input.search.toLowerCase();
+          return allRefs
+            .filter(r => r.patientFullName.toLowerCase().includes(term) || (r.clinic && r.clinic.toLowerCase().includes(term)))
+            .slice(0, 20);
+        }),
+    }),
   }),
 
   // Public endpoints

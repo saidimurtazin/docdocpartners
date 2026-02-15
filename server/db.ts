@@ -1,6 +1,6 @@
 import { eq, desc, and, like, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, agents, referrals, payments, doctors, sessions, otpCodes, clinics, type InsertSession } from "../drizzle/schema";
+import { InsertUser, users, agents, referrals, payments, doctors, sessions, otpCodes, clinics, clinicReports, type InsertSession, type InsertClinicReport } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -746,8 +746,125 @@ export async function getValidOtpCode(email: string, code: string) {
 export async function markOtpAsUsed(id: number) {
   const db = await getDb();
   if (!db) return;
-  
+
   await db.update(otpCodes)
     .set({ used: "yes" })
     .where(eq(otpCodes.id, id));
+}
+
+// ==================== CLINIC REPORTS ====================
+
+export async function getAllClinicReports(filters?: {
+  status?: string;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}) {
+  const db = await getDb();
+  if (!db) return { reports: [], total: 0 };
+
+  const page = filters?.page || 1;
+  const pageSize = filters?.pageSize || 20;
+  const offset = (page - 1) * pageSize;
+
+  let query = db.select().from(clinicReports).orderBy(desc(clinicReports.createdAt));
+
+  // Count total
+  const conditions: any[] = [];
+  if (filters?.status) {
+    conditions.push(eq(clinicReports.status, filters.status as any));
+  }
+  if (filters?.search) {
+    conditions.push(like(clinicReports.patientName, `%${filters.search}%`));
+  }
+
+  let countQuery;
+  if (conditions.length > 0) {
+    countQuery = db.select({ count: sql<number>`count(*)` }).from(clinicReports).where(and(...conditions));
+  } else {
+    countQuery = db.select({ count: sql<number>`count(*)` }).from(clinicReports);
+  }
+  const [{ count: total }] = await countQuery;
+
+  // Fetch paginated
+  let dataQuery;
+  if (conditions.length > 0) {
+    dataQuery = db.select().from(clinicReports).where(and(...conditions)).orderBy(desc(clinicReports.createdAt)).limit(pageSize).offset(offset);
+  } else {
+    dataQuery = db.select().from(clinicReports).orderBy(desc(clinicReports.createdAt)).limit(pageSize).offset(offset);
+  }
+  const reports = await dataQuery;
+
+  return { reports, total };
+}
+
+export async function getClinicReportById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const [report] = await db.select().from(clinicReports).where(eq(clinicReports.id, id));
+  return report || null;
+}
+
+export async function getClinicReportByEmailMessageId(messageId: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const [report] = await db.select().from(clinicReports).where(eq(clinicReports.emailMessageId, messageId));
+  return report || null;
+}
+
+export async function createClinicReport(data: Omit<InsertClinicReport, "id" | "createdAt" | "updatedAt">) {
+  const db = await getDb();
+  if (!db) return null;
+  const [result] = await db.insert(clinicReports).values(data as any);
+  return result.insertId;
+}
+
+export async function updateClinicReportStatus(
+  id: number,
+  status: "pending_review" | "auto_matched" | "approved" | "rejected",
+  reviewedBy?: number,
+  reviewNotes?: string
+) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(clinicReports).set({
+    status,
+    reviewedBy: reviewedBy || undefined,
+    reviewedAt: new Date(),
+    reviewNotes: reviewNotes || undefined,
+  }).where(eq(clinicReports.id, id));
+}
+
+export async function updateClinicReport(id: number, data: Record<string, any>) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(clinicReports).set(data).where(eq(clinicReports.id, id));
+}
+
+export async function linkClinicReportToReferral(id: number, referralId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(clinicReports).set({
+    referralId,
+    matchConfidence: 100,
+  }).where(eq(clinicReports.id, id));
+}
+
+export async function getClinicReportsStats() {
+  const db = await getDb();
+  if (!db) return { total: 0, pendingReview: 0, autoMatched: 0, approved: 0, rejected: 0 };
+
+  const [total] = await db.select({ count: sql<number>`count(*)` }).from(clinicReports);
+  const [pending] = await db.select({ count: sql<number>`count(*)` }).from(clinicReports).where(eq(clinicReports.status, "pending_review"));
+  const [autoMatched] = await db.select({ count: sql<number>`count(*)` }).from(clinicReports).where(eq(clinicReports.status, "auto_matched"));
+  const [approved] = await db.select({ count: sql<number>`count(*)` }).from(clinicReports).where(eq(clinicReports.status, "approved"));
+  const [rejected] = await db.select({ count: sql<number>`count(*)` }).from(clinicReports).where(eq(clinicReports.status, "rejected"));
+
+  return {
+    total: total.count,
+    pendingReview: pending.count,
+    autoMatched: autoMatched.count,
+    approved: approved.count,
+    rejected: rejected.count,
+  };
 }

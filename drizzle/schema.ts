@@ -189,3 +189,44 @@ export const clinics = mysqlTable("clinics", {
 
 export type Clinic = typeof clinics.$inferSelect;
 export type InsertClinic = typeof clinics.$inferInsert;
+
+/**
+ * Clinic reports — реестр отчётов от клиник (AI-парсинг email)
+ */
+export const clinicReports = mysqlTable("clinic_reports", {
+  id: int("id").autoincrement().primaryKey(),
+
+  // FK (nullable — может быть не привязан)
+  referralId: int("referralId"),
+  clinicId: int("clinicId"),
+
+  // Email-метаданные
+  emailFrom: varchar("emailFrom", { length: 320 }).notNull(),
+  emailSubject: varchar("emailSubject", { length: 500 }),
+  emailMessageId: varchar("emailMessageId", { length: 500 }).notNull().unique(),
+  emailReceivedAt: timestamp("emailReceivedAt"),
+  emailBodyRaw: text("emailBodyRaw"),
+
+  // AI-извлечённые поля
+  patientName: varchar("patientName", { length: 255 }),
+  visitDate: varchar("visitDate", { length: 50 }),
+  treatmentAmount: int("treatmentAmount").default(0), // копейки
+  services: text("services"), // JSON array
+  clinicName: varchar("clinicName", { length: 255 }),
+
+  // Статус и уверенность
+  status: mysqlEnum("status", ["pending_review", "auto_matched", "approved", "rejected"]).default("pending_review").notNull(),
+  aiConfidence: int("aiConfidence").default(0), // 0-100
+  matchConfidence: int("matchConfidence").default(0), // 0-100
+
+  // Рецензирование
+  reviewedBy: int("reviewedBy"),
+  reviewedAt: timestamp("reviewedAt"),
+  reviewNotes: text("reviewNotes"),
+
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ClinicReport = typeof clinicReports.$inferSelect;
+export type InsertClinicReport = typeof clinicReports.$inferInsert;
