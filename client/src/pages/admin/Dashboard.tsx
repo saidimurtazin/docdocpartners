@@ -408,7 +408,7 @@ export default function AdminDashboard() {
 
         {/* Navigation Cards */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <Link href="/agents">
+          <Link href="/admin/agents">
             <Card className="hover:border-primary cursor-pointer transition-colors h-full">
               <CardHeader>
                 <CardTitle>👥 Агенты</CardTitle>
@@ -421,7 +421,7 @@ export default function AdminDashboard() {
             </Card>
           </Link>
 
-          <Link href="/referrals">
+          <Link href="/admin/referrals">
             <Card className="hover:border-primary cursor-pointer transition-colors h-full">
               <CardHeader>
                 <CardTitle>📝 Рекомендации</CardTitle>
@@ -434,7 +434,7 @@ export default function AdminDashboard() {
             </Card>
           </Link>
 
-          <Link href="/payments">
+          <Link href="/admin/payments">
             <Card className="hover:border-primary cursor-pointer transition-colors h-full">
               <CardHeader>
                 <CardTitle>💰 Выплаты</CardTitle>
@@ -447,7 +447,7 @@ export default function AdminDashboard() {
             </Card>
           </Link>
 
-          <Link href="/doctors">
+          <Link href="/admin/doctors">
             <Card className="hover:border-primary cursor-pointer transition-colors h-full">
               <CardHeader>
                 <CardTitle>🏥 База врачей</CardTitle>
