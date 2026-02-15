@@ -30,7 +30,10 @@ interface SessionData {
     patientPhone?: string;
     referredBy?: string;
   };
-  lastMessageTime?: number; // For spam protection
+  lastMessageTime?: number;
+  lastCallbackTime?: number; // Prevent double-click on inline buttons
+  processing?: boolean; // Lock to prevent concurrent DB writes
+  createdAt: number; // Session creation timestamp for TTL
 }
 
 interface BotContext extends Context {
@@ -39,6 +42,29 @@ interface BotContext extends Context {
 
 // Simple in-memory session storage
 const sessions = new Map<number, SessionData>();
+
+// Session TTL: 30 minutes
+const SESSION_TTL_MS = 30 * 60 * 1000;
+
+// Cleanup expired sessions every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  sessions.forEach((session, userId) => {
+    if (now - session.createdAt > SESSION_TTL_MS) {
+      sessions.delete(userId);
+    }
+  });
+}, 5 * 60 * 1000);
+
+/**
+ * Escape HTML special characters for Telegram HTML messages
+ */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
 
 // ===============================
 // VALIDATION FUNCTIONS (IMPROVED)
@@ -49,12 +75,16 @@ const sessions = new Map<number, SessionData>();
  */
 function validateFullName(text: string): { valid: boolean; error?: string } {
   const trimmed = text.trim();
-  
+
+  if (trimmed.length > 150) {
+    return { valid: false, error: 'Слишком длинное имя (максимум 150 символов)' };
+  }
+
   // Проверка на кириллицу, пробелы, дефисы
   if (!/^[А-Яа-яЁё\s-]+$/.test(trimmed)) {
     return { valid: false, error: 'Используйте только русские буквы (кириллицу)' };
   }
-  
+
   // Проверка количества слов (2-4 слова)
   const words = trimmed.split(/\s+/).filter(w => w.length > 0);
   if (words.length < 2) {
@@ -63,14 +93,14 @@ function validateFullName(text: string): { valid: boolean; error?: string } {
   if (words.length > 4) {
     return { valid: false, error: 'Слишком много слов. Формат: Фамилия Имя Отчество' };
   }
-  
+
   // Проверка длины каждого слова (минимум 2 буквы)
   for (const word of words) {
     if (word.length < 2) {
       return { valid: false, error: 'Каждое слово должно содержать минимум 2 буквы' };
     }
   }
-  
+
   return { valid: true };
 }
 
@@ -79,19 +109,23 @@ function validateFullName(text: string): { valid: boolean; error?: string } {
  */
 function validateEmailAdvanced(email: string): { valid: boolean; error?: string } {
   const trimmed = email.trim().toLowerCase();
-  
-  // Базовая проверка формата
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (trimmed.length > 254) {
+    return { valid: false, error: 'Email слишком длинный' };
+  }
+
+  // Проверка формата: local@domain.tld
+  const emailRegex = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
   if (!emailRegex.test(trimmed)) {
     return { valid: false, error: 'Неверный формат email. Пример: ivan@mail.ru' };
   }
-  
-  // Проверка длины домена
+
+  // Проверка длины домена (минимум "a.ru" = 4 символа)
   const domain = trimmed.split('@')[1];
   if (domain && domain.length < 4) {
     return { valid: false, error: 'Слишком короткий домен email' };
   }
-  
+
   return { valid: true };
 }
 
@@ -99,19 +133,23 @@ function validateEmailAdvanced(email: string): { valid: boolean; error?: string 
  * Валидация любого международного номера телефона
  * Принимает номера в формате +[country_code][number]
  */
-function validatePhoneAdvanced(phone: string): { valid: boolean; error?: string } {
-  // Убираем пробелы и дефисы
-  const cleaned = phone.replace(/[\s-]/g, '');
-  
-  // Проверка общего формата: + и минимум 10 цифр (максимум 15)
-  if (!/^\+\d{10,15}$/.test(cleaned)) {
-    return { 
-      valid: false, 
-      error: 'Неверный формат. Используйте: +[country_code][number]\nПримеры: +79001234567, +77011234567, +996555123456' 
+function validatePhoneAdvanced(phone: string): { valid: boolean; error?: string; normalized?: string } {
+  // Убираем пробелы, дефисы, скобки
+  let cleaned = phone.replace(/[\s\-()]/g, '');
+
+  // Автоматическая нормализация
+  if (!cleaned.startsWith('+')) cleaned = '+' + cleaned;
+  if (cleaned.startsWith('+8') && cleaned.length === 12) cleaned = '+7' + cleaned.slice(2);
+
+  // Проверка общего формата: + и 11-15 цифр (минимум 11 для РФ/СНГ)
+  if (!/^\+\d{11,15}$/.test(cleaned)) {
+    return {
+      valid: false,
+      error: 'Неверный формат. Минимум 11 цифр с кодом страны.\nПримеры: +79001234567, +77011234567, +996555123456'
     };
   }
-  
-  return { valid: true };
+
+  return { valid: true, normalized: cleaned };
 }
 
 /**
@@ -220,23 +258,40 @@ function validatePhone(phone: string): boolean {
 // SPAM PROTECTION
 // ===============================
 
-const SPAM_INTERVAL_MS = 1000; // 1 second between messages
+const SPAM_INTERVAL_MS = 1500; // 1.5 seconds between messages
+const CALLBACK_COOLDOWN_MS = 3000; // 3 seconds between button clicks
 
 /**
- * Проверка на спам
+ * Проверка на спам сообщений
  */
 function isSpamming(userId: number): boolean {
   const session = getSession(userId);
   const now = Date.now();
-  
+
   if (session.lastMessageTime) {
-    const timeSinceLastMessage = now - session.lastMessageTime;
-    if (timeSinceLastMessage < SPAM_INTERVAL_MS) {
+    if (now - session.lastMessageTime < SPAM_INTERVAL_MS) {
       return true;
     }
   }
-  
+
   session.lastMessageTime = now;
+  return false;
+}
+
+/**
+ * Проверка на повторный клик по inline-кнопке (double-click protection)
+ */
+function isCallbackSpamming(userId: number): boolean {
+  const session = getSession(userId);
+  const now = Date.now();
+
+  if (session.lastCallbackTime) {
+    if (now - session.lastCallbackTime < CALLBACK_COOLDOWN_MS) {
+      return true;
+    }
+  }
+
+  session.lastCallbackTime = now;
   return false;
 }
 
@@ -286,7 +341,7 @@ const contractKeyboard = Markup.inlineKeyboard([
 // Get session helper
 function getSession(userId: number): SessionData {
   if (!sessions.has(userId)) {
-    sessions.set(userId, {});
+    sessions.set(userId, { createdAt: Date.now() });
   }
   return sessions.get(userId)!;
 }
@@ -318,9 +373,9 @@ bot.command('start', async (ctx) => {
         
         await ctx.reply(
           '✅ <b>Вы уже зарегистрированы!</b>\n\n' +
-          `👤 <b>Имя:</b> ${existingAgent.fullName}\n` +
-          `📧 <b>Email:</b> ${existingAgent.email}\n` +
-          `📍 <b>Город:</b> ${existingAgent.city}\n` +
+          `👤 <b>Имя:</b> ${escapeHtml(existingAgent.fullName || '')}\n` +
+          `📧 <b>Email:</b> ${escapeHtml(existingAgent.email || '')}\n` +
+          `📍 <b>Город:</b> ${escapeHtml(existingAgent.city || '')}\n` +
           `🎯 <b>Статус:</b> <b>${statusLabels[existingAgent.status] || existingAgent.status}</b>\n\n` +
           (existingAgent.status === 'pending' 
             ? '⏳ Ваша заявка находится на проверке. Мы свяжемся с вами в течение 24 часов.'
@@ -363,10 +418,13 @@ bot.command('start', async (ctx) => {
   session.tempData = { referredBy };
 });
 
-// Handle full name input
+// Handle text messages
 bot.on(message('text'), async (ctx) => {
   const userId = ctx.from?.id;
   if (!userId) return;
+
+  // Spam protection
+  if (isSpamming(userId)) return;
 
   const session = getSession(userId);
   const text = ctx.message.text;
@@ -379,6 +437,19 @@ bot.on(message('text'), async (ctx) => {
       await ctx.reply('❌ Действие отменено.', Markup.removeKeyboard());
       return;
     }
+  }
+
+  // Block menu/command actions while in a registration/patient flow
+  const isInFlow = session.registrationStep !== undefined;
+  const isMenuAction = text.startsWith('📋') || text.startsWith('📈') || text.startsWith('💰') ||
+                        text.startsWith('👥') || text.startsWith('🧾') || text.startsWith('📚') ||
+                        text.startsWith('ℹ️') || text.startsWith('🔗');
+  if (isInFlow && isMenuAction) {
+    await ctx.reply(
+      '⚠️ Вы сейчас в процессе заполнения формы.\n' +
+      'Завершите текущее действие или введите "Отмена" для выхода.'
+    );
+    return;
   }
 
   // Handle menu button clicks (ReplyKeyboardMarkup)
@@ -490,9 +561,9 @@ bot.on(message('text'), async (ctx) => {
       let message = '💰 <b>Запрос выплаты</b>\n\n';
       message += `💵 Доступно к выводу: <b>${availableBalance.toLocaleString('ru-RU')} ₽</b>\n\n`;
       message += '<b>📋 Ваши реквизиты:</b>\n';
-      message += `👤 ФИО: ${agent.fullName}\n`;
-      message += `📧 Email: ${agent.email}\n`;
-      message += `📞 Телефон: ${agent.phone}\n`;
+      message += `👤 ФИО: ${escapeHtml(agent.fullName || '')}\n`;
+      message += `📧 Email: ${escapeHtml(agent.email || '')}\n`;
+      message += `📞 Телефон: ${escapeHtml(agent.phone || '')}\n`;
       if (agent.inn) {
         message += `💼 ИНН: ${agent.inn}\n`;
       }
@@ -569,7 +640,7 @@ bot.on(message('text'), async (ctx) => {
       for (const ref of displayReferrals) {
         const emoji = statusEmoji[ref.status] || '📋';
         const statusName = statusNames[ref.status] || ref.status;
-        message += `${emoji} <b>${ref.patientFullName}</b>\n`;
+        message += `${emoji} <b>${escapeHtml(ref.patientFullName)}</b>\n`;
         message += `   Статус: ${statusName}\n`;
         message += `   Дата: ${new Date(ref.createdAt).toLocaleDateString('ru-RU')}\n\n`;
       }
@@ -602,10 +673,10 @@ bot.on(message('text'), async (ctx) => {
       }
 
       let message = '💳 <b>Мои реквизиты</b>\n\n';
-      message += `👤 <b>ФИО:</b> ${agent.fullName}\n`;
-      message += `📧 <b>Email:</b> ${agent.email}\n`;
-      message += `📞 <b>Телефон:</b> ${agent.phone}\n`;
-      message += `🏙️ <b>Город:</b> ${agent.city}\n\n`;
+      message += `👤 <b>ФИО:</b> ${escapeHtml(agent.fullName || '')}\n`;
+      message += `📧 <b>Email:</b> ${escapeHtml(agent.email || '')}\n`;
+      message += `📞 <b>Телефон:</b> ${escapeHtml(agent.phone || '')}\n`;
+      message += `🏙️ <b>Город:</b> ${escapeHtml(agent.city || '')}\n\n`;
       
       if (agent.inn) {
         message += `💼 <b>ИНН:</b> ${agent.inn}\n`;
@@ -716,7 +787,8 @@ bot.on(message('text'), async (ctx) => {
     }
 
     const capitalized = capitalizeWords(text);
-    session.tempData!.fullName = capitalized;
+    if (!session.tempData) session.tempData = {};
+    session.tempData.fullName = capitalized;
     session.registrationStep = 'email';
 
     await ctx.reply(
@@ -741,7 +813,8 @@ bot.on(message('text'), async (ctx) => {
       return;
     }
 
-    session.tempData!.email = text.toLowerCase();
+    if (!session.tempData) session.tempData = {};
+    session.tempData.email = text.toLowerCase();
     session.registrationStep = 'phone';
 
     await ctx.reply(
@@ -768,7 +841,8 @@ bot.on(message('text'), async (ctx) => {
     }
 
     const capitalized = capitalizeWords(text);
-    session.tempData!.city = capitalized;
+    if (!session.tempData) session.tempData = {};
+    session.tempData.city = capitalized;
 
     // Show contract
     session.registrationStep = 'contract';
@@ -795,7 +869,8 @@ bot.on(message('text'), async (ctx) => {
     }
 
     const capitalized = capitalizeWords(text);
-    session.tempData!.specialization = capitalized;
+    if (!session.tempData) session.tempData = {};
+    session.tempData.specialization = capitalized;
     session.registrationStep = 'city';
 
     await ctx.reply('✅ Специальность сохранена!\n\nТеперь укажите ваш город:');
@@ -816,7 +891,8 @@ bot.on(message('text'), async (ctx) => {
     }
 
     const capitalized = capitalizeWords(text);
-    session.tempData!.patientName = capitalized;
+    if (!session.tempData) { await ctx.reply('❌ Сессия истекла. Начните заново: /patient'); return; }
+    session.tempData.patientName = capitalized;
     session.registrationStep = 'patient_birthdate';
 
     await ctx.reply(
@@ -867,7 +943,8 @@ bot.on(message('text'), async (ctx) => {
       return;
     }
 
-    session.tempData!.patientBirthdate = text;
+    if (!session.tempData) { await ctx.reply('❌ Сессия истекла. Начните заново: /patient'); return; }
+    session.tempData.patientBirthdate = text;
     session.registrationStep = 'patient_phone';
 
     await ctx.reply('✅ Дата рождения сохранена!\n\nВведите номер телефона пациента (+79XXXXXXXXX):');
@@ -875,20 +952,19 @@ bot.on(message('text'), async (ctx) => {
   }
 
   if (session.registrationStep === 'patient_phone') {
-    let phone = text.trim();
-    if (!phone.startsWith('+')) phone = '+' + phone;
-    if (phone.startsWith('+8')) phone = '+7' + phone.slice(2);
-
-    const validation = validatePhoneAdvanced(phone);
+    const validation = validatePhoneAdvanced(text.trim());
     if (!validation.valid) {
-      await ctx.reply(        `❗️ <b>Ошибка валидации:</b>\n${validation.error}\n\n` +
+      await ctx.reply(
+        `❗️ <b>Ошибка валидации:</b>\n${validation.error}\n\n` +
         'Попробуйте еще раз:',
         { parse_mode: 'HTML' }
       );
       return;
     }
 
-    session.tempData!.patientPhone = phone;
+    const phone = validation.normalized!;
+    if (!session.tempData) { await ctx.reply('❌ Сессия истекла. Начните заново: /patient'); return; }
+    session.tempData.patientPhone = phone;
     session.registrationStep = 'patient_consent';
 
     // Show preview with consent buttons
@@ -899,9 +975,9 @@ bot.on(message('text'), async (ctx) => {
 
     await ctx.reply(
       '📋 <b>Проверьте данные пациента:</b>\n\n' +
-      `👤 <b>ФИО:</b> ${session.tempData!.patientName}\n` +
-      `🎂 <b>Дата рождения:</b> ${session.tempData!.patientBirthdate}\n` +
-      `📞 <b>Телефон:</b> ${phone}\n\n` +
+      `👤 <b>ФИО:</b> ${escapeHtml(session.tempData.patientName || '')}\n` +
+      `🎂 <b>Дата рождения:</b> ${escapeHtml(session.tempData.patientBirthdate || '')}\n` +
+      `📞 <b>Телефон:</b> ${escapeHtml(phone)}\n\n` +
       '⚠️ <b>ВАЖНО:</b> Подтвердите, что пациент дал согласие на передачу его персональных данных в клиники-партнеры DocDocPartner.',
       { parse_mode: 'HTML', ...consentKeyboard }
     );
@@ -911,24 +987,19 @@ bot.on(message('text'), async (ctx) => {
 
 // Handle contact sharing
 bot.on(message('contact'), async (ctx) => {
-  console.log('[Telegram Bot] Received contact:', JSON.stringify(ctx.message.contact));
   const userId = ctx.from?.id;
   if (!userId) return;
 
   const session = getSession(userId);
-  console.log('[Telegram Bot] Current session step:', session.registrationStep);
 
   if (session.registrationStep === 'phone') {
     const contact = ctx.message.contact;
-    const phone = contact.phone_number;
-
-    // Normalize phone number
-    let normalizedPhone = phone.startsWith('+') ? phone : `+${phone}`;
-    if (normalizedPhone.startsWith('+8')) {
-      normalizedPhone = '+7' + normalizedPhone.slice(2);
+    if (!contact?.phone_number) {
+      await ctx.reply('❌ Не удалось получить номер. Попробуйте ещё раз.');
+      return;
     }
 
-    const validation = validatePhoneAdvanced(normalizedPhone);
+    const validation = validatePhoneAdvanced(contact.phone_number);
     if (!validation.valid) {
       await ctx.reply(
         `❌ <b>Ошибка валидации:</b>\n${validation.error}\n\n` +
@@ -938,7 +1009,8 @@ bot.on(message('contact'), async (ctx) => {
       return;
     }
 
-    session.tempData!.phone = normalizedPhone;
+    if (!session.tempData) { await ctx.reply('❌ Сессия истекла. Начните заново: /start'); return; }
+    session.tempData.phone = validation.normalized!;
     session.registrationStep = 'role';
 
     await ctx.reply(
@@ -953,6 +1025,7 @@ bot.on(message('contact'), async (ctx) => {
 bot.action(/^role_(.+)$/, async (ctx) => {
   const userId = ctx.from?.id;
   if (!userId) return;
+  if (isCallbackSpamming(userId)) { await ctx.answerCbQuery(); return; }
 
   const session = getSession(userId);
   const roleKey = ctx.match[1];
@@ -967,7 +1040,8 @@ bot.action(/^role_(.+)$/, async (ctx) => {
   };
 
   const role = roleMap[roleKey];
-  session.tempData!.role = role;
+  if (!role || !session.tempData) { await ctx.answerCbQuery(); return; }
+  session.tempData.role = role;
 
   await ctx.answerCbQuery();
 
@@ -988,6 +1062,7 @@ bot.action(/^role_(.+)$/, async (ctx) => {
 bot.action(/^spec_(.+)$/, async (ctx) => {
   const userId = ctx.from?.id;
   if (!userId) return;
+  if (isCallbackSpamming(userId)) { await ctx.answerCbQuery(); return; }
 
   const session = getSession(userId);
   const specKey = ctx.match[1];
@@ -1010,7 +1085,8 @@ bot.action(/^spec_(.+)$/, async (ctx) => {
   };
 
   const specialization = specMap[specKey];
-  session.tempData!.specialization = specialization;
+  if (!specialization || !session.tempData) { return; }
+  session.tempData.specialization = specialization;
   session.registrationStep = 'city';
 
   await ctx.editMessageText(`✅ Специальность: ${specialization}\n\nТеперь укажите ваш город:`);
@@ -1020,9 +1096,23 @@ bot.action(/^spec_(.+)$/, async (ctx) => {
 bot.action('contract_accept', async (ctx) => {
   const userId = ctx.from?.id;
   if (!userId) return;
+  if (isCallbackSpamming(userId)) { await ctx.answerCbQuery(); return; }
 
   const session = getSession(userId);
-  const data = session.tempData!;
+
+  // Prevent double-click: if already processing, ignore
+  if (session.processing) { await ctx.answerCbQuery('⏳ Обработка...'); return; }
+  session.processing = true;
+
+  // Validate session data exists
+  const data = session.tempData;
+  if (!data?.fullName || !data?.email || !data?.phone || !data?.role || !data?.city) {
+    session.processing = false;
+    await ctx.answerCbQuery();
+    await ctx.editMessageText('❌ Сессия истекла. Начните регистрацию заново: /start');
+    sessions.delete(userId);
+    return;
+  }
 
   await ctx.answerCbQuery();
 
@@ -1030,13 +1120,14 @@ bot.action('contract_accept', async (ctx) => {
     // Save to database
     const db = await getDb();
     if (!db) {
+      session.processing = false;
       await ctx.editMessageText('❌ Ошибка подключения к базе данных. Попробуйте позже.');
       return;
     }
 
     // Check if user already registered
     const [existingAgent] = await db.select().from(agents).where(eq(agents.telegramId, String(userId)));
-    
+
     if (existingAgent) {
       const statusLabels: Record<string, string> = {
         pending: 'ожидает проверки',
@@ -1044,11 +1135,11 @@ bot.action('contract_accept', async (ctx) => {
         rejected: 'отклонена',
         blocked: 'заблокирован'
       };
-      
+
       await ctx.editMessageText(
         '⚠️ <b>Вы уже зарегистрированы!</b>\n\n' +
         `Ваш статус: <b>${statusLabels[existingAgent.status] || existingAgent.status}</b>\n\n` +
-        (existingAgent.status === 'pending' 
+        (existingAgent.status === 'pending'
           ? '⏳ Ваша заявка находится на проверке. Мы свяжемся с вами в течение 24 часов.'
           : existingAgent.status === 'active'
           ? '✅ Вы можете отправлять рекомендации пациентов.'
@@ -1057,8 +1148,7 @@ bot.action('contract_accept', async (ctx) => {
           : '🚫 Ваш аккаунт заблокирован. Свяжитесь с поддержкой для получения информации.'),
         { parse_mode: 'HTML' }
       );
-      
-      // Send main menu keyboard for active users
+
       if (existingAgent.status === 'active') {
         await ctx.reply('Выберите действие:', mainMenuKeyboard);
       }
@@ -1070,19 +1160,34 @@ bot.action('contract_accept', async (ctx) => {
     const crypto = await import('crypto');
     const referralCode = crypto.randomBytes(6).toString('hex');
 
+    // Validate referredBy agent exists (if provided)
+    let referredByAgentId: number | null = null;
+    if (data.referredBy) {
+      const parsedId = parseInt(data.referredBy, 10);
+      if (!isNaN(parsedId) && parsedId > 0) {
+        const [referrer] = await db.select({ id: agents.id }).from(agents).where(eq(agents.id, parsedId));
+        if (referrer) {
+          referredByAgentId = referrer.id;
+        }
+      }
+    }
+
     // Create agent in database
-    const [insertResult] = await db.insert(agents).values({
+    await db.insert(agents).values({
       telegramId: String(userId),
-      fullName: data.fullName!,
-      email: data.email!,
-      phone: data.phone!,
-      role: data.role!,
+      fullName: data.fullName,
+      email: data.email,
+      phone: data.phone,
+      role: data.role,
       specialization: data.specialization || null,
-      city: data.city!,
+      city: data.city,
       status: 'pending',
       referralCode,
-      referredBy: data.referredBy ? parseInt(data.referredBy, 10) || null : null,
+      referredBy: referredByAgentId,
     });
+
+    // Clear session before sending messages (prevents double-submit on retry)
+    sessions.delete(userId);
 
     // Send registration confirmation
     await ctx.editMessageText(
@@ -1095,25 +1200,23 @@ bot.action('contract_accept', async (ctx) => {
       { parse_mode: 'HTML' }
     );
 
-    // Send web access info (OTP-based login, no password needed)
+    // Send web access info
     await ctx.reply(
       '🔐 <b>Доступ к веб-кабинету</b>\n\n' +
-      `📧 Ваш email: <code>${data.email}</code>\n\n` +
-      '🌐 Войдите на сайт: https://docdocpartners.ru/login\n' +
+      `📧 Ваш email: <code>${escapeHtml(data.email)}</code>\n\n` +
+      `🌐 Войдите на сайт: ${ENV.appUrl}/login\n` +
       '💡 Для входа используйте код, который придёт в этот Telegram.',
       { parse_mode: 'HTML' }
     );
 
-    // Send main menu keyboard after successful registration
+    // Send main menu keyboard
     await ctx.reply(
       '📱 <b>Главное меню</b>\n\n' +
       'Выберите действие из меню ниже или используйте команду /help для справки.',
       { parse_mode: 'HTML', ...mainMenuKeyboard }
     );
-
-    // Clear session
-    sessions.delete(userId);
   } catch (error) {
+    session.processing = false;
     console.error('[Telegram Bot] Registration error:', error);
     await ctx.editMessageText(
       '❌ Произошла ошибка при регистрации. Пожалуйста, попробуйте позже или свяжитесь с поддержкой.',
@@ -1139,38 +1242,57 @@ bot.action('contract_decline', async (ctx) => {
 bot.action('patient_consent_yes', async (ctx) => {
   const userId = ctx.from?.id;
   if (!userId) return;
+  if (isCallbackSpamming(userId)) { await ctx.answerCbQuery(); return; }
 
   const session = getSession(userId);
+
+  // Prevent double-click
+  if (session.processing) { await ctx.answerCbQuery('⏳ Обработка...'); return; }
+  session.processing = true;
+
+  // Validate session data
+  const data = session.tempData;
+  if (!data?.agentId || !data?.patientName || !data?.patientBirthdate || !data?.patientPhone) {
+    session.processing = false;
+    await ctx.answerCbQuery();
+    await ctx.editMessageText('❌ Сессия истекла. Начните заново: /patient');
+    sessions.delete(userId);
+    return;
+  }
+
   await ctx.answerCbQuery('✅ Сохраняю данные...');
 
   try {
     const db = await getDb();
     if (!db) {
+      session.processing = false;
       await ctx.editMessageText('❌ Ошибка подключения к базе данных. Попробуйте позже.');
       return;
     }
 
     await db.insert(schema.referrals).values({
-      agentId: session.tempData!.agentId!,
-      patientFullName: session.tempData!.patientName!,
-      patientBirthdate: session.tempData!.patientBirthdate!,
-      patientPhone: session.tempData!.patientPhone!,
+      agentId: data.agentId,
+      patientFullName: data.patientName,
+      patientBirthdate: data.patientBirthdate,
+      patientPhone: data.patientPhone,
       status: 'pending'
     });
 
+    // Clear session before messages (prevents double-submit)
+    sessions.delete(userId);
+
     await ctx.editMessageText(
       '🎉 <b>Пациент успешно отправлен!</b>\n\n' +
-      `👤 <b>ФИО:</b> ${session.tempData!.patientName}\n` +
-      `🎂 <b>Дата рождения:</b> ${session.tempData!.patientBirthdate}\n` +
-      `📞 <b>Телефон:</b> ${session.tempData!.patientPhone}\n\n` +
+      `👤 <b>ФИО:</b> ${escapeHtml(data.patientName)}\n` +
+      `🎂 <b>Дата рождения:</b> ${escapeHtml(data.patientBirthdate)}\n` +
+      `📞 <b>Телефон:</b> ${escapeHtml(data.patientPhone)}\n\n` +
       '✅ Клиника свяжется с пациентом в течение 24 часов\n' +
       '🔔 Вы получите уведомление о статусе рекомендации\n\n' +
       '📝 Используйте /patient для отправки еще одного пациента',
       { parse_mode: 'HTML' }
     );
-
-    sessions.delete(userId);
   } catch (error) {
+    session.processing = false;
     console.error('[Telegram Bot] Patient submission error:', error);
     await ctx.editMessageText(
       '❌ Произошла ошибка при сохранении данных.\n\n' +
@@ -1308,18 +1430,18 @@ bot.command('status', async (ctx) => {
 
     const statusMap: Record<string, string> = {
       pending: '⏳ На рассмотрении',
-      approved: '✅ Одобрен',
+      active: '✅ Одобрен',
       rejected: '❌ Отклонен',
       blocked: '🚫 Заблокирован'
     };
 
     await ctx.reply(
-      `<b>Ваш статус:</b> ${statusMap[agent.status]}\n\n` +
-      `<b>ФИО:</b> ${agent.fullName}\n` +
-      `<b>Email:</b> ${agent.email}\n` +
-      `<b>Роль:</b> ${agent.role}\n` +
-      (agent.specialization ? `<b>Специальность:</b> ${agent.specialization}\n` : '') +
-      `<b>Город:</b> ${agent.city}`,
+      `<b>Ваш статус:</b> ${statusMap[agent.status] || agent.status}\n\n` +
+      `<b>ФИО:</b> ${escapeHtml(agent.fullName || '')}\n` +
+      `<b>Email:</b> ${escapeHtml(agent.email || '')}\n` +
+      `<b>Роль:</b> ${escapeHtml(agent.role || '')}\n` +
+      (agent.specialization ? `<b>Специальность:</b> ${escapeHtml(agent.specialization)}\n` : '') +
+      `<b>Город:</b> ${escapeHtml(agent.city || '')}`,
       { parse_mode: 'HTML' }
     );
   } catch (error) {
@@ -1647,7 +1769,7 @@ bot.action('cmd_referrals', async (ctx) => {
     let message = '📊 <b>Мои рекомендации</b>\n\n';
     referrals.slice(0, 10).forEach((ref, idx) => {
       const statusEmoji = ref.status === 'completed' ? '✅' : ref.status === 'pending' ? '⏳' : '📅';
-      message += `${statusEmoji} <b>${ref.patientFullName}</b>\n`;
+      message += `${statusEmoji} <b>${escapeHtml(ref.patientFullName)}</b>\n`;
       message += `   Статус: ${ref.status}\n\n`;
     });
     

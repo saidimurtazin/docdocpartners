@@ -42,7 +42,7 @@ export default function AdminLogin() {
       }
 
       // Redirect to admin dashboard
-      window.location.replace("/");
+      window.location.replace("/admin");
     } catch (error: any) {
       toast.error("Ошибка", {
         description: error.message || "Неверный код",
@@ -81,7 +81,7 @@ export default function AdminLogin() {
                   <Input
                     id="admin-email"
                     type="email"
-                    placeholder="admin@docdocpartners.ru"
+                    placeholder="admin@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     autoFocus
@@ -159,7 +159,7 @@ export default function AdminLogin() {
         </Card>
 
         <p className="text-xs text-center text-muted-foreground mt-4">
-          admin.docdocpartners.ru
+          DocDocPartner Admin
         </p>
       </div>
     </div>

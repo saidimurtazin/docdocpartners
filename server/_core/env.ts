@@ -8,4 +8,7 @@ export const ENV = {
   oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "https://oauth.manus.space",
   appId: process.env.VITE_APP_ID ?? "",
   ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
+  /** Public-facing URL of the app (e.g. https://docdocpartners-production.up.railway.app) */
+  appUrl: process.env.APP_URL
+    || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "http://localhost:5173"),
 };

@@ -4,7 +4,6 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import { isAdminDomain } from "./utils/domain";
 import Home from "./pages/Home";
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminAgents from "./pages/admin/Agents";
@@ -23,28 +22,17 @@ import AgentReferrals from "./pages/AgentReferrals";
 import Login from "./pages/Login";
 
 function Router() {
-  const isAdmin = isAdminDomain();
-
-  // Admin panel routes (admin.docdocpartners.ru)
-  if (isAdmin) {
-    return (
-      <Switch>
-        <Route path={"/login"} component={AdminLogin} />
-        <Route path={"/"} component={AdminDashboard} />
-        <Route path={"/agents"} component={AdminAgents} />
-        <Route path={"/referrals"} component={AdminReferrals} />
-        <Route path={"/payments"} component={AdminPayments} />
-        <Route path={"/doctors"} component={AdminDoctors} />
-        <Route path={"/404"} component={NotFound} />
-        {/* Final fallback route */}
-        <Route component={NotFound} />
-      </Switch>
-    );
-  }
-
-  // Agent panel routes (docdocpartners.ru)
   return (
     <Switch>
+      {/* Admin panel routes (/admin/*) */}
+      <Route path={"/admin/login"} component={AdminLogin} />
+      <Route path={"/admin"} component={AdminDashboard} />
+      <Route path={"/admin/agents"} component={AdminAgents} />
+      <Route path={"/admin/referrals"} component={AdminReferrals} />
+      <Route path={"/admin/payments"} component={AdminPayments} />
+      <Route path={"/admin/doctors"} component={AdminDoctors} />
+
+      {/* Agent panel routes */}
       <Route path={"/"} component={Home} />
       <Route path={"/login"} component={Login} />
       <Route path={"/dashboard"} component={AgentDashboard} />
@@ -55,8 +43,8 @@ function Router() {
       <Route path={"/agent/sessions"} component={AgentSessions} />
       <Route path={"/knowledge-base"} component={KnowledgeBase} />
       <Route path={"/clinics"} component={Clinics} />
+
       <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
       <Route component={NotFound} />
     </Switch>
   );

@@ -1,33 +1,41 @@
 /**
- * Domain utilities for separating admin and agent panels
+ * Domain utilities for separating admin and agent panels.
+ * Supports two modes:
+ *   1. Subdomain-based: admin.example.com → admin, example.com → agent
+ *   2. Path-based (Railway): example.up.railway.app/admin → admin, everything else → agent
  */
 
 /**
- * Check if current hostname is admin subdomain
+ * Check if current context is the admin panel.
+ * Works both with subdomains (admin.domain.com) and path prefix (/admin).
  */
 export function isAdminDomain(): boolean {
   if (typeof window === 'undefined') return false;
-  return window.location.hostname.startsWith('admin.');
+  return (
+    window.location.hostname.startsWith('admin.') ||
+    window.location.pathname.startsWith('/admin')
+  );
 }
 
 /**
- * Get base domain (admin or main)
+ * Get the base URL origin of the current app (protocol + host).
  */
 export function getBaseDomain(): string {
-  return isAdminDomain() ? 'admin.docdocpartners.ru' : 'docdocpartners.ru';
+  if (typeof window === 'undefined') return '';
+  return window.location.origin;
 }
 
 /**
- * Get login path based on current domain
+ * Get login path based on current context.
  */
 export function getLoginPath(): string {
-  return '/login';
+  return isAdminDomain() ? '/admin/login' : '/login';
 }
 
 /**
- * Get dashboard path based on role
+ * Get dashboard path based on role.
  */
 export function getDashboardPath(role?: 'admin' | 'agent'): string {
-  if (role === 'admin') return '/';
+  if (role === 'admin') return '/admin';
   return '/dashboard';
 }
