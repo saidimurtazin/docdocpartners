@@ -37,11 +37,14 @@ export async function processNewClinicEmails(): Promise<ProcessResult> {
           continue;
         }
 
-        // 3. Try to identify clinic by sender email (from reportEmails field)
+        // 3. Identify clinic by sender email — only process emails from known clinic addresses
         const senderClinic = await findClinicByEmail(email.from);
-        if (senderClinic.clinicId) {
-          console.log(`[Processor] Identified clinic by email: ${email.from} → ${senderClinic.clinicName} (id=${senderClinic.clinicId})`);
+        if (!senderClinic.clinicId) {
+          console.log(`[Processor] Ignoring email from unknown sender: ${email.from} (not in any clinic's reportEmails)`);
+          result.skipped++;
+          continue;
         }
+        console.log(`[Processor] Identified clinic by email: ${email.from} → ${senderClinic.clinicName} (id=${senderClinic.clinicId})`);
 
         // 4. Parse with AI
         const patients = await parseClinicEmail(email.textBody, email.from, email.subject);
