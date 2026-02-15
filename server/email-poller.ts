@@ -32,7 +32,7 @@ export async function pollNewEmails(): Promise<EmailMessage[]> {
       user: ENV.imapUser,
       pass: ENV.imapPass,
     },
-    logger: false, // suppress verbose IMAP logs
+    logger: false,
   });
 
   const emails: EmailMessage[] = [];
@@ -43,58 +43,64 @@ export async function pollNewEmails(): Promise<EmailMessage[]> {
 
     const lock = await client.getMailboxLock("INBOX");
     try {
-      // Log mailbox status for debugging
-      const status = await client.status("INBOX", { messages: true, unseen: true });
-      console.log(`[EmailPoller] Mailbox status: ${status.messages} total, ${status.unseen} unseen`);
+      // Step 1: Search for unseen message UIDs
+      const unseenUids = await client.search({ seen: false }, { uid: true });
+      console.log(`[EmailPoller] Found ${unseenUids.length} unseen messages`);
 
-      if (!status.unseen || status.unseen === 0) {
+      if (unseenUids.length === 0) {
         console.log("[EmailPoller] No unseen messages, nothing to fetch");
-        lock.release();
-        await client.logout();
-        return emails;
-      }
+      } else {
+        // Step 2: Fetch each message by UID individually
+        for (const uid of unseenUids) {
+          try {
+            const { content } = await client.download(String(uid), undefined, { uid: true });
 
-      // Use fetch iterator to get all unseen messages with full source
-      for await (const msg of client.fetch({ seen: false }, { source: true, uid: true })) {
-        try {
-          if (!msg.source) {
-            console.log(`[EmailPoller] No source for UID ${msg.uid}, skipping`);
-            continue;
+            if (!content) {
+              console.log(`[EmailPoller] No content for UID ${uid}, skipping`);
+              continue;
+            }
+
+            // Read stream into buffer
+            const chunks: Buffer[] = [];
+            for await (const chunk of content) {
+              chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+            }
+            const rawSource = Buffer.concat(chunks);
+
+            // Parse email
+            const parsed = await simpleParser(rawSource);
+
+            const messageId = parsed.messageId || `no-id-${Date.now()}-${uid}`;
+            const from = typeof parsed.from?.text === "string"
+              ? parsed.from.text
+              : (parsed.from?.value?.[0]?.address || "unknown");
+            const subject = parsed.subject || "(без темы)";
+            const date = parsed.date || new Date();
+
+            // Extract text: prefer text, fallback to stripped HTML
+            let textBody = parsed.text || "";
+            if (!textBody && parsed.html) {
+              textBody = parsed.html
+                .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+                .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+                .replace(/<[^>]+>/g, " ")
+                .replace(/&nbsp;/g, " ")
+                .replace(/&amp;/g, "&")
+                .replace(/&lt;/g, "<")
+                .replace(/&gt;/g, ">")
+                .replace(/\s+/g, " ")
+                .trim();
+            }
+
+            emails.push({ messageId, from, subject, date, textBody });
+
+            // Mark as seen
+            await client.messageFlagsAdd(String(uid), ["\\Seen"], { uid: true });
+
+            console.log(`[EmailPoller] Fetched UID ${uid}: "${subject}" from ${from}`);
+          } catch (msgError: any) {
+            console.error(`[EmailPoller] Error processing UID ${uid}:`, msgError.message);
           }
-
-          // Parse email from raw source
-          const parsed = await simpleParser(msg.source);
-
-          const messageId = parsed.messageId || `no-id-${Date.now()}-${msg.uid}`;
-          const from = typeof parsed.from?.text === "string"
-            ? parsed.from.text
-            : (parsed.from?.value?.[0]?.address || "unknown");
-          const subject = parsed.subject || "(без темы)";
-          const date = parsed.date || new Date();
-
-          // Extract text: prefer text, fallback to stripped HTML
-          let textBody = parsed.text || "";
-          if (!textBody && parsed.html) {
-            textBody = parsed.html
-              .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-              .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-              .replace(/<[^>]+>/g, " ")
-              .replace(/&nbsp;/g, " ")
-              .replace(/&amp;/g, "&")
-              .replace(/&lt;/g, "<")
-              .replace(/&gt;/g, ">")
-              .replace(/\s+/g, " ")
-              .trim();
-          }
-
-          emails.push({ messageId, from, subject, date, textBody });
-
-          // Mark as seen
-          await client.messageFlagsAdd(String(msg.uid), ["\\Seen"], { uid: true });
-
-          console.log(`[EmailPoller] Fetched: ${subject} from ${from}`);
-        } catch (msgError) {
-          console.error(`[EmailPoller] Error processing message ${msg.uid}:`, msgError);
         }
       }
     } finally {
@@ -103,8 +109,8 @@ export async function pollNewEmails(): Promise<EmailMessage[]> {
 
     await client.logout();
     console.log(`[EmailPoller] Done, fetched ${emails.length} emails`);
-  } catch (error) {
-    console.error("[EmailPoller] IMAP connection error:", error);
+  } catch (error: any) {
+    console.error("[EmailPoller] IMAP error:", error.message);
     try { await client.logout(); } catch { /* ignore */ }
   }
 
