@@ -43,42 +43,27 @@ export async function pollNewEmails(): Promise<EmailMessage[]> {
 
     const lock = await client.getMailboxLock("INBOX");
     try {
-      // Search for unseen messages
-      const unseenMessages = await client.search({ seen: false });
-
-      if (unseenMessages.length === 0) {
-        console.log("[EmailPoller] No new emails");
-        return [];
-      }
-
-      console.log(`[EmailPoller] Found ${unseenMessages.length} unread emails`);
-
-      for (const uid of unseenMessages) {
+      // Use fetch iterator to get all unseen messages with full source
+      for await (const msg of client.fetch({ seen: false }, { source: true, uid: true })) {
         try {
-          // Fetch full message source
-          const download = await client.download(uid.toString(), undefined, { uid: true });
-
-          if (!download || !download.content) continue;
-
-          // Collect stream chunks
-          const chunks: Buffer[] = [];
-          for await (const chunk of download.content) {
-            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          if (!msg.source) {
+            console.log(`[EmailPoller] No source for UID ${msg.uid}, skipping`);
+            continue;
           }
-          const rawEmail = Buffer.concat(chunks);
 
-          // Parse email
-          const parsed = await simpleParser(rawEmail);
+          // Parse email from raw source
+          const parsed = await simpleParser(msg.source);
 
-          const messageId = parsed.messageId || `no-id-${Date.now()}-${uid}`;
-          const from = typeof parsed.from?.text === "string" ? parsed.from.text : (parsed.from?.value?.[0]?.address || "unknown");
+          const messageId = parsed.messageId || `no-id-${Date.now()}-${msg.uid}`;
+          const from = typeof parsed.from?.text === "string"
+            ? parsed.from.text
+            : (parsed.from?.value?.[0]?.address || "unknown");
           const subject = parsed.subject || "(без темы)";
           const date = parsed.date || new Date();
 
           // Extract text: prefer text, fallback to stripped HTML
           let textBody = parsed.text || "";
           if (!textBody && parsed.html) {
-            // Simple HTML-to-text: strip tags
             textBody = parsed.html
               .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
               .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
@@ -94,10 +79,11 @@ export async function pollNewEmails(): Promise<EmailMessage[]> {
           emails.push({ messageId, from, subject, date, textBody });
 
           // Mark as seen
-          await client.messageFlagsAdd(uid.toString(), ["\\Seen"], { uid: true });
+          await client.messageFlagsAdd(String(msg.uid), ["\\Seen"], { uid: true });
+
+          console.log(`[EmailPoller] Fetched: ${subject} from ${from}`);
         } catch (msgError) {
-          console.error(`[EmailPoller] Error processing message ${uid}:`, msgError);
-          // Continue with next message
+          console.error(`[EmailPoller] Error processing message ${msg.uid}:`, msgError);
         }
       }
     } finally {
