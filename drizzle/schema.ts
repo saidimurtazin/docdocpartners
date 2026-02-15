@@ -1,4 +1,4 @@
-import { boolean, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { boolean, double, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -180,6 +180,8 @@ export const clinics = mysqlTable("clinics", {
   foundedYear: int("foundedYear"),
   languages: varchar("languages", { length: 255 }).default("Русский"),
   imageUrl: varchar("imageUrl", { length: 500 }),
+  latitude: double("latitude"),
+  longitude: double("longitude"),
   isActive: mysqlEnum("isActive", ["yes", "no"]).default("yes").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

@@ -742,6 +742,13 @@ DocDocPartner — B2B-платформа агентских рекомендац
     }),
   }),
 
+  // Public endpoints
+  public: router({
+    clinics: publicProcedure.query(async () => {
+      return db.getAllClinics();
+    }),
+  }),
+
   // BOT API - Public endpoints for Telegram bot integration
   bot: router({
     // Register new agent
