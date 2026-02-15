@@ -319,6 +319,13 @@ export async function getAllPayments() {
   return db.select().from(payments).orderBy(desc(payments.createdAt));
 }
 
+export async function getPaymentById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const [payment] = await db.select().from(payments).where(eq(payments.id, id)).limit(1);
+  return payment || null;
+}
+
 export async function getPaymentsByAgentId(agentId: number) {
   const db = await getDb();
   if (!db) return [];

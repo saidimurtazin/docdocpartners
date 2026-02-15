@@ -449,13 +449,41 @@ DocDocPartner — B2B-платформа агентских рекомендац
           return db.getReferralById(input.id);
         }),
       updateStatus: protectedProcedure
-        .input(z.object({ 
-          id: z.number(), 
-          status: z.enum(["pending", "contacted", "scheduled", "completed", "cancelled"]) 
+        .input(z.object({
+          id: z.number(),
+          status: z.enum(["pending", "contacted", "scheduled", "completed", "cancelled"])
         }))
         .mutation(async ({ ctx, input }) => {
           if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+
+          // Get referral before update for notification
+          const referral = await db.getReferralById(input.id);
+          if (!referral) throw new TRPCError({ code: "NOT_FOUND", message: "Рекомендация не найдена" });
+          const oldStatus = referral.status;
+
           await db.updateReferralStatus(input.id, input.status);
+
+          // Send Telegram notification to agent about status change
+          if (oldStatus !== input.status) {
+            try {
+              const agent = await db.getAgentById(referral.agentId);
+              if (agent?.telegramId) {
+                const { notifyReferralStatusChange } = await import("./telegram-notifications");
+                await notifyReferralStatusChange(agent.telegramId, {
+                  id: referral.id,
+                  patientFullName: referral.patientFullName,
+                  oldStatus,
+                  newStatus: input.status,
+                  clinic: referral.clinic,
+                  treatmentAmount: referral.treatmentAmount ?? undefined,
+                  commissionAmount: referral.commissionAmount ?? undefined,
+                });
+              }
+            } catch (err) {
+              console.error("[Admin] Failed to send referral status notification:", err);
+            }
+          }
+
           return { success: true };
         }),
       updateAmounts: protectedProcedure
@@ -478,14 +506,35 @@ DocDocPartner — B2B-платформа агентских рекомендац
         return db.getAllPayments();
       }),
       updateStatus: protectedProcedure
-        .input(z.object({ 
-          id: z.number(), 
+        .input(z.object({
+          id: z.number(),
           status: z.enum(["pending", "processing", "completed", "failed"]),
           transactionId: z.string().optional()
         }))
         .mutation(async ({ ctx, input }) => {
           if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
           await db.updatePaymentStatus(input.id, input.status, input.transactionId);
+
+          // Send Telegram notification to agent about payment status change
+          try {
+            const payment = await db.getPaymentById(input.id);
+            if (payment) {
+              const agent = await db.getAgentById(payment.agentId);
+              if (agent?.telegramId) {
+                const { notifyPaymentProcessed } = await import("./telegram-notifications");
+                await notifyPaymentProcessed(agent.telegramId, {
+                  id: payment.id,
+                  amount: payment.amount,
+                  status: input.status,
+                  method: payment.method,
+                  transactionId: input.transactionId || payment.transactionId,
+                });
+              }
+            }
+          } catch (err) {
+            console.error("[Admin] Failed to send payment status notification:", err);
+          }
+
           return { success: true };
         }),
     }),
@@ -893,10 +942,10 @@ DocDocPartner — B2B-платформа агентских рекомендац
 
     updateProfile: agentProcedure
       .input(z.object({
-        inn: z.string().optional(),
-        bankAccount: z.string().optional(),
-        bankName: z.string().optional(),
-        bankBik: z.string().optional(),
+        inn: z.string().regex(/^\d{12}$/, "ИНН должен содержать 12 цифр").optional(),
+        bankAccount: z.string().regex(/^\d{20}$/, "Расчётный счёт должен содержать 20 цифр").optional(),
+        bankName: z.string().min(2, "Укажите название банка").max(255).optional(),
+        bankBik: z.string().regex(/^\d{9}$/, "БИК должен содержать 9 цифр").optional(),
         isSelfEmployed: z.enum(["yes", "no", "unknown"]).optional(),
       }))
       .mutation(async ({ input, ctx }) => {
@@ -924,9 +973,28 @@ DocDocPartner — B2B-платформа агентских рекомендац
 
     requestPayment: agentProcedure
       .input(z.object({
-        amount: z.number().min(100000),
+        amount: z.number().min(100000, "Минимальная сумма — 1 000 ₽"),
       }))
       .mutation(async ({ input, ctx }) => {
+        // Check for pending payment requests (deduplication)
+        const existingPayments = await db.getPaymentsByAgentId(ctx.agentId);
+        const hasPendingPayment = existingPayments.some(p => p.status === "pending" || p.status === "processing");
+        if (hasPendingPayment) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "У вас уже есть необработанная заявка на выплату. Дождитесь её обработки.",
+          });
+        }
+
+        // Check agent has filled requisites
+        const agent = await db.getAgentById(ctx.agentId);
+        if (!agent?.inn || !agent?.bankAccount || !agent?.bankName || !agent?.bankBik) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Заполните все реквизиты (ИНН, банк, счёт, БИК) в профиле перед запросом выплаты.",
+          });
+        }
+
         await db.createPaymentRequest(ctx.agentId, input.amount);
         return { success: true };
       }),

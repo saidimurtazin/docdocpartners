@@ -10,28 +10,75 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, Download, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+
+const PAGE_SIZE = 20;
 
 export default function AdminPayments() {
   const { user, loading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const [transactionId, setTransactionId] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
 
   const { data: payments, isLoading, refetch } = trpc.admin.payments.list.useQuery();
   const updateStatus = trpc.admin.payments.updateStatus.useMutation({
-    onSuccess: () => {
-      refetch();
-      setEditingId(null);
-      setTransactionId("");
-    },
+    onSuccess: () => { refetch(); setEditingId(null); setTransactionId(""); },
   });
+  const exportPayments = trpc.admin.export.payments.useMutation();
+
+  // Filter + search
+  const filtered = useMemo(() => {
+    if (!payments) return [];
+    return payments.filter(p => {
+      const matchSearch = !search ||
+        String(p.id).includes(search) ||
+        String(p.agentId).includes(search) ||
+        (p.transactionId?.toLowerCase().includes(search.toLowerCase()));
+      const matchStatus = statusFilter === "all" || p.status === statusFilter;
+      return matchSearch && matchStatus;
+    });
+  }, [payments, search, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const handleSearchChange = (v: string) => { setSearch(v); setPage(1); };
+  const handleFilterChange = (v: string) => { setStatusFilter(v); setPage(1); };
+
+  const handleExport = async () => {
+    try {
+      const result = await exportPayments.mutateAsync({
+        status: statusFilter !== "all" ? statusFilter : undefined,
+      });
+      const blob = new Blob([Uint8Array.from(atob(result.data), c => c.charCodeAt(0))], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `payments_${format(new Date(), "yyyy-MM-dd")}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Ошибка экспорта");
+    }
+  };
 
   if (authLoading || isLoading) {
     return (
@@ -71,10 +118,7 @@ export default function AdminPayments() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("ru-RU", {
-      style: "currency",
-      currency: "RUB",
-    }).format(amount / 100);
+    return new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB" }).format(amount / 100);
   };
 
   return (
@@ -90,6 +134,10 @@ export default function AdminPayments() {
               </Link>
               <h1 className="text-2xl font-bold">Выплаты</h1>
             </div>
+            <Button variant="outline" onClick={handleExport} disabled={exportPayments.isPending}>
+              <Download className="w-4 h-4 mr-2" />
+              {exportPayments.isPending ? "Экспорт..." : "Excel"}
+            </Button>
           </div>
         </div>
       </header>
@@ -97,102 +145,124 @@ export default function AdminPayments() {
       <div className="container py-8">
         <Card>
           <CardHeader>
-            <CardTitle>Все выплаты ({payments?.length || 0})</CardTitle>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <CardTitle>Все выплаты ({filtered.length})</CardTitle>
+              <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Поиск по ID, агенту..."
+                    value={search}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    className="pl-9 w-full sm:w-52"
+                  />
+                </div>
+                <Select value={statusFilter} onValueChange={handleFilterChange}>
+                  <SelectTrigger className="w-full sm:w-44">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Все статусы</SelectItem>
+                    <SelectItem value="pending">Ожидает</SelectItem>
+                    <SelectItem value="processing">Обрабатывается</SelectItem>
+                    <SelectItem value="completed">Выплачено</SelectItem>
+                    <SelectItem value="failed">Ошибка</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>ID Агента</TableHead>
-                  <TableHead>Сумма</TableHead>
-                  <TableHead>Статус</TableHead>
-                  <TableHead>Метод</TableHead>
-                  <TableHead>ID Транзакции</TableHead>
-                  <TableHead>Запрошено</TableHead>
-                  <TableHead>Выплачено</TableHead>
-                  <TableHead>Действия</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {payments?.map((payment) => (
-                  <TableRow key={payment.id}>
-                    <TableCell>{payment.id}</TableCell>
-                    <TableCell>{payment.agentId}</TableCell>
-                    <TableCell className="font-medium">{formatCurrency(payment.amount)}</TableCell>
-                    <TableCell>{getStatusBadge(payment.status)}</TableCell>
-                    <TableCell>{payment.method || "—"}</TableCell>
-                    <TableCell>
-                      {editingId === payment.id ? (
-                        <Input
-                          value={transactionId}
-                          onChange={(e) => setTransactionId(e.target.value)}
-                          placeholder="TX123456"
-                          className="w-32"
-                        />
-                      ) : (
-                        payment.transactionId || "—"
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {payment.requestedAt
-                        ? format(new Date(payment.requestedAt), "dd.MM.yyyy HH:mm", { locale: ru })
-                        : "—"}
-                    </TableCell>
-                    <TableCell>
-                      {payment.completedAt
-                        ? format(new Date(payment.completedAt), "dd.MM.yyyy HH:mm", { locale: ru })
-                        : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-2">
-                        {payment.status === "pending" && (
-                          <>
-                            <Button
-                              size="sm"
-                              onClick={() => {
-                                setEditingId(payment.id);
-                              }}
-                            >
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>ID</TableHead>
+                    <TableHead>ID Агента</TableHead>
+                    <TableHead>Сумма</TableHead>
+                    <TableHead>Статус</TableHead>
+                    <TableHead>Метод</TableHead>
+                    <TableHead>ID Транзакции</TableHead>
+                    <TableHead>Запрошено</TableHead>
+                    <TableHead>Выплачено</TableHead>
+                    <TableHead>Действия</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginated.map((payment) => (
+                    <TableRow key={payment.id}>
+                      <TableCell>{payment.id}</TableCell>
+                      <TableCell>{payment.agentId}</TableCell>
+                      <TableCell className="font-medium">{formatCurrency(payment.amount)}</TableCell>
+                      <TableCell>{getStatusBadge(payment.status)}</TableCell>
+                      <TableCell>{payment.method || "—"}</TableCell>
+                      <TableCell>
+                        {editingId === payment.id ? (
+                          <Input
+                            value={transactionId}
+                            onChange={(e) => setTransactionId(e.target.value)}
+                            placeholder="TX123456"
+                            className="w-32"
+                          />
+                        ) : (
+                          payment.transactionId || "—"
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {payment.requestedAt
+                          ? format(new Date(payment.requestedAt), "dd.MM.yyyy HH:mm", { locale: ru })
+                          : "—"}
+                      </TableCell>
+                      <TableCell>
+                        {payment.completedAt
+                          ? format(new Date(payment.completedAt), "dd.MM.yyyy HH:mm", { locale: ru })
+                          : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-2">
+                          {payment.status === "pending" && editingId !== payment.id && (
+                            <Button size="sm" onClick={() => setEditingId(payment.id)}>
                               Обработать
                             </Button>
-                          </>
-                        )}
-                        {editingId === payment.id && (
-                          <>
-                            <Button
-                              size="sm"
-                              onClick={() => handleStatusChange(payment.id, "completed")}
-                              disabled={updateStatus.isPending}
-                            >
-                              Выплачено
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleStatusChange(payment.id, "failed")}
-                              disabled={updateStatus.isPending}
-                            >
-                              Ошибка
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setEditingId(null);
-                                setTransactionId("");
-                              }}
-                            >
-                              Отмена
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                          )}
+                          {editingId === payment.id && (
+                            <>
+                              <Button size="sm" onClick={() => handleStatusChange(payment.id, "completed")} disabled={updateStatus.isPending}>
+                                Выплачено
+                              </Button>
+                              <Button size="sm" variant="destructive" onClick={() => handleStatusChange(payment.id, "failed")} disabled={updateStatus.isPending}>
+                                Ошибка
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => { setEditingId(null); setTransactionId(""); }}>
+                                Отмена
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                <p className="text-sm text-muted-foreground">
+                  Показано {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} из {filtered.length}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <span className="text-sm px-2">Стр. {page} / {totalPages}</span>
+                  <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

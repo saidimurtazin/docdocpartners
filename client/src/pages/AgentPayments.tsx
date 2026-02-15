@@ -67,23 +67,23 @@ export default function AgentPayments() {
 
   const statusIcons: Record<string, React.ReactNode> = {
     pending: <Clock className="w-5 h-5 text-amber-500" />,
-    approved: <CheckCircle2 className="w-5 h-5 text-green-500" />,
-    rejected: <XCircle className="w-5 h-5 text-red-500" />,
     processing: <AlertCircle className="w-5 h-5 text-blue-500" />,
+    completed: <CheckCircle2 className="w-5 h-5 text-green-500" />,
+    failed: <XCircle className="w-5 h-5 text-red-500" />,
   };
 
   const statusLabels: Record<string, string> = {
-    pending: "Ожидает проверки",
-    approved: "Одобрено",
-    rejected: "Отклонено",
+    pending: "Ожидает обработки",
     processing: "В обработке",
+    completed: "Выплачено",
+    failed: "Ошибка",
   };
 
   const statusColors: Record<string, string> = {
     pending: "bg-amber-100 text-amber-800 border-amber-200",
-    approved: "bg-green-100 text-green-800 border-green-200",
-    rejected: "bg-red-100 text-red-800 border-red-200",
     processing: "bg-blue-100 text-blue-800 border-blue-200",
+    completed: "bg-green-100 text-green-800 border-green-200",
+    failed: "bg-red-100 text-red-800 border-red-200",
   };
 
   if (paymentsLoading) {
