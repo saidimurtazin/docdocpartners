@@ -502,7 +502,7 @@ bot.on(message('text'), async (ctx) => {
       await ctx.reply(
         '📊 <b>Моя статистика</b>\n\n' +
         `👥 Отправлено пациентов: <b>${agent.totalReferrals || 0}</b>\n` +
-        `💰 Заработано: <b>${(agent.totalEarnings || 0).toLocaleString('ru-RU')} ₽</b>\n` +
+        `💰 Заработано: <b>${((agent.totalEarnings || 0) / 100).toLocaleString('ru-RU')} ₽</b>\n` +
         `🌟 Бонусные баллы: <b>${agent.bonusPoints || 0}</b>\n\n` +
         '📈 <b>Как заработать больше:</b>\n' +
         '• Отправляйте пациентов через меню\n' +
@@ -532,8 +532,9 @@ bot.on(message('text'), async (ctx) => {
         return;
       }
 
-      const availableBalance = agent.totalEarnings || 0;
-      const minPayout = 1000;
+      const availableBalanceKop = agent.totalEarnings || 0;
+      const availableBalance = availableBalanceKop / 100; // копейки → рубли
+      const minPayout = 1000; // 1000 рублей
 
       if (availableBalance < minPayout) {
         await ctx.reply(
@@ -1858,7 +1859,7 @@ bot.action('cmd_stats', async (ctx) => {
     await ctx.reply(
       '📊 <b>Моя статистика</b>\n\n' +
       `👥 Отправлено пациентов: <b>${agent.totalReferrals || 0}</b>\n` +
-      `💰 Заработано: <b>${(agent.totalEarnings || 0).toLocaleString('ru-RU')} ₽</b>\n` +
+      `💰 Заработано: <b>${((agent.totalEarnings || 0) / 100).toLocaleString('ru-RU')} ₽</b>\n` +
       `🌟 Бонусные баллы: <b>${agent.bonusPoints || 0}</b>\n\n` +
       '📈 <b>Как заработать больше:</b>\n' +
       '• Отправляйте пациентов через /patient\n' +
@@ -1950,7 +1951,8 @@ bot.action('cmd_request_payout', async (ctx) => {
       return;
     }
 
-    const availableBalance = agent.totalEarnings || 0;
+    const availableBalanceKop = agent.totalEarnings || 0;
+    const availableBalance = availableBalanceKop / 100; // копейки → рубли
     const minPayout = 1000;
 
     if (availableBalance < minPayout) {
@@ -2098,7 +2100,7 @@ bot.action('cmd_payments', async (ctx) => {
       await ctx.reply(
         '💰 <b>Мои выплаты</b>\n\n' +
         'У вас пока нет выплат.\n\n' +
-        `💵 Доступно к выводу: <b>${(agent.totalEarnings || 0).toLocaleString('ru-RU')} ₽</b>\n\n` +
+        `💵 Доступно к выводу: <b>${((agent.totalEarnings || 0) / 100).toLocaleString('ru-RU')} ₽</b>\n\n` +
         '💡 Минимальная сумма вывода: 1 000 ₽',
         { parse_mode: 'HTML' }
       );
@@ -2111,8 +2113,8 @@ bot.action('cmd_payments', async (ctx) => {
       message += `${statusEmoji} <b>${(payment.amount / 100).toLocaleString('ru-RU')} ₽</b>\n`;
       message += `   Статус: ${payment.status}\n\n`;
     });
-    
-    message += `\n💵 Доступно к выводу: <b>${(agent.totalEarnings || 0).toLocaleString('ru-RU')} ₽</b>`;
+
+    message += `\n💵 Доступно к выводу: <b>${((agent.totalEarnings || 0) / 100).toLocaleString('ru-RU')} ₽</b>`;
 
     await ctx.reply(message, { parse_mode: 'HTML' });
   } catch (error) {
@@ -2292,7 +2294,7 @@ bot.command('stats', async (ctx) => {
     await ctx.reply(
       '📊 <b>Моя статистика</b>\n\n' +
       `👥 Отправлено пациентов: <b>${agent.totalReferrals || 0}</b>\n` +
-      `💰 Заработано: <b>${(agent.totalEarnings || 0).toLocaleString('ru-RU')} ₽</b>\n` +
+      `💰 Заработано: <b>${((agent.totalEarnings || 0) / 100).toLocaleString('ru-RU')} ₽</b>\n` +
       `🌟 Бонусные баллы: <b>${agent.bonusPoints || 0}</b>\n\n` +
       '📈 <b>Как заработать больше:</b>\n' +
       '• Отправляйте пациентов через /patient\n' +
