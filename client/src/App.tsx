@@ -10,6 +10,8 @@ import AdminAgents from "./pages/admin/Agents";
 import AdminReferrals from "./pages/admin/Referrals";
 import AdminPayments from "./pages/admin/Payments";
 import AdminDoctors from "./pages/admin/Doctors";
+import AdminClinics from "./pages/admin/Clinics";
+import AgentClinics from "./pages/AgentClinics";
 import AdminLogin from "./pages/AdminLogin";
 import AgentCabinet from "./pages/AgentCabinet";
 import KnowledgeBase from "./pages/KnowledgeBase";
@@ -31,6 +33,7 @@ function Router() {
       <Route path={"/admin/referrals"} component={AdminReferrals} />
       <Route path={"/admin/payments"} component={AdminPayments} />
       <Route path={"/admin/doctors"} component={AdminDoctors} />
+      <Route path={"/admin/clinics"} component={AdminClinics} />
 
       {/* Agent panel routes */}
       <Route path={"/"} component={Home} />
@@ -39,6 +42,7 @@ function Router() {
       <Route path={"/dashboard/profile"} component={AgentProfile} />
       <Route path={"/dashboard/payments"} component={AgentPayments} />
       <Route path={"/dashboard/referrals"} component={AgentReferrals} />
+      <Route path={"/dashboard/clinics"} component={AgentClinics} />
       <Route path={"/agent/cabinet"} component={AgentCabinet} />
       <Route path={"/agent/sessions"} component={AgentSessions} />
       <Route path={"/knowledge-base"} component={KnowledgeBase} />

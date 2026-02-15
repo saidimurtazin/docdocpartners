@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Users, FileText, Wallet, TrendingUp, Calendar, Building2, Award } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useMemo } from "react";
+import AdminLayoutWrapper from "@/components/AdminLayoutWrapper";
 
 export default function AdminDashboard() {
   const { user, loading: authLoading } = useAuth();
@@ -159,21 +160,8 @@ export default function AdminDashboard() {
   };
 
   return (
+    <AdminLayoutWrapper>
     <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="container py-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold">DocDocPartner — Админ-панель</h1>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-muted-foreground">{user.name}</span>
-              <Link href="/">
-                <Button variant="outline">На главную</Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </header>
-
       <div className="container py-8 space-y-8">
         {/* Statistics Cards */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -460,8 +448,22 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
           </Link>
+
+          <Link href="/admin/clinics">
+            <Card className="hover:border-primary cursor-pointer transition-colors h-full">
+              <CardHeader>
+                <CardTitle>🏨 Клиники</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Управление клиниками-партнерами
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
       </div>
     </div>
+    </AdminLayoutWrapper>
   );
 }

@@ -1,6 +1,6 @@
 import { eq, desc, and, like, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, agents, referrals, payments, doctors, sessions, otpCodes, type InsertSession } from "../drizzle/schema";
+import { InsertUser, users, agents, referrals, payments, doctors, sessions, otpCodes, clinics, type InsertSession } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -680,6 +680,48 @@ export async function cleanupExpiredSessions() {
       sql`${sessions.expiresAt} < ${now}`,
       eq(sessions.isRevoked, "no")
     ));
+}
+
+// ==================== CLINICS ====================
+
+export async function getAllClinics() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(clinics)
+    .where(eq(clinics.isActive, "yes"))
+    .orderBy(clinics.name);
+}
+
+export async function getAllClinicsAdmin() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(clinics).orderBy(desc(clinics.createdAt));
+}
+
+export async function getClinicById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [clinic] = await db.select().from(clinics).where(eq(clinics.id, id));
+  return clinic;
+}
+
+export async function createClinic(data: any) {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.insert(clinics).values(data);
+  return result.insertId;
+}
+
+export async function updateClinic(id: number, data: any) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(clinics).set(data).where(eq(clinics.id, id));
+}
+
+export async function deleteClinic(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(clinics).set({ isActive: "no" }).where(eq(clinics.id, id));
 }
 
 // OTP Code functions

@@ -159,4 +159,31 @@ export const sessions = mysqlTable("sessions", {
 export type Session = typeof sessions.$inferSelect;
 export type InsertSession = typeof sessions.$inferInsert;
 
+/**
+ * Partner clinics (клиники-партнеры)
+ */
+export const clinics = mysqlTable("clinics", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  type: varchar("type", { length: 100 }), // Многопрофильная, Узкопрофильная
+  ownership: varchar("ownership", { length: 100 }), // Частная, Государственная
+  city: varchar("city", { length: 100 }),
+  address: text("address"),
+  phone: varchar("phone", { length: 50 }),
+  email: varchar("email", { length: 320 }),
+  website: varchar("website", { length: 500 }),
+  specializations: text("specializations"), // JSON array of specializations
+  certifications: text("certifications"),
+  description: text("description"),
+  commissionRate: int("commissionRate").default(10), // % комиссии агенту
+  averageCheck: int("averageCheck").default(0), // средний чек в копейках
+  foundedYear: int("foundedYear"),
+  languages: varchar("languages", { length: 255 }).default("Русский"),
+  imageUrl: varchar("imageUrl", { length: 500 }),
+  isActive: mysqlEnum("isActive", ["yes", "no"]).default("yes").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
 
+export type Clinic = typeof clinics.$inferSelect;
+export type InsertClinic = typeof clinics.$inferInsert;

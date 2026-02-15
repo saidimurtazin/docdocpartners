@@ -610,6 +610,78 @@ DocDocPartner — B2B-платформа агентских рекомендац
         }),
     }),
 
+    // CLINICS
+    clinics: router({
+      list: protectedProcedure.query(async ({ ctx }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        return db.getAllClinicsAdmin();
+      }),
+      getById: protectedProcedure
+        .input(z.object({ id: z.number() }))
+        .query(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          return db.getClinicById(input.id);
+        }),
+      create: protectedProcedure
+        .input(z.object({
+          name: z.string().min(2),
+          type: z.string().optional(),
+          ownership: z.string().optional(),
+          city: z.string().optional(),
+          address: z.string().optional(),
+          phone: z.string().optional(),
+          email: z.string().optional(),
+          website: z.string().optional(),
+          specializations: z.string().optional(),
+          certifications: z.string().optional(),
+          description: z.string().optional(),
+          commissionRate: z.number().optional(),
+          averageCheck: z.number().optional(),
+          foundedYear: z.number().optional(),
+          languages: z.string().optional(),
+          imageUrl: z.string().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          const id = await db.createClinic(input);
+          return { id, success: true };
+        }),
+      update: protectedProcedure
+        .input(z.object({
+          id: z.number(),
+          name: z.string().min(2).optional(),
+          type: z.string().optional(),
+          ownership: z.string().optional(),
+          city: z.string().optional(),
+          address: z.string().optional(),
+          phone: z.string().optional(),
+          email: z.string().optional(),
+          website: z.string().optional(),
+          specializations: z.string().optional(),
+          certifications: z.string().optional(),
+          description: z.string().optional(),
+          commissionRate: z.number().optional(),
+          averageCheck: z.number().optional(),
+          foundedYear: z.number().optional(),
+          languages: z.string().optional(),
+          imageUrl: z.string().optional(),
+          isActive: z.enum(["yes", "no"]).optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          const { id, ...data } = input;
+          await db.updateClinic(id, data);
+          return { success: true };
+        }),
+      delete: protectedProcedure
+        .input(z.object({ id: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          await db.deleteClinic(input.id);
+          return { success: true };
+        }),
+    }),
+
     // STATISTICS
     statistics: protectedProcedure.query(async ({ ctx }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
@@ -986,6 +1058,10 @@ DocDocPartner — B2B-платформа агентских рекомендац
         await db.updateAgentPersonalInfo(ctx.agentId, input);
         return { success: true };
       }),
+
+    clinics: agentProcedure.query(async () => {
+      return db.getAllClinics();
+    }),
 
     requestPayment: agentProcedure
       .input(z.object({

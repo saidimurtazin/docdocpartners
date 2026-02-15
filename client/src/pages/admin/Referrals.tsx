@@ -24,6 +24,7 @@ import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { useState, useMemo } from "react";
+import AdminLayoutWrapper from "@/components/AdminLayoutWrapper";
 
 const PAGE_SIZE = 20;
 
@@ -152,26 +153,7 @@ export default function AdminReferrals() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="container py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/admin">
-                <Button variant="ghost" size="icon">
-                  <ArrowLeft className="w-4 h-4" />
-                </Button>
-              </Link>
-              <h1 className="text-2xl font-bold">Рекомендации пациентов</h1>
-            </div>
-            <Button variant="outline" onClick={handleExport} disabled={exportReferrals.isPending}>
-              <Download className="w-4 h-4 mr-2" />
-              {exportReferrals.isPending ? "Экспорт..." : "Excel"}
-            </Button>
-          </div>
-        </div>
-      </header>
-
+    <AdminLayoutWrapper>
       <div className="container py-8">
         <Card>
           <CardHeader>
@@ -324,6 +306,6 @@ export default function AdminReferrals() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </AdminLayoutWrapper>
   );
 }

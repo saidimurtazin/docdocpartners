@@ -23,6 +23,7 @@ import {
 import { Loader2, ArrowLeft, Plus, Pencil, Trash2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
+import AdminLayoutWrapper from "@/components/AdminLayoutWrapper";
 
 export default function AdminDoctors() {
   const { user, loading: authLoading } = useAuth();
@@ -134,157 +135,145 @@ export default function AdminDoctors() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="container py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/admin">
-                <Button variant="ghost" size="icon">
-                  <ArrowLeft className="w-4 h-4" />
-                </Button>
-              </Link>
-              <h1 className="text-2xl font-bold">База знаний врачей</h1>
-            </div>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button onClick={() => { setEditingDoctor(null); resetForm(); }}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Добавить врача
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>{editingDoctor ? "Редактировать врача" : "Добавить врача"}</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="fullName">ФИО *</Label>
-                      <Input
-                        id="fullName"
-                        value={formData.fullName}
-                        onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="specialization">Специализация *</Label>
-                      <Input
-                        id="specialization"
-                        value={formData.specialization}
-                        onChange={(e) => setFormData({ ...formData, specialization: e.target.value })}
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="clinic">Клиника *</Label>
-                      <Input
-                        id="clinic"
-                        value={formData.clinic}
-                        onChange={(e) => setFormData({ ...formData, clinic: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="clinicLocation">Город</Label>
-                      <Input
-                        id="clinicLocation"
-                        value={formData.clinicLocation}
-                        onChange={(e) => setFormData({ ...formData, clinicLocation: e.target.value })}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="experience">Опыт (лет)</Label>
-                      <Input
-                        id="experience"
-                        type="number"
-                        value={formData.experience}
-                        onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="phone">Телефон</Label>
-                      <Input
-                        id="phone"
-                        value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="education">Образование</Label>
-                    <Textarea
-                      id="education"
-                      value={formData.education}
-                      onChange={(e) => setFormData({ ...formData, education: e.target.value })}
-                      rows={2}
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="achievements">Достижения</Label>
-                    <Textarea
-                      id="achievements"
-                      value={formData.achievements}
-                      onChange={(e) => setFormData({ ...formData, achievements: e.target.value })}
-                      rows={2}
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="services">Услуги (через запятую)</Label>
-                    <Textarea
-                      id="services"
-                      value={formData.services}
-                      onChange={(e) => setFormData({ ...formData, services: e.target.value })}
-                      rows={2}
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="bio">Биография</Label>
-                    <Textarea
-                      id="bio"
-                      value={formData.bio}
-                      onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                      rows={3}
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                      Отмена
-                    </Button>
-                    <Button type="submit" disabled={createDoctor.isPending || updateDoctor.isPending}>
-                      {editingDoctor ? "Сохранить" : "Добавить"}
-                    </Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-      </header>
-
+    <AdminLayoutWrapper>
       <div className="container py-8">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">База знаний врачей</h1>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => { setEditingDoctor(null); resetForm(); }}>
+                <Plus className="w-4 h-4 mr-2" />
+                Добавить врача
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>{editingDoctor ? "Редактировать врача" : "Добавить врача"}</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="fullName">ФИО *</Label>
+                    <Input
+                      id="fullName"
+                      value={formData.fullName}
+                      onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="specialization">Специализация *</Label>
+                    <Input
+                      id="specialization"
+                      value={formData.specialization}
+                      onChange={(e) => setFormData({ ...formData, specialization: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="clinic">Клиника *</Label>
+                    <Input
+                      id="clinic"
+                      value={formData.clinic}
+                      onChange={(e) => setFormData({ ...formData, clinic: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="clinicLocation">Город</Label>
+                    <Input
+                      id="clinicLocation"
+                      value={formData.clinicLocation}
+                      onChange={(e) => setFormData({ ...formData, clinicLocation: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="experience">Опыт (лет)</Label>
+                    <Input
+                      id="experience"
+                      type="number"
+                      value={formData.experience}
+                      onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="phone">Телефон</Label>
+                    <Input
+                      id="phone"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="education">Образование</Label>
+                  <Textarea
+                    id="education"
+                    value={formData.education}
+                    onChange={(e) => setFormData({ ...formData, education: e.target.value })}
+                    rows={2}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="achievements">Достижения</Label>
+                  <Textarea
+                    id="achievements"
+                    value={formData.achievements}
+                    onChange={(e) => setFormData({ ...formData, achievements: e.target.value })}
+                    rows={2}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="services">Услуги (через запятую)</Label>
+                  <Textarea
+                    id="services"
+                    value={formData.services}
+                    onChange={(e) => setFormData({ ...formData, services: e.target.value })}
+                    rows={2}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="bio">Биография</Label>
+                  <Textarea
+                    id="bio"
+                    value={formData.bio}
+                    onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                    rows={3}
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                    Отмена
+                  </Button>
+                  <Button type="submit" disabled={createDoctor.isPending || updateDoctor.isPending}>
+                    {editingDoctor ? "Сохранить" : "Добавить"}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
         <Card>
           <CardHeader>
             <CardTitle>Все врачи ({doctors?.length || 0})</CardTitle>
@@ -339,6 +328,6 @@ export default function AdminDoctors() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </AdminLayoutWrapper>
   );
 }
