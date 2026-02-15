@@ -97,7 +97,7 @@ export default function KnowledgeBase() {
                     <div>
                       <h4 className="font-semibold mb-1">Быстрые выплаты</h4>
                       <p className="text-sm text-muted-foreground">
-                        Выплата в течение 3-5 рабочих дней после подтверждения клиникой
+                        Выплата в течение 3-5 рабочих дней после запроса на выплату
                       </p>
                     </div>
                   </div>
@@ -121,6 +121,7 @@ export default function KnowledgeBase() {
                       <ul className="text-sm text-muted-foreground space-y-1">
                         <li>• Пациент должен пройти лечение в клинике-партнере</li>
                         <li>• Клиника подтверждает факт оказания услуг</li>
+                        <li>• Пациент до этого не являлся клиентом клиники</li>
                         <li>• Минимальная сумма для вывода: 1000 ₽</li>
                         <li>• Для вывода бонусных баллов: минимум 10 собственных рекомендаций</li>
                       </ul>
