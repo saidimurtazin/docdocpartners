@@ -131,20 +131,20 @@ export default function KnowledgeBase() {
               </CardContent>
             </Card>
 
-            {/* Security Checks */}
+            {/* Payment Transparency */}
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
                     <Lock className="w-6 h-6 text-primary" />
                   </div>
-                  <CardTitle className="text-2xl">Проверки безопасности</CardTitle>
+                  <CardTitle className="text-2xl">Прозрачность выплат</CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="prose prose-sm max-w-none">
                   <p className="text-muted-foreground leading-relaxed">
-                    Для обеспечения качества услуг и защиты интересов всех сторон, мы проводим многоуровневую систему проверок.
+                    Мы отправляем данные пациентов напрямую в клиники-партнеры. Если пациент посетит клинику и оплатит услуги — мы выплатим вам комиссию.
                   </p>
                 </div>
 
@@ -156,7 +156,7 @@ export default function KnowledgeBase() {
                     <div>
                       <h4 className="font-semibold mb-2">Верификация агента</h4>
                       <p className="text-sm text-muted-foreground">
-                        При регистрации проверяем ФИО, email, телефон и профессиональную принадлежность. 
+                        При регистрации проверяем ФИО, email, телефон и профессиональную принадлежность.
                         Для самозанятых дополнительно проверяем ИНН через сайт ФНС.
                       </p>
                     </div>
@@ -169,8 +169,7 @@ export default function KnowledgeBase() {
                     <div>
                       <h4 className="font-semibold mb-2">Звонок пациенту</h4>
                       <p className="text-sm text-muted-foreground">
-                        После получения рекомендации наш координатор связывается с пациентом для подтверждения 
-                        контактных данных и уточнения потребностей.
+                        Наш координатор связывается с пациентом для подтверждения данных и уточнения потребностей.
                       </p>
                     </div>
                   </div>
@@ -182,8 +181,7 @@ export default function KnowledgeBase() {
                     <div>
                       <h4 className="font-semibold mb-2">Сверка с клиникой</h4>
                       <p className="text-sm text-muted-foreground">
-                        Передаем данные пациента в клинику-партнер. Клиника связывается с пациентом и 
-                        назначает консультацию или процедуру.
+                        Передаём данные в клинику-партнер. Клиника назначает консультацию.
                       </p>
                     </div>
                   </div>
@@ -193,10 +191,10 @@ export default function KnowledgeBase() {
                       <span className="text-primary font-bold">4</span>
                     </div>
                     <div>
-                      <h4 className="font-semibold mb-2">Подтверждение оказания услуг</h4>
+                      <h4 className="font-semibold mb-2">Подтверждение услуг</h4>
                       <p className="text-sm text-muted-foreground">
-                        После завершения лечения клиника предоставляет подтверждение факта оказания услуг 
-                        и суммы оплаты. Только после этого начисляется вознаграждение.
+                        После лечения клиника подтверждает факт и сумму оказания услуг.
+                        Только после этого начисляется вознаграждение.
                       </p>
                     </div>
                   </div>
