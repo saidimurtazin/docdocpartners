@@ -70,7 +70,7 @@ export async function parseClinicEmail(
   try {
     const genAI = new GoogleGenerativeAI(ENV.geminiApiKey);
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash-preview-05-20",
+      model: "gemini-2.5-flash",
       generationConfig: {
         responseMimeType: "application/json",
         maxOutputTokens: 4096,
@@ -79,6 +79,7 @@ export async function parseClinicEmail(
 
     const prompt = `${SYSTEM_PROMPT}\n\nПроанализируй это письмо от клиники:\n\nОт: ${emailFrom}\nТема: ${emailSubject}\n\nТекст письма:\n${truncatedBody}`;
 
+    console.log(`[ClinicParser] Calling Gemini for email: "${emailSubject}" (body length: ${truncatedBody.length})`);
     const result = await model.generateContent(prompt);
     const content = result.response.text();
 
@@ -86,6 +87,8 @@ export async function parseClinicEmail(
       console.log("[ClinicParser] No content in Gemini response");
       return [];
     }
+
+    console.log(`[ClinicParser] Gemini raw response: ${content.substring(0, 500)}`);
 
     const parsed = JSON.parse(content);
     const patients: ParsedPatientReport[] = [];
