@@ -3,7 +3,7 @@
  */
 import { pollNewEmails } from "./email-poller";
 import { parseClinicEmail } from "./clinic-report-parser";
-import { findMatchingReferral } from "./referral-matcher";
+import { findMatchingReferral, findClinicByEmail } from "./referral-matcher";
 import * as db from "./db";
 
 export interface ProcessResult {
@@ -37,12 +37,19 @@ export async function processNewClinicEmails(): Promise<ProcessResult> {
           continue;
         }
 
-        // 3. Parse with AI
+        // 3. Try to identify clinic by sender email (from reportEmails field)
+        const senderClinic = await findClinicByEmail(email.from);
+        if (senderClinic.clinicId) {
+          console.log(`[Processor] Identified clinic by email: ${email.from} → ${senderClinic.clinicName} (id=${senderClinic.clinicId})`);
+        }
+
+        // 4. Parse with AI
         const patients = await parseClinicEmail(email.textBody, email.from, email.subject);
 
         if (patients.length === 0) {
           // Save the email anyway with empty extraction (for admin review)
           await db.createClinicReport({
+            clinicId: senderClinic.clinicId,
             emailFrom: email.from,
             emailSubject: email.subject,
             emailMessageId: email.messageId,
@@ -52,7 +59,7 @@ export async function processNewClinicEmails(): Promise<ProcessResult> {
             visitDate: null,
             treatmentAmount: 0,
             services: "[]",
-            clinicName: null,
+            clinicName: senderClinic.clinicName,
             status: "pending_review",
             aiConfidence: 0,
             matchConfidence: 0,
@@ -61,7 +68,7 @@ export async function processNewClinicEmails(): Promise<ProcessResult> {
           continue;
         }
 
-        // 4. For each patient in the email
+        // 5. For each patient in the email
         for (let i = 0; i < patients.length; i++) {
           const patient = patients[i];
 
@@ -77,23 +84,31 @@ export async function processNewClinicEmails(): Promise<ProcessResult> {
             continue;
           }
 
-          // 5. Match to referral
+          // Use clinic name from sender email detection if AI didn't extract one
+          const effectiveClinicName = patient.clinicName || senderClinic.clinicName;
+
+          // 6. Match to referral (pass known clinicId from email detection)
           const match = await findMatchingReferral(
             patient.patientName,
-            patient.clinicName,
-            patient.visitDate
+            effectiveClinicName,
+            patient.visitDate,
+            senderClinic.clinicId
           );
 
-          // Determine status based on confidence
-          const status = match.matchConfidence >= 85 ? "auto_matched" : "pending_review";
+          // Determine status — boost confidence if clinic was identified by email
+          let finalMatchConfidence = match.matchConfidence;
+          if (senderClinic.clinicId && match.referralId) {
+            finalMatchConfidence = Math.min(100, finalMatchConfidence + 10);
+          }
+          const status = finalMatchConfidence >= 85 ? "auto_matched" : "pending_review";
 
           // Convert treatment amount from rubles to kopecks
           const treatmentKopecks = patient.treatmentAmount ? Math.round(patient.treatmentAmount * 100) : 0;
 
-          // 6. Insert into DB
+          // 7. Insert into DB
           await db.createClinicReport({
             referralId: match.referralId,
-            clinicId: match.clinicId,
+            clinicId: senderClinic.clinicId || match.clinicId,
             emailFrom: email.from,
             emailSubject: email.subject,
             emailMessageId: patientMessageId,
@@ -103,15 +118,15 @@ export async function processNewClinicEmails(): Promise<ProcessResult> {
             visitDate: patient.visitDate,
             treatmentAmount: treatmentKopecks,
             services: JSON.stringify(patient.services),
-            clinicName: patient.clinicName,
+            clinicName: effectiveClinicName,
             status,
             aiConfidence: patient.confidence,
-            matchConfidence: match.matchConfidence,
+            matchConfidence: finalMatchConfidence,
           });
 
           result.created++;
           console.log(
-            `[Processor] Created report: ${patient.patientName} | confidence: ${patient.confidence}% | match: ${match.matchConfidence}% | status: ${status}`
+            `[Processor] Created report: ${patient.patientName} | clinic: ${effectiveClinicName} | confidence: ${patient.confidence}% | match: ${finalMatchConfidence}% | status: ${status}`
           );
         }
       } catch (emailError) {

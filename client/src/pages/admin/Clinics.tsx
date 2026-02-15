@@ -34,6 +34,7 @@ const emptyClinic = {
   foundedYear: 2020,
   languages: "Русский",
   imageUrl: "",
+  reportEmails: "",
 };
 
 export default function AdminClinics() {
@@ -84,6 +85,7 @@ export default function AdminClinics() {
       foundedYear: clinic.foundedYear || 2020,
       languages: clinic.languages || "Русский",
       imageUrl: clinic.imageUrl || "",
+      reportEmails: clinic.reportEmails || "",
     });
     setIsDialogOpen(true);
   };
@@ -213,6 +215,27 @@ export default function AdminClinics() {
                   )}
                 </div>
 
+                {clinic.reportEmails && (() => {
+                  try {
+                    const emails = JSON.parse(clinic.reportEmails);
+                    if (Array.isArray(emails) && emails.length > 0) {
+                      return (
+                        <div className="text-sm">
+                          <span className="text-muted-foreground flex items-center gap-1 mb-1">
+                            <Mail className="w-3 h-3" /> Почта для отчётов:
+                          </span>
+                          <div className="flex flex-wrap gap-1">
+                            {emails.map((e: string, i: number) => (
+                              <Badge key={i} variant="outline" className="text-xs font-normal">{e}</Badge>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+                  } catch { /* ignore bad JSON */ }
+                  return null;
+                })()}
+
                 <div className="flex items-center gap-2 pt-2 border-t">
                   <Button size="sm" variant="outline" onClick={() => openEdit(clinic)} className="flex-1">
                     <Pencil className="w-3 h-3 mr-1" />
@@ -315,6 +338,24 @@ export default function AdminClinics() {
               <div className="col-span-2">
                 <label className="text-sm font-medium">Сертификаты и лицензии</label>
                 <Input value={form.certifications} onChange={(e) => setForm({...form, certifications: e.target.value})} placeholder="JCI, ISO 9001, ..." />
+              </div>
+              <div className="col-span-2">
+                <label className="text-sm font-medium">Почты для приёма отчётов по пациентам</label>
+                <Input
+                  value={(() => {
+                    try {
+                      const arr = JSON.parse(form.reportEmails);
+                      return Array.isArray(arr) ? arr.join(", ") : form.reportEmails;
+                    } catch { return form.reportEmails; }
+                  })()}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const emails = raw.split(",").map(s => s.trim()).filter(Boolean);
+                    setForm({...form, reportEmails: JSON.stringify(emails)});
+                  }}
+                  placeholder="report@clinic.ru, info@clinic.ru"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Через запятую. Письма с этих адресов будут автоматически привязаны к клинике.</p>
               </div>
               <div className="col-span-2">
                 <label className="text-sm font-medium">URL изображения</label>

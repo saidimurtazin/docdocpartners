@@ -128,12 +128,45 @@ function compareClinicNames(name1: string, name2: string): number {
 }
 
 /**
+ * Find clinic by sender email address (matches against reportEmails JSON array).
+ * Returns clinicId and clinicName if found.
+ */
+export async function findClinicByEmail(
+  senderEmail: string
+): Promise<{ clinicId: number | null; clinicName: string | null }> {
+  const database = await getDb();
+  if (!database) return { clinicId: null, clinicName: null };
+
+  const allClinics = await database.select().from(clinics);
+  const normalizedSender = senderEmail.toLowerCase().trim();
+
+  for (const clinic of allClinics) {
+    if (!clinic.reportEmails) continue;
+    try {
+      const emails: string[] = JSON.parse(clinic.reportEmails);
+      if (Array.isArray(emails)) {
+        for (const email of emails) {
+          if (email.toLowerCase().trim() === normalizedSender) {
+            return { clinicId: clinic.id, clinicName: clinic.name };
+          }
+        }
+      }
+    } catch {
+      // ignore bad JSON
+    }
+  }
+
+  return { clinicId: null, clinicName: null };
+}
+
+/**
  * Find the best matching referral for a parsed patient report.
  */
 export async function findMatchingReferral(
   patientName: string | null,
   clinicName: string | null,
-  visitDate: string | null
+  visitDate: string | null,
+  knownClinicId?: number | null
 ): Promise<MatchResult> {
   const result: MatchResult = { referralId: null, clinicId: null, matchConfidence: 0 };
 
@@ -153,8 +186,10 @@ export async function findMatchingReferral(
     ["new", "in_progress", "contacted", "scheduled", "visited"].includes(r.status)
   );
 
-  // Match clinic to clinics table
-  if (clinicName) {
+  // Match clinic — use known clinicId from email sender if available
+  if (knownClinicId) {
+    result.clinicId = knownClinicId;
+  } else if (clinicName) {
     const allClinics = await db.select().from(clinics);
     let bestClinicScore = 0;
     for (const clinic of allClinics) {

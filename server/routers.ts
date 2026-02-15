@@ -640,6 +640,7 @@ DocDocPartner — B2B-платформа агентских рекомендац
           foundedYear: z.number().optional(),
           languages: z.string().optional(),
           imageUrl: z.string().optional(),
+          reportEmails: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
           if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
@@ -665,6 +666,7 @@ DocDocPartner — B2B-платформа агентских рекомендац
           foundedYear: z.number().optional(),
           languages: z.string().optional(),
           imageUrl: z.string().optional(),
+          reportEmails: z.string().optional(),
           isActive: z.enum(["yes", "no"]).optional(),
         }))
         .mutation(async ({ ctx, input }) => {

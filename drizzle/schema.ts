@@ -180,6 +180,7 @@ export const clinics = mysqlTable("clinics", {
   foundedYear: int("foundedYear"),
   languages: varchar("languages", { length: 255 }).default("Русский"),
   imageUrl: varchar("imageUrl", { length: 500 }),
+  reportEmails: text("reportEmails"), // JSON array of emails from which clinic sends patient reports
   latitude: double("latitude"),
   longitude: double("longitude"),
   isActive: mysqlEnum("isActive", ["yes", "no"]).default("yes").notNull(),
