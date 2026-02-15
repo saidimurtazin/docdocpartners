@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Users, FileText, Wallet, TrendingUp, Calendar, Building2, Award } from "lucide-react";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { useMemo } from "react";
 import AdminLayoutWrapper from "@/components/AdminLayoutWrapper";
 
@@ -395,73 +395,6 @@ export default function AdminDashboard() {
           </Card>
         </div>
 
-        {/* Navigation Cards */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <Link href="/admin/agents">
-            <Card className="hover:border-primary cursor-pointer transition-colors h-full">
-              <CardHeader>
-                <CardTitle>👥 Агенты</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Управление врачами-агентами, модерация заявок
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link href="/admin/referrals">
-            <Card className="hover:border-primary cursor-pointer transition-colors h-full">
-              <CardHeader>
-                <CardTitle>📝 Рекомендации</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Все рекомендации пациентов, статусы, суммы
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link href="/admin/payments">
-            <Card className="hover:border-primary cursor-pointer transition-colors h-full">
-              <CardHeader>
-                <CardTitle>💰 Выплаты</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Управление выплатами агентам
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link href="/admin/doctors">
-            <Card className="hover:border-primary cursor-pointer transition-colors h-full">
-              <CardHeader>
-                <CardTitle>🏥 База врачей</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  База знаний врачей клиник-партнеров
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link href="/admin/clinics">
-            <Card className="hover:border-primary cursor-pointer transition-colors h-full">
-              <CardHeader>
-                <CardTitle>🏨 Клиники</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Управление клиниками-партнерами
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-        </div>
       </div>
     </div>
     </AdminLayoutWrapper>
