@@ -128,6 +128,21 @@ function compareClinicNames(name1: string, name2: string): number {
 }
 
 /**
+ * Extract bare email address from a "From" header value.
+ * Handles formats like: "Display Name" <email@domain.com>, <email@domain.com>, email@domain.com
+ */
+function extractEmail(from: string): string {
+  // Try to extract email from angle brackets: "Name" <email@domain.com>
+  const match = from.match(/<([^>]+)>/);
+  if (match) return match[1].toLowerCase().trim();
+  // Try to find any email-like pattern
+  const emailMatch = from.match(/[\w.+-]+@[\w.-]+\.\w+/);
+  if (emailMatch) return emailMatch[0].toLowerCase().trim();
+  // Fallback: return as-is
+  return from.toLowerCase().trim();
+}
+
+/**
  * Find clinic by sender email address (matches against reportEmails JSON array).
  * Returns clinicId and clinicName if found.
  */
@@ -138,7 +153,7 @@ export async function findClinicByEmail(
   if (!database) return { clinicId: null, clinicName: null };
 
   const allClinics = await database.select().from(clinics);
-  const normalizedSender = senderEmail.toLowerCase().trim();
+  const normalizedSender = extractEmail(senderEmail);
 
   for (const clinic of allClinics) {
     if (!clinic.reportEmails) continue;
