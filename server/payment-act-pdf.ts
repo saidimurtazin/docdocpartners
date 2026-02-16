@@ -5,12 +5,11 @@
 
 import PDFDocument from "pdfkit";
 import path from "path";
-import { fileURLToPath } from "url";
 import { amountToWordsRu } from "./amount-to-words-ru";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const FONT_DIR = path.join(__dirname, "fonts");
+// Use process.cwd() because esbuild bundles into dist/index.js
+// but fonts remain in server/fonts/ at the project root
+const FONT_DIR = path.join(process.cwd(), "server", "fonts");
 const FONT_REGULAR = path.join(FONT_DIR, "DejaVuSans.ttf");
 const FONT_BOLD = path.join(FONT_DIR, "DejaVuSans-Bold.ttf");
 
