@@ -62,15 +62,6 @@ export default function AgentClinics() {
           <div className="grid gap-6 md:grid-cols-2">
             {filtered.map((clinic: any) => (
               <Card key={clinic.id} className="overflow-hidden border-2 hover:border-primary/50 transition-all hover:shadow-lg">
-                {clinic.imageUrl && (
-                  <div className="aspect-video overflow-hidden bg-muted">
-                    <img
-                      src={clinic.imageUrl}
-                      alt={clinic.name}
-                      className="w-full h-full object-cover transition-transform hover:scale-105"
-                    />
-                  </div>
-                )}
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-2">
                     <CardTitle className="text-xl">{clinic.name}</CardTitle>

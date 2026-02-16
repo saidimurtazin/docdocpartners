@@ -154,15 +154,6 @@ export default function AdminClinics() {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filtered.map((clinic: any) => (
             <Card key={clinic.id} className="overflow-hidden hover:border-primary/50 transition-all">
-              {clinic.imageUrl && (
-                <div className="aspect-video overflow-hidden bg-muted">
-                  <img
-                    src={clinic.imageUrl}
-                    alt={clinic.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              )}
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
