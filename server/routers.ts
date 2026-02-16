@@ -1150,6 +1150,57 @@ DocDocPartner — B2B-платформа агентских рекомендац
       return db.getReferralsByAgentId(ctx.agentId);
     }),
 
+    createReferral: agentProcedure
+      .input(z.object({
+        patientFullName: z.string().min(3, "ФИО должно содержать минимум 3 символа"),
+        patientBirthdate: z.string().regex(/^\d{2}\.\d{2}\.\d{4}$/, "Формат даты: ДД.ММ.ГГГГ"),
+        patientCity: z.string().optional(),
+        patientPhone: z.string().optional(),
+        patientEmail: z.string().email("Некорректный email").optional().or(z.literal("")),
+        clinic: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const agent = await db.getAgentById(ctx.agentId);
+        if (!agent) throw new TRPCError({ code: "NOT_FOUND", message: "Агент не найден" });
+        if (agent.status !== "active") throw new TRPCError({ code: "FORBIDDEN", message: "Аккаунт не активен" });
+
+        // Validate name has at least 2 words
+        const nameWords = input.patientFullName.trim().split(/\s+/);
+        if (nameWords.length < 2) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Укажите фамилию и имя (минимум 2 слова)" });
+        }
+
+        const referralId = await db.createReferral({
+          agentId: ctx.agentId,
+          patientFullName: input.patientFullName.trim(),
+          patientBirthdate: input.patientBirthdate,
+          patientCity: input.patientCity || undefined,
+          patientPhone: input.patientPhone || undefined,
+          patientEmail: input.patientEmail || undefined,
+          clinic: input.clinic || undefined,
+        });
+
+        // Send email notification
+        try {
+          const { sendReferralNotification } = await import("./email");
+          await sendReferralNotification({
+            to: "said.murtazin@mail.ru",
+            referralId,
+            agentName: agent.fullName,
+            patientName: input.patientFullName,
+            patientBirthdate: input.patientBirthdate,
+            patientCity: input.patientCity,
+            patientPhone: input.patientPhone,
+            patientEmail: input.patientEmail,
+            clinic: input.clinic,
+          });
+        } catch (emailError) {
+          console.error("[Dashboard] Email notification failed:", emailError);
+        }
+
+        return { success: true, referralId };
+      }),
+
     profile: agentProcedure.query(async ({ ctx }) => {
       const agent = await db.getAgentById(ctx.agentId);
       if (!agent) throw new TRPCError({ code: "NOT_FOUND", message: "Агент не найден" });
