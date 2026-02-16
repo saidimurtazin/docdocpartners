@@ -151,7 +151,7 @@ export default function Home() {
       </header>
 
       {/* ============== HERO SECTION ============== */}
-      <section className="relative overflow-hidden mesh-bg py-24 md:py-36">
+      <section className="relative overflow-hidden mesh-bg py-12 md:py-20">
         <ParticleBackground particleCount={40} color="rgba(26, 47, 90, 0.15)" />
 
         {/* Animated gradient orbs */}
