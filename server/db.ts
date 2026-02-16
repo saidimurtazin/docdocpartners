@@ -923,3 +923,20 @@ export async function getClinicReportsStats() {
     rejected: rejected.count,
   };
 }
+
+export async function getPublicStats() {
+  const db = await getDb();
+  if (!db) return { agentCount: 0, referralCount: 0, clinicCount: 0 };
+
+  const [agentCount] = await db.select({ count: sql<number>`count(*)` }).from(agents);
+  const [referralCount] = await db.select({ count: sql<number>`count(*)` }).from(referrals);
+  const [clinicCount] = await db.select({ count: sql<number>`count(*)` })
+    .from(clinics)
+    .where(eq(clinics.isActive, "yes"));
+
+  return {
+    agentCount: agentCount.count,
+    referralCount: referralCount.count,
+    clinicCount: clinicCount.count,
+  };
+}

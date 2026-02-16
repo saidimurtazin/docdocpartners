@@ -80,6 +80,7 @@ function AnimatedSection({ children, className = "" }: { children: React.ReactNo
 export default function Home() {
   const { isAuthenticated } = useAuth();
   const { data: dbClinics } = trpc.public.clinics.useQuery(undefined, { retry: false });
+  const { data: publicStats } = trpc.public.stats.useQuery(undefined, { retry: false });
 
   // Parallax for hero
   const { scrollY } = useScroll();
@@ -150,6 +151,28 @@ export default function Home() {
         </div>
       </header>
 
+      {/* ============== TRUST TICKER ============== */}
+      {publicStats && (publicStats.agentCount > 0 || publicStats.referralCount > 0) && (
+        <div className="w-full bg-gradient-to-r from-[oklch(0.35_0.08_250)] to-[oklch(0.55_0.12_250)] py-2.5 overflow-hidden">
+          <div className="container flex items-center justify-center gap-6 md:gap-12 text-white text-sm font-medium">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-[oklch(0.85_0.12_75)]" />
+              <span>{publicStats.agentCount} агентов</span>
+            </div>
+            <div className="w-1 h-1 rounded-full bg-white/40" />
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-[oklch(0.85_0.12_75)]" />
+              <span>{publicStats.referralCount} рекомендаций</span>
+            </div>
+            <div className="w-1 h-1 rounded-full bg-white/40" />
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-[oklch(0.85_0.12_75)]" />
+              <span>{publicStats.clinicCount} клиник</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ============== HERO SECTION ============== */}
       <section className="relative overflow-hidden mesh-bg py-12 md:py-20">
         <ParticleBackground particleCount={40} color="rgba(26, 47, 90, 0.15)" />
@@ -158,7 +181,7 @@ export default function Home() {
         <div className="absolute top-20 left-10 w-72 h-72 bg-[oklch(0.55_0.12_250)] rounded-full mix-blend-multiply filter blur-[120px] opacity-20 animate-float" />
         <div className="absolute bottom-20 right-10 w-96 h-96 bg-[oklch(0.70_0.15_75)] rounded-full mix-blend-multiply filter blur-[120px] opacity-15 animate-float" style={{ animationDelay: "1.5s" }} />
 
-        {/* Hero text with parallax — only heading and subheading fade on scroll */}
+        {/* Hero text with parallax — heading and subheading fade on scroll */}
         <motion.div style={{ y: heroY, opacity: heroOpacity }} className="container relative z-10">
           <div className="max-w-7xl mx-auto">
             {/* Badge */}
@@ -194,46 +217,48 @@ export default function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.3 }}
-              className="text-center text-lg sm:text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto mb-12 leading-relaxed"
+              className="text-center text-lg sm:text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto leading-relaxed"
             >
               Присоединяйтесь к партнерской программе DocDocPartner и получайте{" "}
               <strong className="text-foreground font-semibold">до 10% вознаграждения</strong>{" "}
               за каждого направленного пациента в проверенные клиники России.
             </motion.p>
-
-            {/* CTA Buttons */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.45 }}
-              className="flex flex-col sm:flex-row gap-4 justify-center"
-            >
-              <Button
-                size="lg"
-                className="btn-premium text-[oklch(0.15_0.05_75)] font-semibold text-lg h-16 px-10 animate-pulse-glow"
-                onClick={() => window.open('https://t.me/docpartnerbot', '_blank')}
-              >
-                <MessageSquare className="w-5 h-5 mr-2" />
-                Начать работу
-                <ArrowRight className="w-5 h-5 ml-2" />
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="h-16 px-10 text-lg border-2"
-                onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
-              >
-                Узнать больше
-                <ChevronRight className="w-5 h-5 ml-2" />
-              </Button>
-            </motion.div>
           </div>
         </motion.div>
+
+        {/* CTA Buttons — outside parallax so they stay visible on scroll */}
+        <div className="container relative z-10 mt-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.45 }}
+            className="flex flex-col sm:flex-row gap-4 justify-center"
+          >
+            <Button
+              size="lg"
+              className="btn-premium text-[oklch(0.15_0.05_75)] font-semibold text-lg h-16 px-10 animate-pulse-glow"
+              onClick={() => window.open('https://t.me/docpartnerbot', '_blank')}
+            >
+              <MessageSquare className="w-5 h-5 mr-2" />
+              Начать работу
+              <ArrowRight className="w-5 h-5 ml-2" />
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="h-16 px-10 text-lg border-2"
+              onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
+            >
+              Узнать больше
+              <ChevronRight className="w-5 h-5 ml-2" />
+            </Button>
+          </motion.div>
+        </div>
 
         {/* Stats and Country Expansion — outside parallax container so they stay visible */}
         <div className="container relative z-10 mt-16">
           <div className="max-w-7xl mx-auto">
-            {/* Stats Grid with Animated Counters */}
+            {/* Stats Grid with Animated Counters — real data from DB */}
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
@@ -242,9 +267,9 @@ export default function Home() {
             >
               {[
                 { value: 10, suffix: "%", label: "Вознаграждение", gold: true },
-                { value: 150, suffix: "+", label: "Отделений", gold: false },
-                { value: 30, suffix: "+", label: "Городов России", gold: false },
-                { value: 100, suffix: "%", label: "Прозрачность", gold: false },
+                { value: publicStats?.agentCount ?? 0, suffix: "", label: "Агентов", gold: false },
+                { value: publicStats?.referralCount ?? 0, suffix: "", label: "Рекомендаций", gold: false },
+                { value: publicStats?.clinicCount ?? 0, suffix: "", label: "Клиник-партнеров", gold: false },
               ].map((stat, i) => (
                 <motion.div
                   key={stat.label}
