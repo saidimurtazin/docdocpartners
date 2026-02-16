@@ -1,8 +1,10 @@
 /**
  * AI Clinic Report Parser — uses Google Gemini 2.5 Flash to extract structured data from clinic emails
+ * Supports: plain text, PDF (native), images (native), Excel (text extraction), Word (text extraction)
  */
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, type Part } from "@google/generative-ai";
 import { ENV } from "./_core/env";
+import type { EmailAttachment } from "./email-poller";
 
 export interface ParsedPatientReport {
   patientName: string | null;
@@ -32,6 +34,8 @@ const SYSTEM_PROMPT = `Ты — AI-ассистент для обработки 
 - Поле confidence (0-100) — твоя уверенность в корректности извлечённых данных
 - Суммы указывай строго в рублях как целое число (без копеек, без пробелов)
 - Не придумывай данные — извлекай только то, что реально есть в тексте
+- Анализируй ВСЮ информацию: текст письма + вложенные файлы (PDF, Excel таблицы, Word документы, изображения)
+- Если данные есть и в тексте и в файле — объедини их
 - Если письмо явно спам, реклама или автоответ без упоминания пациентов — верни пустой массив patients
 
 Ответ СТРОГО в формате JSON:
@@ -48,16 +52,73 @@ const SYSTEM_PROMPT = `Ты — AI-ассистент для обработки 
   ]
 }`;
 
+// MIME types that Gemini can process natively (as inline data)
+const GEMINI_NATIVE_TYPES = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/webp",
+]);
+
 /**
- * Parse a clinic email body and extract patient visit data using Google Gemini
+ * Extract text from Excel file (xlsx/xls) using xlsx library
+ */
+async function extractExcelText(buffer: Buffer): Promise<string> {
+  try {
+    const XLSX = await import("xlsx");
+    const workbook = XLSX.read(buffer, { type: "buffer" });
+    const lines: string[] = [];
+
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName];
+      if (!sheet) continue;
+      lines.push(`=== Лист: ${sheetName} ===`);
+      // Convert to CSV-like text
+      const csv = XLSX.utils.sheet_to_csv(sheet, { FS: " | ", RS: "\n" });
+      lines.push(csv);
+    }
+
+    const text = lines.join("\n").trim();
+    console.log(`[ClinicParser] Excel extracted: ${text.length} chars from ${workbook.SheetNames.length} sheets`);
+    return text;
+  } catch (error: any) {
+    console.error("[ClinicParser] Excel extraction error:", error.message);
+    return "";
+  }
+}
+
+/**
+ * Extract text from Word file (docx) using mammoth library
+ */
+async function extractWordText(buffer: Buffer): Promise<string> {
+  try {
+    const mammoth = await import("mammoth");
+    const result = await mammoth.extractRawText({ buffer });
+    const text = result.value.trim();
+    console.log(`[ClinicParser] Word extracted: ${text.length} chars`);
+    return text;
+  } catch (error: any) {
+    console.error("[ClinicParser] Word extraction error:", error.message);
+    return "";
+  }
+}
+
+/**
+ * Parse a clinic email body and extract patient visit data using Google Gemini.
+ * Supports attachments: PDF/images sent natively to Gemini, Excel/Word converted to text.
  */
 export async function parseClinicEmail(
   emailBody: string,
   emailFrom: string,
-  emailSubject: string
+  emailSubject: string,
+  attachments: EmailAttachment[] = []
 ): Promise<ParsedPatientReport[]> {
-  if (!emailBody || emailBody.trim().length < 10) {
-    console.log("[ClinicParser] Email body too short, skipping");
+  const hasAttachments = attachments.length > 0;
+  const bodyTooShort = !emailBody || emailBody.trim().length < 10;
+
+  if (bodyTooShort && !hasAttachments) {
+    console.log("[ClinicParser] Email body too short and no attachments, skipping");
     return [];
   }
 
@@ -67,7 +128,9 @@ export async function parseClinicEmail(
   }
 
   // Truncate very long emails
-  const truncatedBody = emailBody.length > 15000 ? emailBody.substring(0, 15000) + "\n...(обрезано)" : emailBody;
+  const truncatedBody = emailBody && emailBody.length > 15000
+    ? emailBody.substring(0, 15000) + "\n...(обрезано)"
+    : (emailBody || "");
 
   try {
     const genAI = new GoogleGenerativeAI(ENV.geminiApiKey);
@@ -79,10 +142,81 @@ export async function parseClinicEmail(
       },
     });
 
-    const prompt = `${SYSTEM_PROMPT}\n\nПроанализируй это письмо от клиники:\n\nОт: ${emailFrom}\nТема: ${emailSubject}\n\nТекст письма:\n${truncatedBody}`;
+    // Build multimodal content parts
+    const parts: Part[] = [];
 
-    console.log(`[ClinicParser] Calling Gemini for email: "${emailSubject}" (body length: ${truncatedBody.length})`);
-    const result = await model.generateContent(prompt);
+    // 1. Text prompt (always first)
+    let textPrompt = `${SYSTEM_PROMPT}\n\nПроанализируй это письмо от клиники:\n\nОт: ${emailFrom}\nТема: ${emailSubject}\n`;
+
+    if (truncatedBody) {
+      textPrompt += `\nТекст письма:\n${truncatedBody}\n`;
+    }
+
+    // 2. Process attachments
+    const extraTexts: string[] = [];
+
+    for (const att of attachments) {
+      const ext = att.filename.split(".").pop()?.toLowerCase() || "";
+      const isNative = GEMINI_NATIVE_TYPES.has(att.contentType) ||
+        att.contentType === "image/jpg" ||
+        ext === "pdf" || ["png", "jpg", "jpeg", "webp"].includes(ext);
+
+      if (isNative) {
+        // PDF and images — send as inline data to Gemini (native multimodal)
+        const mimeType = att.contentType === "image/jpg" ? "image/jpeg" : att.contentType;
+        console.log(`[ClinicParser] Adding native attachment: "${att.filename}" (${mimeType}, ${Math.round(att.size / 1024)}KB)`);
+        // Add text part first, then inline data
+        textPrompt += `\n[Вложение: ${att.filename}]\n`;
+      } else if (["xlsx", "xls"].includes(ext) || att.contentType.includes("spreadsheet") || att.contentType.includes("excel")) {
+        // Excel — extract text
+        const excelText = await extractExcelText(att.content);
+        if (excelText) {
+          extraTexts.push(`\n--- Данные из файла "${att.filename}" (Excel) ---\n${excelText}\n`);
+        }
+      } else if (["docx", "doc"].includes(ext) || att.contentType.includes("word")) {
+        // Word — extract text
+        const wordText = await extractWordText(att.content);
+        if (wordText) {
+          extraTexts.push(`\n--- Данные из файла "${att.filename}" (Word) ---\n${wordText}\n`);
+        }
+      }
+    }
+
+    // Append extracted texts to prompt
+    if (extraTexts.length > 0) {
+      textPrompt += extraTexts.join("\n");
+    }
+
+    // Add text part
+    parts.push({ text: textPrompt });
+
+    // Add native file parts (PDF, images) as inline data
+    for (const att of attachments) {
+      const ext = att.filename.split(".").pop()?.toLowerCase() || "";
+      const isNative = GEMINI_NATIVE_TYPES.has(att.contentType) ||
+        att.contentType === "image/jpg" ||
+        ext === "pdf" || ["png", "jpg", "jpeg", "webp"].includes(ext);
+
+      if (isNative) {
+        let mimeType = att.contentType;
+        if (mimeType === "image/jpg") mimeType = "image/jpeg";
+        if (ext === "pdf" && !mimeType.includes("pdf")) mimeType = "application/pdf";
+
+        parts.push({
+          inlineData: {
+            mimeType,
+            data: att.content.toString("base64"),
+          },
+        });
+      }
+    }
+
+    const attachmentInfo = hasAttachments
+      ? ` + ${attachments.length} attachments (${attachments.map(a => a.filename).join(", ")})`
+      : "";
+    console.log(`[ClinicParser] Calling Gemini: "${emailSubject}" (body: ${truncatedBody.length} chars${attachmentInfo})`);
+
+    const result = await model.generateContent(parts);
     const content = result.response.text();
 
     if (!content) {

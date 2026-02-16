@@ -46,8 +46,8 @@ export async function processNewClinicEmails(): Promise<ProcessResult> {
         }
         console.log(`[Processor] Identified clinic by email: ${email.from} → ${senderClinic.clinicName} (id=${senderClinic.clinicId})`);
 
-        // 4. Parse with AI
-        const patients = await parseClinicEmail(email.textBody, email.from, email.subject);
+        // 4. Parse with AI (pass attachments for multimodal processing)
+        const patients = await parseClinicEmail(email.textBody, email.from, email.subject, email.attachments);
 
         if (patients.length === 0) {
           // Save the email anyway with empty extraction (for admin review)

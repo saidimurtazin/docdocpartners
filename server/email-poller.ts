@@ -1,10 +1,18 @@
 /**
  * IMAP Email Poller — reads unread emails from clinic reports mailbox
  * Uses connect-poll-disconnect pattern for Railway compatibility
+ * Supports attachments: PDF, Excel (xlsx/xls), Word (docx)
  */
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { ENV } from "./_core/env";
+
+export interface EmailAttachment {
+  filename: string;
+  contentType: string;
+  content: Buffer;  // raw file bytes
+  size: number;
+}
 
 export interface EmailMessage {
   messageId: string;
@@ -12,7 +20,24 @@ export interface EmailMessage {
   subject: string;
   date: Date;
   textBody: string;
+  attachments: EmailAttachment[];
 }
+
+// Supported attachment MIME types
+const SUPPORTED_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // xlsx
+  "application/vnd.ms-excel", // xls
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // docx
+  "application/msword", // doc
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/webp",
+]);
+
+// Max attachment size: 10MB
+const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 
 /**
  * Poll for new (UNSEEN) emails from the clinic reports mailbox.
@@ -92,12 +117,38 @@ export async function pollNewEmails(): Promise<EmailMessage[]> {
                 .trim();
             }
 
-            emails.push({ messageId, from, subject, date, textBody });
+            // Extract supported attachments
+            const attachments: EmailAttachment[] = [];
+            if (parsed.attachments && parsed.attachments.length > 0) {
+              for (const att of parsed.attachments) {
+                const mimeType = (att.contentType || "").toLowerCase();
+                const filename = att.filename || "unnamed";
+                const ext = filename.split(".").pop()?.toLowerCase() || "";
+
+                // Check by MIME type or file extension
+                const isSupportedMime = SUPPORTED_MIME_TYPES.has(mimeType);
+                const isSupportedExt = ["pdf", "xlsx", "xls", "docx", "doc", "png", "jpg", "jpeg", "webp"].includes(ext);
+
+                if ((isSupportedMime || isSupportedExt) && att.content && att.size <= MAX_ATTACHMENT_SIZE) {
+                  attachments.push({
+                    filename,
+                    contentType: mimeType || `application/${ext}`,
+                    content: att.content,
+                    size: att.size,
+                  });
+                  console.log(`[EmailPoller] Attachment: "${filename}" (${mimeType}, ${Math.round(att.size / 1024)}KB)`);
+                } else if (att.size > MAX_ATTACHMENT_SIZE) {
+                  console.log(`[EmailPoller] Skipping attachment "${filename}" — too large (${Math.round(att.size / 1024 / 1024)}MB)`);
+                }
+              }
+            }
+
+            emails.push({ messageId, from, subject, date, textBody, attachments });
 
             // Mark as seen
             await client.messageFlagsAdd(String(uid), ["\\Seen"], { uid: true });
 
-            console.log(`[EmailPoller] Fetched UID ${uid}: "${subject}" from ${from}`);
+            console.log(`[EmailPoller] Fetched UID ${uid}: "${subject}" from ${from} (${attachments.length} attachments)`);
           } catch (msgError: any) {
             console.error(`[EmailPoller] Error processing UID ${uid}:`, msgError.message);
           }
