@@ -544,6 +544,41 @@ export async function updateAgentPersonalInfo(agentId: number, data: {
   await db.update(agents).set(data).where(eq(agents.id, agentId));
 }
 
+export async function updateAgentExcludedClinics(agentId: number, clinicIds: number[]) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(agents).set({
+    excludedClinics: JSON.stringify(clinicIds),
+  }).where(eq(agents.id, agentId));
+}
+
+export async function removeAgentExcludedClinic(agentId: number, clinicId: number) {
+  const db = await getDb();
+  if (!db) return;
+  const [agent] = await db.select().from(agents).where(eq(agents.id, agentId));
+  if (!agent) return;
+
+  let current: number[] = [];
+  try {
+    if (agent.excludedClinics) current = JSON.parse(agent.excludedClinics);
+  } catch { /* ignore */ }
+
+  const updated = current.filter(id => id !== clinicId);
+  await db.update(agents).set({
+    excludedClinics: JSON.stringify(updated),
+  }).where(eq(agents.id, agentId));
+}
+
+export function parseExcludedClinics(raw: string | null): number[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((id: any) => typeof id === "number") : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function createPaymentRequest(agentId: number, amount: number) {
   const db = await getDb();
   if (!db) return;

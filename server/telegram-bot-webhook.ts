@@ -16,7 +16,7 @@ const bot = new Telegraf(ENV.telegramBotToken);
 
 // Session interface
 interface SessionData {
-  registrationStep?: 'fullName' | 'email' | 'phone' | 'role' | 'specialization' | 'city' | 'contract' | 'patient_name' | 'patient_birthdate' | 'patient_phone' | 'patient_contact_consent' | 'patient_consent' | 'payout_inn' | 'payout_bank_name' | 'payout_bank_account' | 'payout_bank_bik';
+  registrationStep?: 'fullName' | 'email' | 'phone' | 'role' | 'specialization' | 'city' | 'excluded_clinics' | 'contract' | 'patient_name' | 'patient_birthdate' | 'patient_phone' | 'patient_contact_consent' | 'patient_consent' | 'payout_inn' | 'payout_bank_name' | 'payout_bank_account' | 'payout_bank_bik';
   tempData?: {
     fullName?: string;
     email?: string;
@@ -24,6 +24,7 @@ interface SessionData {
     role?: string;
     specialization?: string;
     city?: string;
+    excludedClinics?: number[];
     agentId?: number;
     patientName?: string;
     patientBirthdate?: string;
@@ -881,20 +882,46 @@ bot.on(message('text'), async (ctx) => {
     if (!session.tempData) session.tempData = {};
     session.tempData.city = capitalized;
 
-    // Show contract
-    session.registrationStep = 'contract';
-    await ctx.reply(
-      '📄 <b>Договор оферты DocDocPartner</b>\n\n' +
-      'Основные условия:\n' +
-      '• Вознаграждение: 7% от стоимости лечения (10% для самозанятых)\n' +
-      '• Минимальная сумма выплаты: 1000 ₽\n' +
-      '• Выплаты производятся после подтверждения лечения клиникой\n' +
-      '• Все рекомендации фиксируются в системе\n' +
-      '• Персональные данные защищены согласно 152-ФЗ\n\n' +
-      'Полный текст договора: ' + ENV.appUrl + '/contract\n\n' +
-      'Принимаете условия договора?',
-      { ...contractKeyboard, parse_mode: 'HTML' }
-    );
+    // Show clinic exclusion selection
+    session.registrationStep = 'excluded_clinics';
+    session.tempData.excludedClinics = [];
+
+    // Fetch active clinics from DB
+    const clinicDb = await getDb();
+    const activeClinics = clinicDb
+      ? await clinicDb.select({ id: schema.clinics.id, name: schema.clinics.name }).from(schema.clinics).where(eq(schema.clinics.isActive, 'yes'))
+      : [];
+
+    if (activeClinics.length === 0) {
+      // No clinics — skip to contract
+      session.registrationStep = 'contract';
+      await ctx.reply(
+        '📄 <b>Договор оферты DocDocPartner</b>\n\n' +
+        'Основные условия:\n' +
+        '• Вознаграждение: 7% от стоимости лечения (10% для самозанятых)\n' +
+        '• Минимальная сумма выплаты: 1000 ₽\n' +
+        '• Выплаты производятся после подтверждения лечения клиникой\n' +
+        '• Все рекомендации фиксируются в системе\n' +
+        '• Персональные данные защищены согласно 152-ФЗ\n\n' +
+        'Полный текст договора: ' + ENV.appUrl + '/contract\n\n' +
+        'Принимаете условия договора?',
+        { ...contractKeyboard, parse_mode: 'HTML' }
+      );
+    } else {
+      const buttons = activeClinics.map(c =>
+        [Markup.button.callback(`${c.name}`, `excl_clinic_${c.id}`)]
+      );
+      buttons.push([Markup.button.callback('Пропустить ➡️', 'excl_clinics_done')]);
+      buttons.push([Markup.button.callback('✅ Готово — сохранить выбор', 'excl_clinics_done')]);
+
+      await ctx.reply(
+        '🏥 <b>Исключение клиник</b>\n\n' +
+        'Выберите клиники, куда <b>НЕ</b> желательно направлять ваших пациентов.\n' +
+        'Нажмите на клинику чтобы добавить/убрать из списка исключений.\n\n' +
+        'Когда закончите, нажмите «Готово» или «Пропустить».',
+        { ...Markup.inlineKeyboard(buttons), parse_mode: 'HTML' }
+      );
+    }
     return;
   }
 
@@ -1316,6 +1343,10 @@ bot.action('contract_accept', async (ctx) => {
     }
 
     // Create agent in database
+    const excludedClinicsJson = data.excludedClinics && data.excludedClinics.length > 0
+      ? JSON.stringify(data.excludedClinics)
+      : null;
+
     await db.insert(agents).values({
       telegramId: String(userId),
       fullName: data.fullName,
@@ -1327,6 +1358,7 @@ bot.action('contract_accept', async (ctx) => {
       status: 'pending',
       referralCode,
       referredBy: referredByAgentId,
+      excludedClinics: excludedClinicsJson,
     });
 
     // Clear session before sending messages (prevents double-submit on retry)
@@ -1366,6 +1398,101 @@ bot.action('contract_accept', async (ctx) => {
       { parse_mode: 'HTML' }
     );
   }
+});
+
+// Handle clinic exclusion toggle
+bot.action(/^excl_clinic_(\d+)$/, async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+  if (isCallbackSpamming(userId)) { await ctx.answerCbQuery(); return; }
+
+  const session = getSession(userId);
+  if (session.registrationStep !== 'excluded_clinics') {
+    await ctx.answerCbQuery();
+    return;
+  }
+
+  const clinicId = parseInt(ctx.match[1], 10);
+  if (!session.tempData) session.tempData = {};
+  if (!session.tempData.excludedClinics) session.tempData.excludedClinics = [];
+
+  const idx = session.tempData.excludedClinics.indexOf(clinicId);
+  if (idx >= 0) {
+    session.tempData.excludedClinics.splice(idx, 1);
+    await ctx.answerCbQuery('Клиника убрана из исключений');
+  } else {
+    session.tempData.excludedClinics.push(clinicId);
+    await ctx.answerCbQuery('Клиника добавлена в исключения');
+  }
+
+  // Update the message with checkmarks
+  try {
+    const clinicDb = await getDb();
+    const activeClinics = clinicDb
+      ? await clinicDb.select({ id: schema.clinics.id, name: schema.clinics.name }).from(schema.clinics).where(eq(schema.clinics.isActive, 'yes'))
+      : [];
+
+    const excluded = session.tempData.excludedClinics;
+    const buttons = activeClinics.map(c => {
+      const isExcluded = excluded.includes(c.id);
+      return [Markup.button.callback(`${isExcluded ? '❌ ' : ''}${c.name}`, `excl_clinic_${c.id}`)];
+    });
+    buttons.push([Markup.button.callback('Пропустить ➡️', 'excl_clinics_done')]);
+    buttons.push([Markup.button.callback('✅ Готово — сохранить выбор', 'excl_clinics_done')]);
+
+    const excludedNames = activeClinics
+      .filter(c => excluded.includes(c.id))
+      .map(c => c.name);
+    const excludedText = excludedNames.length > 0
+      ? `\n\nИсключены: ${excludedNames.join(', ')}`
+      : '';
+
+    await ctx.editMessageText(
+      '🏥 <b>Исключение клиник</b>\n\n' +
+      'Выберите клиники, куда <b>НЕ</b> желательно направлять ваших пациентов.\n' +
+      'Нажмите на клинику чтобы добавить/убрать из списка исключений.' +
+      excludedText,
+      { ...Markup.inlineKeyboard(buttons), parse_mode: 'HTML' }
+    );
+  } catch (e) {
+    console.error('[Bot] Error updating clinic exclusion message:', e);
+  }
+});
+
+// Handle clinic exclusion done
+bot.action('excl_clinics_done', async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+  if (isCallbackSpamming(userId)) { await ctx.answerCbQuery(); return; }
+
+  const session = getSession(userId);
+  if (session.registrationStep !== 'excluded_clinics') {
+    await ctx.answerCbQuery();
+    return;
+  }
+
+  await ctx.answerCbQuery();
+
+  const excluded = session.tempData?.excludedClinics || [];
+  const excludedInfo = excluded.length > 0
+    ? `\n✅ Исключено клиник: ${excluded.length}`
+    : '\n✅ Нет исключений';
+
+  // Transition to contract
+  session.registrationStep = 'contract';
+  await ctx.editMessageText(
+    `${excludedInfo}\n\n` +
+    '📄 <b>Договор оферты DocDocPartner</b>\n\n' +
+    'Основные условия:\n' +
+    '• Вознаграждение: 7% от стоимости лечения (10% для самозанятых)\n' +
+    '• Минимальная сумма выплаты: 1000 ₽\n' +
+    '• Выплаты производятся после подтверждения лечения клиникой\n' +
+    '• Все рекомендации фиксируются в системе\n' +
+    '• Персональные данные защищены согласно 152-ФЗ\n\n' +
+    'Полный текст договора: ' + ENV.appUrl + '/contract\n\n' +
+    'Принимаете условия договора?',
+    { ...contractKeyboard, parse_mode: 'HTML' }
+  );
 });
 
 bot.action('contract_decline', async (ctx) => {

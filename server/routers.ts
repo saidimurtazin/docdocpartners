@@ -425,13 +425,33 @@ DocDocPartner — B2B-платформа агентских рекомендац
           return db.getAgentById(input.id);
         }),
       updateStatus: protectedProcedure
-        .input(z.object({ 
-          id: z.number(), 
-          status: z.enum(["pending", "active", "rejected", "blocked"]) 
+        .input(z.object({
+          id: z.number(),
+          status: z.enum(["pending", "active", "rejected", "blocked"])
         }))
         .mutation(async ({ ctx, input }) => {
           if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
           await db.updateAgentStatus(input.id, input.status);
+          return { success: true };
+        }),
+      updateExcludedClinics: protectedProcedure
+        .input(z.object({
+          agentId: z.number(),
+          clinicIds: z.array(z.number()),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          await db.updateAgentExcludedClinics(input.agentId, input.clinicIds);
+          return { success: true };
+        }),
+      removeExcludedClinic: protectedProcedure
+        .input(z.object({
+          agentId: z.number(),
+          clinicId: z.number(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          await db.removeAgentExcludedClinic(input.agentId, input.clinicId);
           return { success: true };
         }),
     }),
@@ -883,6 +903,7 @@ DocDocPartner — B2B-платформа агентских рекомендац
         city: z.string(),
         specialization: z.string().optional(),
         referredBy: z.string().optional(),
+        excludedClinics: z.string().optional(), // JSON array of clinic IDs
       }))
       .mutation(async ({ input }) => {
         const agent = await db.createAgent(input);

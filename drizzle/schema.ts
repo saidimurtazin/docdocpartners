@@ -74,6 +74,7 @@ export const agents = mysqlTable("agents", {
   bankAccount: varchar("bankAccount", { length: 20 }), // номер счета
   bankName: varchar("bankName", { length: 255 }), // название банка
   bankBik: varchar("bankBik", { length: 9 }), // БИК банка
+  excludedClinics: text("excludedClinics"), // JSON array of clinic IDs, e.g. "[1,3,5]"
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

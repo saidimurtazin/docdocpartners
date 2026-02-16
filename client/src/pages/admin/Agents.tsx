@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Download, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, ArrowLeft, Download, Search, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -36,10 +36,31 @@ export default function AdminAgents() {
   const [page, setPage] = useState(1);
 
   const { data: agents, isLoading, refetch } = trpc.admin.agents.list.useQuery();
+  const { data: clinicsList } = trpc.admin.clinics.list.useQuery();
   const updateStatus = trpc.admin.agents.updateStatus.useMutation({
     onSuccess: () => refetch(),
   });
+  const removeExcludedClinic = trpc.admin.agents.removeExcludedClinic.useMutation({
+    onSuccess: () => refetch(),
+  });
   const exportAgents = trpc.admin.export.agents.useMutation();
+
+  // Helper: parse excludedClinics JSON and resolve names
+  const getExcludedClinicNames = (excludedJson: string | null): { id: number; name: string }[] => {
+    if (!excludedJson) return [];
+    try {
+      const ids: number[] = JSON.parse(excludedJson);
+      if (!Array.isArray(ids)) return [];
+      return ids.map(id => {
+        const clinic = clinicsList?.find((c: any) => c.id === id);
+        return { id, name: clinic?.name || `Клиника #${id}` };
+      });
+    } catch { return []; }
+  };
+
+  const handleRemoveExcludedClinic = async (agentId: number, clinicId: number) => {
+    await removeExcludedClinic.mutateAsync({ agentId, clinicId });
+  };
 
   // Filter + search
   const filtered = useMemo(() => {
@@ -165,6 +186,7 @@ export default function AdminAgents() {
                     <TableHead>Рекомендаций</TableHead>
                     <TableHead>Заработано</TableHead>
                     <TableHead>Реквизиты</TableHead>
+                    <TableHead>Исключения</TableHead>
                     <TableHead>Дата регистрации</TableHead>
                     <TableHead>Действия</TableHead>
                   </TableRow>
@@ -195,6 +217,29 @@ export default function AdminAgents() {
                         ) : (
                           <span className="text-muted-foreground">Не указаны</span>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const excluded = getExcludedClinicNames((agent as any).excludedClinics);
+                          if (excluded.length === 0) return <span className="text-muted-foreground text-xs">—</span>;
+                          return (
+                            <div className="flex flex-wrap gap-1 max-w-xs">
+                              {excluded.map(c => (
+                                <span key={c.id} className="inline-flex items-center gap-0.5 bg-red-50 text-red-700 border border-red-200 rounded-full px-2 py-0.5 text-xs">
+                                  {c.name}
+                                  <button
+                                    onClick={() => handleRemoveExcludedClinic(agent.id, c.id)}
+                                    className="ml-0.5 hover:bg-red-200 rounded-full p-0.5"
+                                    title="Убрать из исключений"
+                                    disabled={removeExcludedClinic.isPending}
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         {agent.createdAt ? format(new Date(agent.createdAt), "dd.MM.yyyy", { locale: ru }) : "—"}
