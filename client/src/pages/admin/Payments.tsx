@@ -473,6 +473,14 @@ function ActionsForActGenerated({
         <Send className="w-3 h-3 mr-1" />
         На подписание
       </Button>
+      {act && (
+        <a href={`/api/acts/${act.id}/pdf`} target="_blank" rel="noopener noreferrer">
+          <Button size="sm" variant="outline" className="w-full">
+            <Download className="w-3 h-3 mr-1" />
+            Скачать PDF
+          </Button>
+        </a>
+      )}
     </>
   );
 }

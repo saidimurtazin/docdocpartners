@@ -125,17 +125,15 @@ export default function ActSigningDialog({ paymentId, isOpen, onClose, onSigned 
             </div>
 
             {/* Download PDF */}
-            {act.downloadUrl && (
-              <a
-                href={act.downloadUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-primary hover:underline"
-              >
-                <Download className="w-4 h-4" />
-                Скачать акт (PDF)
-              </a>
-            )}
+            <a
+              href={`/api/acts/${act.id}/pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-sm text-primary hover:underline"
+            >
+              <Download className="w-4 h-4" />
+              Скачать акт (PDF)
+            </a>
 
             {/* OTP input */}
             <div className="space-y-3">

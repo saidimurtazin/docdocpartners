@@ -61,6 +61,82 @@ async function startServer() {
     }
   });
 
+  // PDF download endpoint for payment acts
+  app.get("/api/acts/:actId/pdf", async (req, res) => {
+    try {
+      const actId = parseInt(req.params.actId);
+      if (!actId) { res.status(400).json({ error: "Invalid actId" }); return; }
+
+      // Verify auth via session cookie
+      const sessionToken = req.cookies?.session;
+      if (!sessionToken) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+      const db = await import("../db");
+      const session = await db.getSessionByToken(sessionToken);
+      if (!session) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+      const user = await db.getUserById(session.userId);
+      if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+      const act = await db.getPaymentActById(actId);
+      if (!act) { res.status(404).json({ error: "Act not found" }); return; }
+
+      // Allow admins or the agent who owns the act
+      if (user.role !== "admin") {
+        const agent = await db.getAgentByTelegramId(user.openId);
+        if (!agent || agent.id !== act.agentId) {
+          res.status(403).json({ error: "Forbidden" }); return;
+        }
+      }
+
+      // Generate PDF on the fly
+      const { generatePaymentActPdf, toPatientInitials } = await import("../payment-act-pdf");
+      const { ENV } = await import("./env");
+      const allAgents = await db.getAllAgents();
+      const agent = allAgents.find(a => a.id === act.agentId);
+      if (!agent) { res.status(404).json({ error: "Agent not found" }); return; }
+
+      const agentReferrals = await db.getAgentPaidReferrals(agent.id);
+      const referralData = agentReferrals.map(r => ({
+        id: r.id,
+        patientInitials: toPatientInitials(r.patientFullName),
+        clinic: r.clinic || "—",
+        treatmentAmount: r.treatmentAmount || 0,
+        commissionAmount: r.commissionAmount || 0,
+      }));
+
+      const pdfBuffer = await generatePaymentActPdf({
+        actNumber: act.actNumber,
+        actDate: new Date(act.actDate),
+        periodStart: new Date(act.periodStart),
+        periodEnd: new Date(act.periodEnd),
+        agent: {
+          fullName: act.agentFullNameSnapshot,
+          inn: act.agentInnSnapshot,
+          bankName: act.agentBankNameSnapshot,
+          bankAccount: act.agentBankAccountSnapshot,
+          bankBik: act.agentBankBikSnapshot,
+          isSelfEmployed: agent.isSelfEmployed === "yes",
+        },
+        referrals: referralData,
+        totalAmount: act.totalAmount,
+        company: {
+          name: ENV.companyName, inn: ENV.companyInn, ogrn: ENV.companyOgrn,
+          address: ENV.companyAddress, bankName: ENV.companyBankName,
+          bankAccount: ENV.companyBankAccount, bankBik: ENV.companyBankBik,
+          director: ENV.companyDirector,
+        },
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${act.actNumber}.pdf"`);
+      res.send(pdfBuffer);
+    } catch (error: any) {
+      console.error("[ActPDF] Error generating PDF:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",
