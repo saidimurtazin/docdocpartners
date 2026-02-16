@@ -948,8 +948,8 @@ export async function getPublicStats() {
 export async function createPaymentAct(data: InsertPaymentAct): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
-  const [result] = await db.insert(paymentActs).values(data).$returningId();
-  return result.id;
+  const [result] = await db.insert(paymentActs).values(data);
+  return result.insertId;
 }
 
 export async function getPaymentActById(id: number) {
