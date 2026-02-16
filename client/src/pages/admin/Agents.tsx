@@ -218,15 +218,15 @@ export default function AdminAgents() {
                           <span className="text-muted-foreground">Не указаны</span>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="max-w-[200px]">
                         {(() => {
                           const excluded = getExcludedClinicNames((agent as any).excludedClinics);
                           if (excluded.length === 0) return <span className="text-muted-foreground text-xs">—</span>;
                           return (
-                            <div className="flex flex-wrap gap-1 max-w-xs">
+                            <div className="flex flex-wrap gap-1">
                               {excluded.map(c => (
-                                <span key={c.id} className="inline-flex items-center gap-0.5 bg-red-50 text-red-700 border border-red-200 rounded-full px-2 py-0.5 text-xs">
-                                  {c.name}
+                                <span key={c.id} className="inline-flex items-center gap-0.5 bg-red-50 text-red-700 border border-red-200 rounded-full px-2 py-0.5 text-xs leading-tight">
+                                  <span className="truncate max-w-[140px]">{c.name}</span>
                                   <button
                                     onClick={() => handleRemoveExcludedClinic(agent.id, c.id)}
                                     className="ml-0.5 hover:bg-red-200 rounded-full p-0.5"
