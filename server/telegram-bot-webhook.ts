@@ -866,6 +866,30 @@ bot.on(message('text'), async (ctx) => {
     return;
   }
 
+  // Handle phone number typed as text (also accept text input, not only contact sharing)
+  if (session.registrationStep === 'phone') {
+    const validation = validatePhoneAdvanced(text);
+    if (!validation.valid) {
+      await ctx.reply(
+        `❌ <b>Ошибка валидации:</b>\n${validation.error}\n\n` +
+        '📱 <b>Поделитесь номером телефона</b> кнопкой ниже или введите вручную (например, +79991234567):',
+        { parse_mode: 'HTML', ...Markup.keyboard([
+          Markup.button.contactRequest('📱 Поделиться номером телефона')
+        ]).oneTime().resize() }
+      );
+      return;
+    }
+
+    if (!session.tempData) { await ctx.reply('❌ Сессия истекла. Начните заново: /start'); return; }
+    session.tempData.phone = validation.normalized!;
+    session.registrationStep = 'role';
+
+    // Remove the contact keyboard first, then show role inline keyboard
+    await ctx.reply('✅ Номер телефона сохранен!', Markup.removeKeyboard());
+    await ctx.reply('Выберите вашу роль:', roleKeyboard);
+    return;
+  }
+
   if (session.registrationStep === 'city') {
     const validation = validateCity(text);
     if (!validation.valid) {
