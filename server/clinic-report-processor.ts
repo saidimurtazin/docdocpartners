@@ -113,9 +113,9 @@ export async function processNewClinicEmails(): Promise<ProcessResult> {
           // Determine status — boost confidence if clinic was identified by email
           let finalMatchConfidence = match.matchConfidence;
           if (effectiveClinicId && match.referralId) {
-            finalMatchConfidence = Math.min(100, finalMatchConfidence + 10);
+            finalMatchConfidence = Math.min(100, finalMatchConfidence + 5);
           }
-          const status = finalMatchConfidence >= 85 ? "auto_matched" : "pending_review";
+          const status = finalMatchConfidence >= 95 ? "auto_matched" : "pending_review";
 
           // Convert treatment amount from rubles to kopecks
           const treatmentKopecks = patient.treatmentAmount ? Math.round(patient.treatmentAmount * 100) : 0;

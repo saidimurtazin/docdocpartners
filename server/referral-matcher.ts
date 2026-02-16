@@ -81,7 +81,7 @@ function compareNames(name1: string, name2: string): number {
       }
     }
 
-    if (bestIdx >= 0 && bestScore >= 60) {
+    if (bestIdx >= 0 && bestScore >= 80) {
       used.add(bestIdx);
       matchedTokens++;
       totalScore += bestScore;
@@ -90,8 +90,13 @@ function compareNames(name1: string, name2: string): number {
 
   if (matchedTokens === 0) return 0;
 
-  // Weight by proportion of tokens matched
+  // Require at least 67% of tokens to match (e.g., 2 of 3 for ФИО)
   const maxTokens = Math.max(tokens1.length, tokens2.length);
+  if (matchedTokens < Math.ceil(maxTokens * 0.67)) {
+    return 0;
+  }
+
+  // Weight by proportion of tokens matched
   const tokenCoverage = matchedTokens / maxTokens;
   const avgTokenScore = totalScore / matchedTokens;
 
@@ -285,7 +290,10 @@ export async function findMatchingReferral(
     }
   }
 
-  result.referralId = bestReferralId;
+  // Only link to referral if match confidence is strong enough (≥70)
+  if (bestScore >= 70) {
+    result.referralId = bestReferralId;
+  }
   result.matchConfidence = bestScore;
 
   return result;

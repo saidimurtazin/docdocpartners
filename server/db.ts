@@ -850,6 +850,15 @@ export async function linkClinicReportToReferral(id: number, referralId: number)
   }).where(eq(clinicReports.id, id));
 }
 
+export async function unlinkClinicReportFromReferral(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(clinicReports).set({
+    referralId: null,
+    matchConfidence: 0,
+  }).where(eq(clinicReports.id, id));
+}
+
 export async function getClinicReportsStats() {
   const db = await getDb();
   if (!db) return { total: 0, pendingReview: 0, autoMatched: 0, approved: 0, rejected: 0 };
