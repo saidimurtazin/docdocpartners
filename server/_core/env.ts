@@ -29,4 +29,13 @@ export const ENV = {
   imapPass: process.env.IMAP_PASS ?? "",
   /** Google Gemini API key for AI parsing of clinic emails */
   geminiApiKey: process.env.GEMINI_API_KEY ?? "",
+  /** Company requisites for payment acts */
+  companyName: process.env.COMPANY_NAME ?? "",
+  companyInn: process.env.COMPANY_INN ?? "",
+  companyOgrn: process.env.COMPANY_OGRN ?? "",
+  companyAddress: process.env.COMPANY_ADDRESS ?? "",
+  companyBankName: process.env.COMPANY_BANK_NAME ?? "",
+  companyBankAccount: process.env.COMPANY_BANK_ACCOUNT ?? "",
+  companyBankBik: process.env.COMPANY_BANK_BIK ?? "",
+  companyDirector: process.env.COMPANY_DIRECTOR ?? "",
 };

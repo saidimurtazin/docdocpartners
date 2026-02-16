@@ -3,10 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Wallet, Send, CheckCircle2, Clock, XCircle, AlertCircle } from "lucide-react";
+import { Wallet, Send, CheckCircle2, Clock, XCircle, AlertCircle, FileText, FileSignature, Banknote, Download } from "lucide-react";
 import { useState } from "react";
 import DashboardLayoutWrapper from "@/components/DashboardLayoutWrapper";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import ActSigningDialog from "@/components/ActSigningDialog";
 
 export default function AgentPayments() {
   useRequireAuth();
@@ -16,6 +17,7 @@ export default function AgentPayments() {
 
   const [amount, setAmount] = useState("");
   const [error, setError] = useState("");
+  const [signingPaymentId, setSigningPaymentId] = useState<number | null>(null);
 
   const handleRequestPayment = async () => {
     setError("");
@@ -67,6 +69,10 @@ export default function AgentPayments() {
 
   const statusIcons: Record<string, React.ReactNode> = {
     pending: <Clock className="w-5 h-5 text-amber-500" />,
+    act_generated: <FileText className="w-5 h-5 text-blue-500" />,
+    sent_for_signing: <FileSignature className="w-5 h-5 text-amber-500" />,
+    signed: <CheckCircle2 className="w-5 h-5 text-green-500" />,
+    ready_for_payment: <Banknote className="w-5 h-5 text-green-600" />,
     processing: <AlertCircle className="w-5 h-5 text-blue-500" />,
     completed: <CheckCircle2 className="w-5 h-5 text-green-500" />,
     failed: <XCircle className="w-5 h-5 text-red-500" />,
@@ -74,6 +80,10 @@ export default function AgentPayments() {
 
   const statusLabels: Record<string, string> = {
     pending: "Ожидает обработки",
+    act_generated: "Акт сформирован",
+    sent_for_signing: "Ожидает подписания",
+    signed: "Акт подписан",
+    ready_for_payment: "Готово к оплате",
     processing: "В обработке",
     completed: "Выплачено",
     failed: "Ошибка",
@@ -81,6 +91,10 @@ export default function AgentPayments() {
 
   const statusColors: Record<string, string> = {
     pending: "bg-amber-100 text-amber-800 border-amber-200",
+    act_generated: "bg-blue-100 text-blue-800 border-blue-200",
+    sent_for_signing: "bg-amber-100 text-amber-800 border-amber-200",
+    signed: "bg-green-100 text-green-800 border-green-200",
+    ready_for_payment: "bg-emerald-100 text-emerald-800 border-emerald-200",
     processing: "bg-blue-100 text-blue-800 border-blue-200",
     completed: "bg-green-100 text-green-800 border-green-200",
     failed: "bg-red-100 text-red-800 border-red-200",
@@ -225,16 +239,27 @@ export default function AgentPayments() {
                           </div>
                         </div>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right flex flex-col items-end gap-2">
                         <span
                           className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${
-                            statusColors[payment.status]
+                            statusColors[payment.status] || "bg-gray-100 text-gray-800 border-gray-200"
                           }`}
                         >
-                          {statusLabels[payment.status]}
+                          {statusLabels[payment.status] || payment.status}
                         </span>
+                        {payment.status === "sent_for_signing" && (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={() => setSigningPaymentId(payment.id)}
+                            className="text-xs"
+                          >
+                            <FileSignature className="w-3 h-3 mr-1" />
+                            Подписать акт
+                          </Button>
+                        )}
                         {payment.processedAt && (
-                          <div className="text-xs text-muted-foreground mt-1">
+                          <div className="text-xs text-muted-foreground">
                             Обработано: {formatDate(payment.processedAt)}
                           </div>
                         )}
@@ -247,6 +272,19 @@ export default function AgentPayments() {
           </Card>
         </div>
       </div>
+
+      {/* Act Signing Dialog */}
+      {signingPaymentId && (
+        <ActSigningDialog
+          paymentId={signingPaymentId}
+          isOpen={!!signingPaymentId}
+          onClose={() => setSigningPaymentId(null)}
+          onSigned={() => {
+            setSigningPaymentId(null);
+            refetch();
+          }}
+        />
+      )}
     </DashboardLayoutWrapper>
   );
 }

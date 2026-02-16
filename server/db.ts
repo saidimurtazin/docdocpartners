@@ -1,6 +1,6 @@
 import { eq, desc, and, like, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, agents, referrals, payments, doctors, sessions, otpCodes, clinics, clinicReports, type InsertSession, type InsertClinicReport } from "../drizzle/schema";
+import { InsertUser, users, agents, referrals, payments, doctors, sessions, otpCodes, clinics, clinicReports, paymentActs, type InsertSession, type InsertClinicReport, type InsertPaymentAct } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -390,8 +390,8 @@ export async function createPayment(data: any) {
 }
 
 export async function updatePaymentStatus(
-  id: number, 
-  status: "pending" | "processing" | "completed" | "failed",
+  id: number,
+  status: "pending" | "act_generated" | "sent_for_signing" | "signed" | "ready_for_payment" | "processing" | "completed" | "failed",
   transactionId?: string
 ) {
   const db = await getDb();
@@ -939,4 +939,69 @@ export async function getPublicStats() {
     referralCount: referralCount.count,
     clinicCount: clinicCount.count,
   };
+}
+
+// =====================
+// PAYMENT ACTS
+// =====================
+
+export async function createPaymentAct(data: InsertPaymentAct): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.insert(paymentActs).values(data).$returningId();
+  return result.id;
+}
+
+export async function getPaymentActById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(paymentActs).where(eq(paymentActs.id, id)).limit(1);
+  return result[0] || null;
+}
+
+export async function getPaymentActByPaymentId(paymentId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(paymentActs)
+    .where(and(
+      eq(paymentActs.paymentId, paymentId),
+      sql`${paymentActs.status} != 'cancelled'`
+    ))
+    .orderBy(desc(paymentActs.createdAt))
+    .limit(1);
+  return result[0] || null;
+}
+
+export async function updatePaymentAct(id: number, data: Partial<InsertPaymentAct>) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(paymentActs).set(data as any).where(eq(paymentActs.id, id));
+}
+
+export async function getReadyForPaymentActsWithAgents() {
+  const db = await getDb();
+  if (!db) return [];
+  const result = await db.select({
+    act: paymentActs,
+    agent: agents,
+    payment: payments,
+  })
+    .from(paymentActs)
+    .innerJoin(agents, eq(paymentActs.agentId, agents.id))
+    .innerJoin(payments, eq(paymentActs.paymentId, payments.id))
+    .where(eq(payments.status, "ready_for_payment"))
+    .orderBy(desc(paymentActs.createdAt));
+  return result;
+}
+
+export async function getAgentPaidReferrals(agentId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(referrals)
+    .where(and(
+      eq(referrals.agentId, agentId),
+      sql`${referrals.commissionAmount} > 0`,
+      sql`${referrals.status} IN ('visited', 'paid')`
+    ))
+    .orderBy(desc(referrals.createdAt));
 }

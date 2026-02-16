@@ -389,3 +389,90 @@ export async function exportPaymentRegistryToExcel(filters: {
   const regBuffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(regBuffer);
 }
+
+/**
+ * Export signed acts registry for bank upload
+ * Only includes payments with status ready_for_payment (signed acts)
+ */
+export async function exportSignedActsRegistryToExcel(filters: {
+  periodStart: string;
+  periodEnd: string;
+}): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Реестр подписанных актов');
+
+  worksheet.columns = [
+    { header: '№', key: 'num', width: 6 },
+    { header: 'ФИО агента', key: 'agentName', width: 30 },
+    { header: 'ИНН', key: 'inn', width: 15 },
+    { header: 'Банк', key: 'bankName', width: 25 },
+    { header: 'Номер счёта', key: 'bankAccount', width: 25 },
+    { header: 'БИК', key: 'bankBik', width: 12 },
+    { header: 'Сумма (₽)', key: 'amount', width: 15 },
+    { header: 'Назначение платежа', key: 'purpose', width: 40 },
+    { header: 'Акт №', key: 'actNumber', width: 22 },
+    { header: 'Дата подписания', key: 'signedDate', width: 18 },
+    { header: 'Самозанятый', key: 'selfEmployed', width: 14 },
+  ];
+
+  worksheet.getRow(1).font = { color: { argb: 'FFFFFFFF' }, bold: true };
+  worksheet.getRow(1).fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FF10b981' }
+  };
+
+  const actsWithAgents = await db.getReadyForPaymentActsWithAgents();
+
+  const startDate = new Date(filters.periodStart);
+  const endDate = new Date(filters.periodEnd);
+  endDate.setHours(23, 59, 59, 999);
+
+  const filtered = actsWithAgents.filter(row => {
+    const actDate = new Date(row.act.actDate);
+    return actDate >= startDate && actDate <= endDate;
+  });
+
+  const fmtDate = (d: Date | string) => {
+    const date = new Date(d);
+    const dd = String(date.getDate()).padStart(2, '0');
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    return `${dd}.${mm}.${date.getFullYear()}`;
+  };
+
+  filtered.forEach((row, idx) => {
+    worksheet.addRow({
+      num: idx + 1,
+      agentName: row.act.agentFullNameSnapshot,
+      inn: row.act.agentInnSnapshot,
+      bankName: row.act.agentBankNameSnapshot,
+      bankAccount: row.act.agentBankAccountSnapshot,
+      bankBik: row.act.agentBankBikSnapshot,
+      amount: (row.act.totalAmount || 0) / 100,
+      purpose: `Оплата по Акту ${row.act.actNumber} от ${fmtDate(row.act.actDate)} за услуги по привлечению пациентов`,
+      actNumber: row.act.actNumber,
+      signedDate: row.act.signedAt ? fmtDate(row.act.signedAt) : '—',
+      selfEmployed: row.agent.isSelfEmployed === 'yes' ? 'Да' : row.agent.isSelfEmployed === 'no' ? 'Нет' : '—',
+    });
+  });
+
+  const totalAmount = filtered.reduce((sum, row) => sum + (Number(row.act.totalAmount) || 0), 0);
+  const summaryRow = worksheet.addRow({
+    num: '',
+    agentName: `ИТОГО (${filtered.length} актов):`,
+    inn: '', bankName: '', bankAccount: '', bankBik: '',
+    amount: totalAmount / 100,
+    purpose: '', actNumber: '', signedDate: '', selfEmployed: '',
+  });
+  summaryRow.font = { bold: true };
+  summaryRow.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FFf3f4f6' }
+  };
+
+  worksheet.getColumn('amount').numFmt = '#,##0.00';
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer);
+}

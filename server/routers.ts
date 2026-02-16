@@ -522,7 +522,7 @@ DocDocPartner — B2B-платформа агентских рекомендац
       updateStatus: protectedProcedure
         .input(z.object({
           id: z.number(),
-          status: z.enum(["pending", "processing", "completed", "failed"]),
+          status: z.enum(["pending", "act_generated", "sent_for_signing", "signed", "ready_for_payment", "processing", "completed", "failed"]),
           transactionId: z.string().optional()
         }))
         .mutation(async ({ ctx, input }) => {
@@ -550,6 +550,42 @@ DocDocPartner — B2B-платформа агентских рекомендац
           }
 
           return { success: true };
+        }),
+      generateAct: protectedProcedure
+        .input(z.object({ paymentId: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          const { generateAct } = await import("./payment-act-service");
+          return generateAct(input.paymentId);
+        }),
+      sendForSigning: protectedProcedure
+        .input(z.object({ actId: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          const { sendActSigningOtp } = await import("./payment-act-service");
+          return sendActSigningOtp(input.actId);
+        }),
+      regenerateAct: protectedProcedure
+        .input(z.object({ paymentId: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          const { regenerateAct } = await import("./payment-act-service");
+          return regenerateAct(input.paymentId);
+        }),
+      getAct: protectedProcedure
+        .input(z.object({ paymentId: z.number() }))
+        .query(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          return db.getPaymentActByPaymentId(input.paymentId);
+        }),
+      batchMarkCompleted: protectedProcedure
+        .input(z.object({ paymentIds: z.array(z.number()) }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          for (const id of input.paymentIds) {
+            await db.updatePaymentStatus(id, "completed");
+          }
+          return { success: true, count: input.paymentIds.length };
         }),
     }),
 
@@ -753,6 +789,17 @@ DocDocPartner — B2B-платформа агентских рекомендац
           if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
           const { exportPaymentRegistryToExcel } = await import("./export");
           const buffer = await exportPaymentRegistryToExcel(input);
+          return { data: buffer.toString('base64') };
+        }),
+      signedActsRegistry: protectedProcedure
+        .input(z.object({
+          periodStart: z.string(),
+          periodEnd: z.string(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          const { exportSignedActsRegistryToExcel } = await import("./export");
+          const buffer = await exportSignedActsRegistryToExcel(input);
           return { data: buffer.toString('base64') };
         }),
     }),
@@ -1289,6 +1336,52 @@ DocDocPartner — B2B-платформа агентских рекомендац
 
         await db.createPaymentRequest(ctx.agentId, input.amount);
         return { success: true };
+      }),
+
+    // Payment act signing
+    getPaymentAct: agentProcedure
+      .input(z.object({ paymentId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const payment = await db.getPaymentById(input.paymentId);
+        if (!payment || payment.agentId !== ctx.agentId) {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
+        const { getActWithDownloadUrl } = await import("./payment-act-service");
+        const act = await db.getPaymentActByPaymentId(input.paymentId);
+        if (!act) return null;
+        return getActWithDownloadUrl(act.id);
+      }),
+
+    signAct: agentProcedure
+      .input(z.object({
+        actId: z.number(),
+        code: z.string().regex(/^\d{6}$/, "Код должен содержать 6 цифр"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const act = await db.getPaymentActById(input.actId);
+        if (!act || act.agentId !== ctx.agentId) {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
+        const { verifyActOtp } = await import("./payment-act-service");
+        const ip = (ctx.req.headers["x-forwarded-for"] as string)?.split(",")[0] ||
+                   ctx.req.socket?.remoteAddress || "";
+        const ua = ctx.req.headers["user-agent"] || "";
+        const success = await verifyActOtp(input.actId, input.code, ip, ua);
+        if (!success) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Неверный или истекший код" });
+        }
+        return { success: true };
+      }),
+
+    resendActOtp: agentProcedure
+      .input(z.object({ actId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const act = await db.getPaymentActById(input.actId);
+        if (!act || act.agentId !== ctx.agentId) {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
+        const { resendActOtp } = await import("./payment-act-service");
+        return resendActOtp(input.actId);
       }),
   }),
 });

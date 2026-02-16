@@ -113,7 +113,7 @@ export const payments = mysqlTable("payments", {
   id: int("id").autoincrement().primaryKey(),
   agentId: int("agentId").notNull(),
   amount: int("amount").notNull(), // в копейках
-  status: mysqlEnum("status", ["pending", "processing", "completed", "failed"]).default("pending").notNull(),
+  status: mysqlEnum("status", ["pending", "act_generated", "sent_for_signing", "signed", "ready_for_payment", "processing", "completed", "failed"]).default("pending").notNull(),
   method: varchar("method", { length: 50 }), // card, bank_transfer, etc.
   transactionId: varchar("transactionId", { length: 255 }),
   notes: text("notes"),
@@ -232,3 +232,55 @@ export const clinicReports = mysqlTable("clinic_reports", {
 
 export type ClinicReport = typeof clinicReports.$inferSelect;
 export type InsertClinicReport = typeof clinicReports.$inferInsert;
+
+/**
+ * Payment acts — акты на оплату с подписанием через ПЭП
+ */
+export const paymentActs = mysqlTable("payment_acts", {
+  id: int("id").autoincrement().primaryKey(),
+  paymentId: int("paymentId").notNull(),
+  agentId: int("agentId").notNull(),
+
+  // Document metadata
+  actNumber: varchar("actNumber", { length: 50 }).notNull().unique(),
+  actDate: timestamp("actDate").notNull(),
+  periodStart: timestamp("periodStart").notNull(),
+  periodEnd: timestamp("periodEnd").notNull(),
+
+  // Financial
+  totalAmount: int("totalAmount").notNull(), // kopecks
+
+  // File storage
+  pdfStorageKey: varchar("pdfStorageKey", { length: 500 }),
+  pdfUrl: varchar("pdfUrl", { length: 1000 }),
+
+  // Signing workflow
+  status: mysqlEnum("status", ["generated", "sent_for_signing", "signed", "cancelled"]).default("generated").notNull(),
+
+  // OTP for signing
+  otpCode: varchar("otpCode", { length: 6 }),
+  otpExpiresAt: timestamp("otpExpiresAt"),
+  otpAttempts: int("otpAttempts").default(0),
+  otpSentVia: varchar("otpSentVia", { length: 20 }),
+
+  // Signing data
+  signedAt: timestamp("signedAt"),
+  signedIp: varchar("signedIp", { length: 45 }),
+  signedUserAgent: text("signedUserAgent"),
+
+  // Snapshot of agent requisites at time of act generation
+  agentFullNameSnapshot: varchar("agentFullNameSnapshot", { length: 255 }).notNull(),
+  agentInnSnapshot: varchar("agentInnSnapshot", { length: 12 }).notNull(),
+  agentBankNameSnapshot: varchar("agentBankNameSnapshot", { length: 255 }).notNull(),
+  agentBankAccountSnapshot: varchar("agentBankAccountSnapshot", { length: 20 }).notNull(),
+  agentBankBikSnapshot: varchar("agentBankBikSnapshot", { length: 9 }).notNull(),
+
+  // Referral IDs included in this act (JSON array)
+  referralIds: text("referralIds"),
+
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PaymentAct = typeof paymentActs.$inferSelect;
+export type InsertPaymentAct = typeof paymentActs.$inferInsert;

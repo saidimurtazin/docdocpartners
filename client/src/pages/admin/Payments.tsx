@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, ArrowLeft, Download, Search, ChevronLeft, ChevronRight, FileSpreadsheet } from "lucide-react";
+import { Loader2, ArrowLeft, Download, Search, ChevronLeft, ChevronRight, FileSpreadsheet, FileText, Send, CheckCircle2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -41,7 +41,7 @@ export default function AdminPayments() {
   // Registry period state
   const [periodStart, setPeriodStart] = useState(() => {
     const d = new Date();
-    d.setDate(1); // first day of current month
+    d.setDate(1);
     return format(d, "yyyy-MM-dd");
   });
   const [periodEnd, setPeriodEnd] = useState(() => format(new Date(), "yyyy-MM-dd"));
@@ -50,8 +50,30 @@ export default function AdminPayments() {
   const updateStatus = trpc.admin.payments.updateStatus.useMutation({
     onSuccess: () => { refetch(); setEditingId(null); setTransactionId(""); },
   });
+  const generateAct = trpc.admin.payments.generateAct.useMutation({
+    onSuccess: (data) => {
+      alert(`Акт ${data.actNumber} создан!`);
+      refetch();
+    },
+    onError: (err) => alert(`Ошибка: ${err.message}`),
+  });
+  const sendForSigning = trpc.admin.payments.sendForSigning.useMutation({
+    onSuccess: (data) => {
+      alert(`OTP-код отправлен через ${data.sentVia === "telegram" ? "Telegram" : "email"}`);
+      refetch();
+    },
+    onError: (err) => alert(`Ошибка: ${err.message}`),
+  });
+  const batchMarkCompleted = trpc.admin.payments.batchMarkCompleted.useMutation({
+    onSuccess: (data) => {
+      alert(`${data.count} выплат помечены как выплаченные`);
+      refetch();
+    },
+    onError: (err) => alert(`Ошибка: ${err.message}`),
+  });
   const exportPayments = trpc.admin.export.payments.useMutation();
   const exportRegistry = trpc.admin.export.paymentRegistry.useMutation();
+  const exportSignedRegistry = trpc.admin.export.signedActsRegistry.useMutation();
 
   // Filter + search
   const filtered = useMemo(() => {
@@ -78,15 +100,7 @@ export default function AdminPayments() {
       const result = await exportPayments.mutateAsync({
         status: statusFilter !== "all" ? statusFilter : undefined,
       });
-      const blob = new Blob([Uint8Array.from(atob(result.data), c => c.charCodeAt(0))], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `payments_${format(new Date(), "yyyy-MM-dd")}.xlsx`;
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadExcel(result.data, `payments_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
     } catch {
       alert("Ошибка экспорта");
     }
@@ -99,19 +113,46 @@ export default function AdminPayments() {
         periodEnd,
         status: statusFilter !== "all" ? statusFilter : undefined,
       });
-      const blob = new Blob([Uint8Array.from(atob(result.data), c => c.charCodeAt(0))], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `registry_${periodStart}_${periodEnd}.xlsx`;
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadExcel(result.data, `registry_${periodStart}_${periodEnd}.xlsx`);
     } catch {
       alert("Ошибка формирования реестра");
     }
   };
+
+  const handleExportSignedRegistry = async () => {
+    try {
+      const result = await exportSignedRegistry.mutateAsync({ periodStart, periodEnd });
+      downloadExcel(result.data, `signed_acts_registry_${periodStart}_${periodEnd}.xlsx`);
+    } catch {
+      alert("Ошибка формирования реестра подписанных актов");
+    }
+  };
+
+  const handleBatchComplete = () => {
+    if (!payments) return;
+    const readyIds = payments
+      .filter(p => p.status === "ready_for_payment")
+      .map(p => p.id);
+    if (readyIds.length === 0) {
+      alert("Нет выплат со статусом «К оплате»");
+      return;
+    }
+    if (confirm(`Пометить ${readyIds.length} выплат как выплаченные?`)) {
+      batchMarkCompleted.mutate({ paymentIds: readyIds });
+    }
+  };
+
+  function downloadExcel(base64: string, filename: string) {
+    const blob = new Blob([Uint8Array.from(atob(base64), c => c.charCodeAt(0))], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   if (authLoading || isLoading) {
     return (
@@ -129,12 +170,20 @@ export default function AdminPayments() {
   const getStatusBadge = (status: string) => {
     const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
       pending: "secondary",
+      act_generated: "outline",
+      sent_for_signing: "outline",
+      signed: "default",
+      ready_for_payment: "default",
       processing: "default",
       completed: "default",
       failed: "destructive",
     };
     const labels: Record<string, string> = {
       pending: "Ожидает",
+      act_generated: "Акт создан",
+      sent_for_signing: "На подписании",
+      signed: "Подписан",
+      ready_for_payment: "К оплате",
       processing: "Обрабатывается",
       completed: "Выплачено",
       failed: "Ошибка",
@@ -144,7 +193,7 @@ export default function AdminPayments() {
 
   const handleStatusChange = async (
     id: number,
-    status: "pending" | "processing" | "completed" | "failed"
+    status: "pending" | "act_generated" | "sent_for_signing" | "signed" | "ready_for_payment" | "processing" | "completed" | "failed"
   ) => {
     const txId = status === "completed" ? transactionId : undefined;
     await updateStatus.mutateAsync({ id, status, transactionId: txId });
@@ -154,6 +203,8 @@ export default function AdminPayments() {
     return new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB" }).format(amount / 100);
   };
 
+  const readyForPaymentCount = payments?.filter(p => p.status === "ready_for_payment").length || 0;
+
   return (
     <AdminLayoutWrapper>
       <div className="container py-8 space-y-6">
@@ -162,10 +213,10 @@ export default function AdminPayments() {
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <FileSpreadsheet className="w-5 h-5 text-primary" />
-              Сформировать реестр на оплату
+              Реестры и выплаты
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <div className="flex flex-col sm:flex-row items-end gap-4">
               <div className="flex-1 w-full sm:w-auto">
                 <Label htmlFor="periodStart" className="text-sm text-muted-foreground">Начало периода</Label>
@@ -190,15 +241,37 @@ export default function AdminPayments() {
               <Button
                 onClick={handleExportRegistry}
                 disabled={exportRegistry.isPending || !periodStart || !periodEnd}
-                className="bg-primary hover:bg-primary/90 w-full sm:w-auto"
+                variant="outline"
+                className="w-full sm:w-auto"
               >
                 <FileSpreadsheet className="w-4 h-4 mr-2" />
-                {exportRegistry.isPending ? "Формирование..." : "Сформировать реестр"}
+                {exportRegistry.isPending ? "Формирование..." : "Общий реестр"}
+              </Button>
+              <Button
+                onClick={handleExportSignedRegistry}
+                disabled={exportSignedRegistry.isPending || !periodStart || !periodEnd}
+                className="bg-primary hover:bg-primary/90 w-full sm:w-auto"
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                {exportSignedRegistry.isPending ? "Формирование..." : "Реестр подписанных актов"}
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Реестр содержит: ФИО агента, дата выплаты, период, сумма, реквизиты (ИНН, банк, счёт, БИК)
-            </p>
+            {readyForPaymentCount > 0 && (
+              <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg p-3">
+                <span className="text-sm text-green-800">
+                  <CheckCircle2 className="w-4 h-4 inline mr-1" />
+                  {readyForPaymentCount} выплат готовы к оплате (подписанные акты)
+                </span>
+                <Button
+                  size="sm"
+                  onClick={handleBatchComplete}
+                  disabled={batchMarkCompleted.isPending}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {batchMarkCompleted.isPending ? "Обработка..." : "Пакетная выплата"}
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -224,6 +297,10 @@ export default function AdminPayments() {
                   <SelectContent>
                     <SelectItem value="all">Все статусы</SelectItem>
                     <SelectItem value="pending">Ожидает</SelectItem>
+                    <SelectItem value="act_generated">Акт создан</SelectItem>
+                    <SelectItem value="sent_for_signing">На подписании</SelectItem>
+                    <SelectItem value="signed">Подписан</SelectItem>
+                    <SelectItem value="ready_for_payment">К оплате</SelectItem>
                     <SelectItem value="processing">Обрабатывается</SelectItem>
                     <SelectItem value="completed">Выплачено</SelectItem>
                     <SelectItem value="failed">Ошибка</SelectItem>
@@ -285,11 +362,47 @@ export default function AdminPayments() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-2">
-                          {payment.status === "pending" && editingId !== payment.id && (
-                            <Button size="sm" onClick={() => setEditingId(payment.id)}>
-                              Обработать
+                          {/* Step 1: Generate act */}
+                          {payment.status === "pending" && (
+                            <Button
+                              size="sm"
+                              onClick={() => generateAct.mutate({ paymentId: payment.id })}
+                              disabled={generateAct.isPending}
+                            >
+                              <FileText className="w-3 h-3 mr-1" />
+                              Сформировать акт
                             </Button>
                           )}
+
+                          {/* Step 2: Send for signing */}
+                          {payment.status === "act_generated" && (
+                            <ActionsForActGenerated
+                              paymentId={payment.id}
+                              onSendForSigning={(actId) => sendForSigning.mutate({ actId })}
+                              isSending={sendForSigning.isPending}
+                            />
+                          )}
+
+                          {/* Step 3: Waiting for signature */}
+                          {payment.status === "sent_for_signing" && (
+                            <span className="text-xs text-amber-600">Ожидание подписи...</span>
+                          )}
+
+                          {/* Step 4: Ready for payment */}
+                          {payment.status === "ready_for_payment" && (
+                            <>
+                              <Button
+                                size="sm"
+                                onClick={() => handleStatusChange(payment.id, "completed")}
+                                disabled={updateStatus.isPending}
+                              >
+                                <CheckCircle2 className="w-3 h-3 mr-1" />
+                                Выплатить
+                              </Button>
+                            </>
+                          )}
+
+                          {/* Legacy: manual processing for older payments */}
                           {editingId === payment.id && (
                             <>
                               <Button size="sm" onClick={() => handleStatusChange(payment.id, "completed")} disabled={updateStatus.isPending}>
@@ -332,5 +445,34 @@ export default function AdminPayments() {
         </Card>
       </div>
     </AdminLayoutWrapper>
+  );
+}
+
+/**
+ * Sub-component for act_generated status actions
+ * Needs to fetch the act to get actId for sending
+ */
+function ActionsForActGenerated({
+  paymentId,
+  onSendForSigning,
+  isSending,
+}: {
+  paymentId: number;
+  onSendForSigning: (actId: number) => void;
+  isSending: boolean;
+}) {
+  const { data: act } = trpc.admin.payments.getAct.useQuery({ paymentId });
+
+  return (
+    <>
+      <Button
+        size="sm"
+        onClick={() => act && onSendForSigning(act.id)}
+        disabled={isSending || !act}
+      >
+        <Send className="w-3 h-3 mr-1" />
+        На подписание
+      </Button>
+    </>
   );
 }
