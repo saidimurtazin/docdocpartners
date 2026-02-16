@@ -175,6 +175,36 @@ export async function findClinicByEmail(
 }
 
 /**
+ * Find clinic by name using fuzzy matching (for AI-extracted clinic names).
+ * Returns clinicId and clinicName if a good match is found (>= 60% similarity).
+ */
+export async function findClinicByName(
+  clinicNameQuery: string
+): Promise<{ clinicId: number | null; clinicName: string | null }> {
+  const database = await getDb();
+  if (!database) return { clinicId: null, clinicName: null };
+
+  const allClinics = await database.select().from(clinics);
+
+  let bestScore = 0;
+  let bestClinic: { id: number; name: string } | null = null;
+
+  for (const clinic of allClinics) {
+    const score = compareClinicNames(clinicNameQuery, clinic.name);
+    if (score > bestScore) {
+      bestScore = score;
+      bestClinic = { id: clinic.id, name: clinic.name };
+    }
+  }
+
+  if (bestScore >= 60 && bestClinic) {
+    return { clinicId: bestClinic.id, clinicName: bestClinic.name };
+  }
+
+  return { clinicId: null, clinicName: null };
+}
+
+/**
  * Find the best matching referral for a parsed patient report.
  */
 export async function findMatchingReferral(

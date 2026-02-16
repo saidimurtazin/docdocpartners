@@ -3,7 +3,7 @@
  */
 import { pollNewEmails } from "./email-poller";
 import { parseClinicEmail } from "./clinic-report-parser";
-import { findMatchingReferral, findClinicByEmail } from "./referral-matcher";
+import { findMatchingReferral, findClinicByEmail, findClinicByName } from "./referral-matcher";
 import * as db from "./db";
 
 export interface ProcessResult {
@@ -87,20 +87,32 @@ export async function processNewClinicEmails(): Promise<ProcessResult> {
             continue;
           }
 
-          // Use clinic name from sender email detection if AI didn't extract one
+          // Use AI-extracted clinic name as priority, fallback to sender clinic
           const effectiveClinicName = patient.clinicName || senderClinic.clinicName;
 
-          // 6. Match to referral (pass known clinicId from email detection)
+          // If AI found a different clinic name, try to resolve its ID from DB
+          let effectiveClinicId = senderClinic.clinicId;
+          if (patient.clinicName && patient.clinicName !== senderClinic.clinicName) {
+            const resolved = await findClinicByName(patient.clinicName);
+            if (resolved.clinicId) {
+              effectiveClinicId = resolved.clinicId;
+              console.log(`[Processor] AI clinic "${patient.clinicName}" resolved to DB clinic id=${resolved.clinicId} "${resolved.clinicName}"`);
+            } else {
+              console.log(`[Processor] AI clinic "${patient.clinicName}" not found in DB, keeping sender clinic id=${senderClinic.clinicId}`);
+            }
+          }
+
+          // 6. Match to referral (pass resolved clinicId)
           const match = await findMatchingReferral(
             patient.patientName,
             effectiveClinicName,
             patient.visitDate,
-            senderClinic.clinicId
+            effectiveClinicId
           );
 
           // Determine status — boost confidence if clinic was identified by email
           let finalMatchConfidence = match.matchConfidence;
-          if (senderClinic.clinicId && match.referralId) {
+          if (effectiveClinicId && match.referralId) {
             finalMatchConfidence = Math.min(100, finalMatchConfidence + 10);
           }
           const status = finalMatchConfidence >= 85 ? "auto_matched" : "pending_review";
@@ -111,7 +123,7 @@ export async function processNewClinicEmails(): Promise<ProcessResult> {
           // 7. Insert into DB
           await db.createClinicReport({
             referralId: match.referralId,
-            clinicId: senderClinic.clinicId || match.clinicId,
+            clinicId: effectiveClinicId || match.clinicId,
             emailFrom: email.from,
             emailSubject: email.subject,
             emailMessageId: patientMessageId,
