@@ -125,7 +125,7 @@ export const appRouter = router({
             used: "no",
           });
 
-          // Send OTP to admin via Telegram
+          // Send OTP to admin via Telegram (non-blocking — login proceeds even if Telegram fails)
           try {
             const { notifyAgent } = await import("./telegram-bot-webhook");
             await notifyAgent(
@@ -134,10 +134,7 @@ export const appRouter = router({
             );
           } catch (err) {
             console.error("[RequestOTP] Failed to send Telegram notification to admin:", err);
-            throw new TRPCError({
-              code: "INTERNAL_SERVER_ERROR",
-              message: "Не удалось отправить код. Проверьте настройки Telegram.",
-            });
+            // Don't throw — OTP saved to DB, admin can still check logs in dev
           }
 
           return { success: true };
@@ -182,7 +179,7 @@ export const appRouter = router({
           used: "no",
         });
 
-        // Send OTP via Telegram bot to agent
+        // Send OTP via Telegram bot to agent (non-blocking — login proceeds even if Telegram fails)
         try {
           const { notifyAgent } = await import("./telegram-bot-webhook");
           await notifyAgent(
@@ -191,10 +188,7 @@ export const appRouter = router({
           );
         } catch (err) {
           console.error("[RequestOTP] Failed to send Telegram notification to agent:", err);
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Не удалось отправить код в Telegram. Попробуйте позже.",
-          });
+          // Don't throw — OTP saved to DB, user can retry
         }
 
         return { success: true };
@@ -906,7 +900,10 @@ DocDocPartner — B2B-платформа агентских рекомендац
         excludedClinics: z.string().optional(), // JSON array of clinic IDs
       }))
       .mutation(async ({ input }) => {
-        const agent = await db.createAgent(input);
+        // Generate referralCode if not present
+        const crypto = await import("crypto");
+        const referralCode = crypto.randomBytes(6).toString("hex");
+        const agent = await db.createAgent({ ...input, referralCode });
         return { success: true, agent };
       }),
 

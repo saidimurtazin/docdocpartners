@@ -2008,7 +2008,7 @@ bot.command('referral_program', async (ctx) => {
     const referralCount = referredAgents.length;
     const bonusPoints = agent.bonusPoints || 0;
 
-    const referralLink = `https://t.me/docpartnerbot?start=${agent.referralCode}`;
+    const referralLink = `https://t.me/docpartnerbot?start=ref_${agent.id}`;
 
     let message = '🎁 <b>Реферальная программа</b>\n\n';
     message += '📢 Приглашайте коллег и получайте бонусы!\n\n';

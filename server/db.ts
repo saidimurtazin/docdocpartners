@@ -283,31 +283,42 @@ export async function updateReferralStatus(
 export async function updateReferralAmounts(id: number, treatmentAmount: number, commissionAmount: number) {
   const db = await getDb();
   if (!db) return;
-  
+
+  // Block negative values
+  if (treatmentAmount < 0 || commissionAmount < 0) {
+    throw new Error("Amounts cannot be negative");
+  }
+
   // Get referral to find agent
   const referralResult = await db.select().from(referrals).where(eq(referrals.id, id)).limit(1);
   const referral = referralResult[0];
-  
+
   if (!referral) {
     throw new Error(`Referral ${id} not found`);
   }
-  
+
+  // Calculate commission delta (subtract old, add new) to avoid double-counting
+  const oldCommission = referral.commissionAmount || 0;
+  const commissionDelta = commissionAmount - oldCommission;
+
   // Update referral amounts
   await db.update(referrals)
     .set({ treatmentAmount, commissionAmount })
     .where(eq(referrals.id, id));
-  
-  // Update agent totalEarnings (add commission)
-  const agentResult = await db.select().from(agents).where(eq(agents.id, referral.agentId)).limit(1);
-  const agent = agentResult[0];
-  
-  if (agent) {
-    const currentEarnings = agent.totalEarnings || 0;
-    const newEarnings = currentEarnings + commissionAmount;
-    
-    await db.update(agents)
-      .set({ totalEarnings: newEarnings })
-      .where(eq(agents.id, referral.agentId));
+
+  // Update agent totalEarnings (apply delta, not absolute)
+  if (commissionDelta !== 0) {
+    const agentResult = await db.select().from(agents).where(eq(agents.id, referral.agentId)).limit(1);
+    const agent = agentResult[0];
+
+    if (agent) {
+      const currentEarnings = agent.totalEarnings || 0;
+      const newEarnings = Math.max(0, currentEarnings + commissionDelta);
+
+      await db.update(agents)
+        .set({ totalEarnings: newEarnings })
+        .where(eq(agents.id, referral.agentId));
+    }
   }
 }
 
