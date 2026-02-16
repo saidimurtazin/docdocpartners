@@ -69,7 +69,7 @@ export async function generateAct(paymentId: number): Promise<{ actId: number; a
   const actId = await db.createPaymentAct({
     paymentId,
     agentId: agent.id,
-    actNumber: "TEMP",
+    actNumber: `TEMP-${Date.now()}-${crypto.randomInt(1000, 9999)}`,
     actDate: now,
     periodStart,
     periodEnd,
