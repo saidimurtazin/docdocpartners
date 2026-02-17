@@ -464,12 +464,32 @@ export function maskCardNumber(cardNumber: string): string {
 }
 
 /**
- * Validate card number with Luhn algorithm.
+ * Check if card number belongs to MIR payment system.
+ * MIR BIN ranges: 2200–2204 (first 4 digits).
  */
-export function validateCardNumber(cardNumber: string): boolean {
+export function isMirCard(cardNumber: string): boolean {
   const digits = cardNumber.replace(/\D/g, "");
-  if (digits.length < 13 || digits.length > 19) return false;
+  if (digits.length < 4) return false;
+  const prefix = parseInt(digits.substring(0, 4), 10);
+  return prefix >= 2200 && prefix <= 2204;
+}
 
+/**
+ * Validate card number with Luhn algorithm + MIR check.
+ * Returns { valid, error } for detailed error messages.
+ */
+export function validateCardNumberDetailed(cardNumber: string): { valid: boolean; error?: string } {
+  const digits = cardNumber.replace(/\D/g, "");
+  if (digits.length < 13 || digits.length > 19) {
+    return { valid: false, error: "Номер карты должен содержать 13-19 цифр" };
+  }
+
+  // MIR check
+  if (!isMirCard(digits)) {
+    return { valid: false, error: "Принимаются только карты МИР (номер начинается с 2200-2204)" };
+  }
+
+  // Luhn algorithm
   let sum = 0;
   let isEven = false;
   for (let i = digits.length - 1; i >= 0; i--) {
@@ -481,7 +501,19 @@ export function validateCardNumber(cardNumber: string): boolean {
     sum += digit;
     isEven = !isEven;
   }
-  return sum % 10 === 0;
+  if (sum % 10 !== 0) {
+    return { valid: false, error: "Некорректный номер карты (не прошёл проверку)" };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Validate card number with Luhn algorithm + MIR check.
+ * Simple boolean version for backward compatibility.
+ */
+export function validateCardNumber(cardNumber: string): boolean {
+  return validateCardNumberDetailed(cardNumber).valid;
 }
 
 /**

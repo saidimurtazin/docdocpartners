@@ -1470,11 +1470,12 @@ DocDocPartner — B2B-платформа агентских рекомендац
         bankBik: z.string().regex(/^\d{9}$/, "БИК должен содержать 9 цифр").optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        // Validate card number if provided
+        // Validate card number if provided (MIR only + Luhn)
         if (input.cardNumber) {
-          const { validateCardNumber } = await import("./jump-finance");
-          if (!validateCardNumber(input.cardNumber)) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "Некорректный номер карты" });
+          const { validateCardNumberDetailed } = await import("./jump-finance");
+          const cardCheck = validateCardNumberDetailed(input.cardNumber);
+          if (!cardCheck.valid) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: cardCheck.error || "Некорректный номер карты" });
           }
         }
         await db.updateAgentRequisites(ctx.agentId, input);

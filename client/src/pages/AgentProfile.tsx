@@ -70,6 +70,20 @@ export default function AgentProfile() {
   };
 
   const handleSavePaymentDetails = async () => {
+    // Client-side MIR card validation
+    if (payoutMethod === "card" && cardNumber) {
+      const digits = cardNumber.replace(/\D/g, "");
+      if (digits.length < 13 || digits.length > 19) {
+        alert("❌ Номер карты должен содержать 13-19 цифр");
+        return;
+      }
+      const prefix = parseInt(digits.substring(0, 4), 10);
+      if (prefix < 2200 || prefix > 2204) {
+        alert("❌ Принимаются только карты МИР (номер начинается с 2200-2204).\nVisa и Mastercard не поддерживаются.");
+        return;
+      }
+    }
+
     try {
       await updateProfile.mutateAsync({
         inn,
@@ -82,8 +96,9 @@ export default function AgentProfile() {
       });
       await refetch();
       alert("✅ Реквизиты успешно сохранены!");
-    } catch (error) {
-      alert("❌ Ошибка сохранения. Попробуйте еще раз.");
+    } catch (error: any) {
+      const msg = error?.message || "Ошибка сохранения. Попробуйте еще раз.";
+      alert(`❌ ${msg}`);
     }
   };
 
@@ -351,7 +366,7 @@ export default function AgentProfile() {
                     className="mt-2"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    16-19 цифр номера банковской карты
+                    Только карты МИР (номер начинается с 2200-2204)
                   </p>
                 </div>
               )}
