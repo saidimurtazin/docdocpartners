@@ -1466,10 +1466,22 @@ DocDocPartner — B2B-платформа агентских рекомендац
       // Bonus info
       const paidReferralCount = referrals.filter(r => r.status === "paid").length;
       const pendingPaymentsSum = await db.getAgentPendingPaymentsSum(ctx.agentId);
+      const completedPaymentsSum = await db.getAgentCompletedPaymentsSum(ctx.agentId);
+
+      // Referral program: count agents invited by this agent
+      const { agents: agentsTable } = await import("../drizzle/schema");
+      const { eq: eqOp } = await import("drizzle-orm");
+      const database = await db.getDb();
+      let referredAgentsCount = 0;
+      if (database) {
+        const referred = await database.select({ id: agentsTable.id }).from(agentsTable).where(eqOp(agentsTable.referredBy, ctx.agentId));
+        referredAgentsCount = referred.length;
+      }
 
       return {
         totalEarnings: agent.totalEarnings || 0,
         availableBalance: Math.max(0, (agent.totalEarnings || 0) - pendingPaymentsSum),
+        completedPaymentsSum,
         activeReferrals: activeReferrals.length,
         conversionRate,
         thisMonthEarnings,
@@ -1478,6 +1490,8 @@ DocDocPartner — B2B-платформа агентских рекомендац
         bonusPoints: agent.bonusPoints || 0,
         paidReferralCount,
         bonusUnlockThreshold: 10,
+        referredAgentsCount,
+        referralLink: `https://t.me/docpartnerbot?start=ref_${ctx.agentId}`,
       };
     }),
 

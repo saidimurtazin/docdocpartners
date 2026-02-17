@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Wallet, Send, CheckCircle2, Clock, XCircle, AlertCircle, FileText, FileSignature, Banknote, Download, Zap } from "lucide-react";
+import { Wallet, Send, CheckCircle2, Clock, XCircle, AlertCircle, FileText, FileSignature, Banknote, Download, Zap, Gift, Users, Copy, Lock, Unlock } from "lucide-react";
 import { useState } from "react";
 import DashboardLayoutWrapper from "@/components/DashboardLayoutWrapper";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
@@ -35,9 +35,9 @@ export default function AgentPayments() {
       return;
     }
 
-    const availableBalance = (stats?.totalEarnings || 0) / 100; // convert from kopecks
-    if (amountNum > availableBalance) {
-      setError(`Недостаточно средств. Доступно: ${availableBalance.toLocaleString('ru-RU')} ₽`);
+    const availBal = (stats?.availableBalance || 0) / 100; // convert from kopecks
+    if (amountNum > availBal) {
+      setError(`Недостаточно средств. Доступно: ${availBal.toLocaleString('ru-RU')} ₽`);
       return;
     }
 
@@ -132,7 +132,24 @@ export default function AgentPayments() {
     );
   }
 
-  const availableBalance = (stats?.totalEarnings || 0) / 100;
+  const availableBalance = (stats?.availableBalance || 0) / 100;
+  const totalEarnings = (stats?.totalEarnings || 0) / 100;
+  const completedPaymentsSum = (stats?.completedPaymentsSum || 0) / 100;
+  const bonusPoints = (stats?.bonusPoints || 0) / 100;
+  const paidReferralCount = stats?.paidReferralCount || 0;
+  const bonusUnlockThreshold = stats?.bonusUnlockThreshold || 10;
+  const bonusUnlocked = paidReferralCount >= bonusUnlockThreshold;
+  const referredAgentsCount = stats?.referredAgentsCount || 0;
+  const referralLink = stats?.referralLink || '';
+  const [copied, setCopied] = useState(false);
+
+  const copyReferralLink = () => {
+    if (referralLink) {
+      navigator.clipboard.writeText(referralLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   return (
     <DashboardLayoutWrapper>
@@ -147,7 +164,7 @@ export default function AgentPayments() {
 
         <div className="container py-8 max-w-6xl">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            {/* Balance Card */}
+            {/* Balance Card — with breakdown */}
             <Card className="border-2 lg:col-span-1">
               <CardHeader>
                 <CardTitle className="text-sm text-muted-foreground">Доступно для вывода</CardTitle>
@@ -156,7 +173,31 @@ export default function AgentPayments() {
                 <div className="text-3xl font-bold text-primary">
                   {availableBalance.toLocaleString('ru-RU')} ₽
                 </div>
-                <p className="text-sm text-muted-foreground mt-2">
+                <div className="mt-3 space-y-1.5 text-sm text-muted-foreground">
+                  <div className="flex justify-between">
+                    <span>Заработано:</span>
+                    <span className="font-medium">{totalEarnings.toLocaleString('ru-RU')} ₽</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Выплачено:</span>
+                    <span className="font-medium">{completedPaymentsSum.toLocaleString('ru-RU')} ₽</span>
+                  </div>
+                  {bonusPoints > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="flex items-center gap-1">
+                        {bonusUnlocked ? <Unlock className="w-3 h-3 text-green-500" /> : <Lock className="w-3 h-3 text-amber-500" />}
+                        Бонус за рефералов:
+                      </span>
+                      <span className="font-medium">{bonusPoints.toLocaleString('ru-RU')} ₽</span>
+                    </div>
+                  )}
+                  {bonusPoints > 0 && !bonusUnlocked && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      Бонус разблокируется после {bonusUnlockThreshold} оплаченных пациентов ({paidReferralCount}/{bonusUnlockThreshold})
+                    </p>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-3 pt-2 border-t">
                   Минимум для вывода: 1 000 ₽
                 </p>
               </CardContent>
@@ -223,6 +264,71 @@ export default function AgentPayments() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Referral Program Section */}
+          <Card className="border-2 mb-8">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Gift className="w-5 h-5 text-amber-500" />
+                Реферальная программа
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Referral link */}
+                <div className="md:col-span-2">
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Приглашайте коллег и получайте <strong>1 000 ₽</strong> за каждого зарегистрированного агента.
+                    Бонус разблокируется после {bonusUnlockThreshold} ваших оплаченных пациентов.
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      value={referralLink}
+                      readOnly
+                      className="text-sm font-mono bg-muted"
+                    />
+                    <Button variant="outline" size="icon" onClick={copyReferralLink} title="Копировать">
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  {copied && <p className="text-xs text-green-600 mt-1">Ссылка скопирована!</p>}
+                </div>
+
+                {/* Referral stats */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                    <span className="text-sm text-muted-foreground flex items-center gap-2">
+                      <Users className="w-4 h-4" />
+                      Приглашено агентов
+                    </span>
+                    <span className="font-bold text-lg">{referredAgentsCount}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                    <span className="text-sm text-muted-foreground flex items-center gap-2">
+                      <Gift className="w-4 h-4 text-amber-500" />
+                      Бонус за рефералов
+                    </span>
+                    <div className="text-right">
+                      <span className="font-bold text-lg">{bonusPoints.toLocaleString('ru-RU')} ₽</span>
+                      {bonusPoints > 0 && (
+                        <div className="text-xs mt-0.5">
+                          {bonusUnlocked ? (
+                            <span className="text-green-600 flex items-center gap-1 justify-end">
+                              <Unlock className="w-3 h-3" /> Доступен
+                            </span>
+                          ) : (
+                            <span className="text-amber-600 flex items-center gap-1 justify-end">
+                              <Lock className="w-3 h-3" /> {paidReferralCount}/{bonusUnlockThreshold} пациентов
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Payment History */}
           <Card className="border-2">
