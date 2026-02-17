@@ -506,17 +506,28 @@ bot.on(message('text'), async (ctx) => {
         return;
       }
 
-      await ctx.reply(
-        '📊 <b>Моя статистика</b>\n\n' +
-        `👥 Отправлено пациентов: <b>${agent.totalReferrals || 0}</b>\n` +
-        `💰 Заработано: <b>${((agent.totalEarnings || 0) / 100).toLocaleString('ru-RU')} ₽</b>\n` +
-        `🌟 Бонусные баллы: <b>${agent.bonusPoints || 0}</b>\n\n` +
-        '📈 <b>Как заработать больше:</b>\n' +
-        '• Отправляйте пациентов через меню\n' +
-        '• Приглашайте других агентов (реферальная программа)\n' +
-        '• Получайте бонусы за объем рекомендаций',
-        { parse_mode: 'HTML' }
-      );
+      const { getAgentCompletedPaymentsSum } = await import('./db');
+      const paidOutSum = await getAgentCompletedPaymentsSum(agent.id);
+      const earnedRub = ((agent.totalEarnings || 0) / 100).toLocaleString('ru-RU');
+      const paidOutRub = (paidOutSum / 100).toLocaleString('ru-RU');
+      const bonusRub = ((agent.bonusPoints || 0) / 100).toLocaleString('ru-RU');
+      const referralLink = `https://t.me/docpartnerbot?start=ref_${agent.id}`;
+
+      let message = '📊 <b>Моя статистика</b>\n\n';
+      message += `👥 Отправлено пациентов: <b>${agent.totalReferrals || 0}</b>\n`;
+      message += `💰 Заработано: <b>${earnedRub} ₽</b>\n`;
+      message += `✅ Выплачено: <b>${paidOutRub} ₽</b>\n`;
+      if ((agent.bonusPoints || 0) > 0) {
+        message += `🎁 Бонусные баллы: <b>${bonusRub} ₽</b>\n`;
+      }
+      message += `\n🔗 <b>Ваша реферальная ссылка:</b>\n<code>${referralLink}</code>\n`;
+      message += '📢 За каждого приглашённого агента — <b>1 000 ₽</b> бонус\n\n';
+      message += '📈 <b>Как заработать больше:</b>\n';
+      message += '• Отправляйте пациентов через меню\n';
+      message += '• Приглашайте коллег по реферальной ссылке\n';
+      message += '• Бонус разблокируется после 10 оплаченных пациентов';
+
+      await ctx.reply(message, { parse_mode: 'HTML' });
     } catch (error) {
       console.error('[Telegram Bot] Stats error:', error);
       await ctx.reply('❌ Произошла ошибка.');
@@ -2290,17 +2301,28 @@ bot.action('cmd_stats', async (ctx) => {
       return;
     }
 
-    await ctx.reply(
-      '📊 <b>Моя статистика</b>\n\n' +
-      `👥 Отправлено пациентов: <b>${agent.totalReferrals || 0}</b>\n` +
-      `💰 Заработано: <b>${((agent.totalEarnings || 0) / 100).toLocaleString('ru-RU')} ₽</b>\n` +
-      `🌟 Бонусные баллы: <b>${agent.bonusPoints || 0}</b>\n\n` +
-      '📈 <b>Как заработать больше:</b>\n' +
-      '• Отправляйте пациентов через /patient\n' +
-      '• Получайте до 10% от стоимости лечения\n' +
-      '• Выплаты от 1000 ₽',
-      { parse_mode: 'HTML' }
-    );
+    const { getAgentCompletedPaymentsSum } = await import('./db');
+    const paidOutSum = await getAgentCompletedPaymentsSum(agent.id);
+    const earnedRub = ((agent.totalEarnings || 0) / 100).toLocaleString('ru-RU');
+    const paidOutRub = (paidOutSum / 100).toLocaleString('ru-RU');
+    const bonusRub = ((agent.bonusPoints || 0) / 100).toLocaleString('ru-RU');
+    const referralLink = `https://t.me/docpartnerbot?start=ref_${agent.id}`;
+
+    let message = '📊 <b>Моя статистика</b>\n\n';
+    message += `👥 Отправлено пациентов: <b>${agent.totalReferrals || 0}</b>\n`;
+    message += `💰 Заработано: <b>${earnedRub} ₽</b>\n`;
+    message += `✅ Выплачено: <b>${paidOutRub} ₽</b>\n`;
+    if ((agent.bonusPoints || 0) > 0) {
+      message += `🎁 Бонусные баллы: <b>${bonusRub} ₽</b>\n`;
+    }
+    message += `\n🔗 <b>Ваша реферальная ссылка:</b>\n<code>${referralLink}</code>\n`;
+    message += '📢 За каждого приглашённого агента — <b>1 000 ₽</b> бонус\n\n';
+    message += '📈 <b>Как заработать больше:</b>\n';
+    message += '• Отправляйте пациентов через /patient\n';
+    message += '• Приглашайте коллег по реферальной ссылке\n';
+    message += '• Бонус разблокируется после 10 оплаченных пациентов';
+
+    await ctx.reply(message, { parse_mode: 'HTML' });
   } catch (error) {
     console.error('[Telegram Bot] Stats callback error:', error);
     await ctx.reply('❌ Произошла ошибка.');
@@ -3111,17 +3133,28 @@ bot.command('stats', async (ctx) => {
       return;
     }
 
-    await ctx.reply(
-      '📊 <b>Моя статистика</b>\n\n' +
-      `👥 Отправлено пациентов: <b>${agent.totalReferrals || 0}</b>\n` +
-      `💰 Заработано: <b>${((agent.totalEarnings || 0) / 100).toLocaleString('ru-RU')} ₽</b>\n` +
-      `🌟 Бонусные баллы: <b>${agent.bonusPoints || 0}</b>\n\n` +
-      '📈 <b>Как заработать больше:</b>\n' +
-      '• Отправляйте пациентов через /patient\n' +
-      '• Получайте до 10% от стоимости лечения\n' +
-      '• Выплаты от 1000 ₽',
-      { parse_mode: 'HTML' }
-    );
+    const { getAgentCompletedPaymentsSum: getCompletedSum } = await import('./db');
+    const paidOutSum = await getCompletedSum(agent.id);
+    const earnedRub = ((agent.totalEarnings || 0) / 100).toLocaleString('ru-RU');
+    const paidOutRub = (paidOutSum / 100).toLocaleString('ru-RU');
+    const bonusRub = ((agent.bonusPoints || 0) / 100).toLocaleString('ru-RU');
+    const referralLink = `https://t.me/docpartnerbot?start=ref_${agent.id}`;
+
+    let message = '📊 <b>Моя статистика</b>\n\n';
+    message += `👥 Отправлено пациентов: <b>${agent.totalReferrals || 0}</b>\n`;
+    message += `💰 Заработано: <b>${earnedRub} ₽</b>\n`;
+    message += `✅ Выплачено: <b>${paidOutRub} ₽</b>\n`;
+    if ((agent.bonusPoints || 0) > 0) {
+      message += `🎁 Бонусные баллы: <b>${bonusRub} ₽</b>\n`;
+    }
+    message += `\n🔗 <b>Ваша реферальная ссылка:</b>\n<code>${referralLink}</code>\n`;
+    message += '📢 За каждого приглашённого агента — <b>1 000 ₽</b> бонус\n\n';
+    message += '📈 <b>Как заработать больше:</b>\n';
+    message += '• Отправляйте пациентов через /patient\n';
+    message += '• Приглашайте коллег по реферальной ссылке\n';
+    message += '• Бонус разблокируется после 10 оплаченных пациентов';
+
+    await ctx.reply(message, { parse_mode: 'HTML' });
   } catch (error) {
     console.error('[Telegram Bot] Stats command error:', error);
     await ctx.reply('❌ Произошла ошибка.');

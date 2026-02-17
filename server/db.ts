@@ -1122,6 +1122,22 @@ export async function getAgentPendingPaymentsSum(agentId: number): Promise<numbe
 }
 
 /**
+ * Сумма всех завершённых (выплаченных) платежей агента
+ */
+export async function getAgentCompletedPaymentsSum(agentId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.select({
+    sum: sql<number>`COALESCE(SUM(${payments.amount}), 0)`
+  }).from(payments)
+    .where(and(
+      eq(payments.agentId, agentId),
+      eq(payments.status, "completed")
+    ));
+  return result.sum;
+}
+
+/**
  * Месячная выручка агента (сумма treatmentAmount за текущий месяц, visited/paid)
  */
 export async function getAgentMonthlyRevenue(agentId: number): Promise<number> {
