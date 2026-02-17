@@ -1480,7 +1480,7 @@ DocDocPartner — B2B-платформа агентских рекомендац
 
       return {
         totalEarnings: agent.totalEarnings || 0,
-        availableBalance: Math.max(0, (agent.totalEarnings || 0) - pendingPaymentsSum),
+        availableBalance: Math.max(0, (agent.totalEarnings || 0) - completedPaymentsSum - pendingPaymentsSum),
         completedPaymentsSum,
         activeReferrals: activeReferrals.length,
         conversionRate,
@@ -1686,9 +1686,10 @@ DocDocPartner — B2B-платформа агентских рекомендац
           });
         }
 
-        // Validate amount against available balance
+        // Validate amount against available balance (earnings minus already paid and pending)
         const pendingSum = await db.getAgentPendingPaymentsSum(ctx.agentId);
-        const availableBalance = (agent.totalEarnings || 0) - pendingSum;
+        const completedSum = await db.getAgentCompletedPaymentsSum(ctx.agentId);
+        const availableBalance = (agent.totalEarnings || 0) - completedSum - pendingSum;
         if (input.amount > availableBalance) {
           throw new TRPCError({
             code: "BAD_REQUEST",
