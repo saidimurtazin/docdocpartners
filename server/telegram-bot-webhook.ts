@@ -821,19 +821,36 @@ bot.on(message('text'), async (ctx) => {
       }
 
       const referralLink = `https://t.me/docpartnerbot?start=ref_${agent.id}`;
-      const referredCount = 0; // TODO: implement referredAgentsCount tracking
       const bonusPoints = agent.bonusPoints || 0;
 
-      await ctx.reply(
-        '👥 <b>Реферальная программа</b>\n\n' +
-        '🎁 Приглашайте других агентов и получайте бонусы!\n\n' +
-        `🔗 <b>Ваша реферальная ссылка:</b>\n<code>${referralLink}</code>\n\n` +
-        `📈 <b>Ваша статистика:</b>\n` +
-        `• Приглашено агентов: ${referredCount}\n` +
-        `• Бонусные баллы: ${bonusPoints}\n\n` +
-        '💡 Бонусные баллы можно вывести после 10+ собственных рекомендаций.',
-        { parse_mode: 'HTML' }
-      );
+      // Count referred agents from DB
+      const referredAgents = await db.select().from(agents)
+        .where(eq(agents.referredBy, agent.id));
+      const referredCount = referredAgents.length;
+
+      // Get paid referral count for bonus unlock progress
+      const { getAgentPaidReferralCount } = await import('./db');
+      const paidCount = await getAgentPaidReferralCount(agent.id);
+      const bonusRub = (bonusPoints / 100).toLocaleString("ru-RU");
+      const bonusUnlocked = paidCount >= 10;
+
+      let message = '👥 <b>Реферальная программа</b>\n\n';
+      message += '🎁 Приглашайте коллег и зарабатывайте!\n\n';
+      message += `🔗 <b>Ваша реферальная ссылка:</b>\n<code>${referralLink}</code>\n\n`;
+      message += `📈 <b>Ваша статистика:</b>\n`;
+      message += `• Приглашено агентов: ${referredCount}\n`;
+      message += `• Бонус за рефералов: ${bonusRub} ₽`;
+      if (bonusPoints > 0 && !bonusUnlocked) {
+        message += ` (🔒 заблокирован)\n`;
+        message += `• Прогресс: ${paidCount}/10 оплаченных пациентов\n`;
+      } else if (bonusPoints > 0 && bonusUnlocked) {
+        message += ` (✅ доступен для вывода)\n`;
+      } else {
+        message += `\n`;
+      }
+      message += '\n💡 За каждого приглашённого — 1 000 ₽. Разблокировка после 10 оплаченных пациентов.';
+
+      await ctx.reply(message, { parse_mode: 'HTML' });
     } catch (error) {
       console.error('[Telegram Bot] Referral program error:', error);
       await ctx.reply('❌ Произошла ошибка.');

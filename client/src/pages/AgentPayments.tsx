@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Wallet, Send, CheckCircle2, Clock, XCircle, AlertCircle, FileText, FileSignature, Banknote, Download, Zap, Gift, Users, Copy, Lock, Unlock } from "lucide-react";
+import { Wallet, Send, CheckCircle2, Clock, XCircle, AlertCircle, FileText, FileSignature, Banknote, Download, Zap, Gift, Users, Copy, Lock, Unlock, Link2, TrendingUp } from "lucide-react";
 import { useState } from "react";
 import DashboardLayoutWrapper from "@/components/DashboardLayoutWrapper";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
@@ -163,172 +163,186 @@ export default function AgentPayments() {
         </div>
 
         <div className="container py-8 max-w-6xl">
+          {/* Balance Overview + Request Payment */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            {/* Balance Card — with breakdown */}
+            {/* Balance Card — with full breakdown */}
             <Card className="border-2 lg:col-span-1">
-              <CardHeader>
-                <CardTitle className="text-sm text-muted-foreground">Доступно для вывода</CardTitle>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Wallet className="w-4 h-4" />
+                  Доступно для вывода
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-primary">
+                <div className="text-3xl font-bold text-primary mb-4">
                   {availableBalance.toLocaleString('ru-RU')} ₽
                 </div>
-                <div className="mt-3 space-y-1.5 text-sm text-muted-foreground">
-                  <div className="flex justify-between">
-                    <span>Заработано:</span>
-                    <span className="font-medium">{totalEarnings.toLocaleString('ru-RU')} ₽</span>
+
+                {/* Balance breakdown */}
+                <div className="space-y-2 text-sm border-t pt-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground flex items-center gap-1.5">
+                      <TrendingUp className="w-3.5 h-3.5 text-green-500" />
+                      Заработано
+                    </span>
+                    <span className="font-semibold">{totalEarnings.toLocaleString('ru-RU')} ₽</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span>Выплачено:</span>
-                    <span className="font-medium">{completedPaymentsSum.toLocaleString('ru-RU')} ₽</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-500" />
+                      Выплачено
+                    </span>
+                    <span className="font-semibold">{completedPaymentsSum.toLocaleString('ru-RU')} ₽</span>
                   </div>
                   {bonusPoints > 0 && (
                     <div className="flex justify-between items-center">
-                      <span className="flex items-center gap-1">
-                        {bonusUnlocked ? <Unlock className="w-3 h-3 text-green-500" /> : <Lock className="w-3 h-3 text-amber-500" />}
-                        Бонус за рефералов:
+                      <span className="text-muted-foreground flex items-center gap-1.5">
+                        <Gift className="w-3.5 h-3.5 text-amber-500" />
+                        Бонус рефералов
                       </span>
-                      <span className="font-medium">{bonusPoints.toLocaleString('ru-RU')} ₽</span>
+                      <span className="font-semibold flex items-center gap-1">
+                        {bonusPoints.toLocaleString('ru-RU')} ₽
+                        {bonusUnlocked
+                          ? <Unlock className="w-3 h-3 text-green-500" />
+                          : <Lock className="w-3 h-3 text-amber-500" />
+                        }
+                      </span>
                     </div>
                   )}
-                  {bonusPoints > 0 && !bonusUnlocked && (
-                    <p className="text-xs text-amber-600 mt-1">
-                      Бонус разблокируется после {bonusUnlockThreshold} оплаченных пациентов ({paidReferralCount}/{bonusUnlockThreshold})
-                    </p>
-                  )}
                 </div>
+
+                {/* Bonus unlock progress */}
+                {bonusPoints > 0 && !bonusUnlocked && (
+                  <div className="mt-3 pt-3 border-t">
+                    <div className="flex justify-between text-xs text-amber-700 mb-1.5">
+                      <span>Разблокировка бонуса</span>
+                      <span className="font-medium">{paidReferralCount}/{bonusUnlockThreshold}</span>
+                    </div>
+                    <div className="w-full bg-amber-100 rounded-full h-2">
+                      <div
+                        className="bg-amber-500 h-2 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, (paidReferralCount / bonusUnlockThreshold) * 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-amber-600 mt-1">
+                      Ещё {bonusUnlockThreshold - paidReferralCount} оплаченных пациентов
+                    </p>
+                  </div>
+                )}
+
                 <p className="text-xs text-muted-foreground mt-3 pt-2 border-t">
                   Минимум для вывода: 1 000 ₽
                 </p>
               </CardContent>
             </Card>
 
-            {/* Request Payment Card */}
+            {/* Request Payment + Referral Link */}
             <Card className="border-2 lg:col-span-2">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Wallet className="w-5 h-5 text-primary" />
+                  <Send className="w-5 h-5 text-primary" />
                   Запросить выплату
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
                   <Label htmlFor="amount">Сумма вывода (₽)</Label>
-                  <Input
-                    id="amount"
-                    type="number"
-                    value={amount}
-                    onChange={(e) => {
-                      setAmount(e.target.value);
-                      setError("");
-                    }}
-                    placeholder="1000"
-                    min="1000"
-                    className="mt-2"
-                  />
+                  <div className="flex gap-2 mt-2">
+                    <Input
+                      id="amount"
+                      type="number"
+                      value={amount}
+                      onChange={(e) => {
+                        setAmount(e.target.value);
+                        setError("");
+                      }}
+                      placeholder="1000"
+                      min="1000"
+                    />
+                    <Button
+                      onClick={handleRequestPayment}
+                      disabled={requestPayment.isPending || !amount}
+                      className="bg-primary hover:bg-primary/90 whitespace-nowrap"
+                    >
+                      {requestPayment.isPending ? (
+                        <>
+                          <Send className="w-4 h-4 mr-2 animate-pulse" />
+                          Отправка...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4 mr-2" />
+                          Запросить
+                        </>
+                      )}
+                    </Button>
+                  </div>
                   {error && (
                     <p className="text-sm text-destructive mt-2">{error}</p>
                   )}
-                  <p className="text-sm text-muted-foreground mt-2">
+                  <p className="text-xs text-muted-foreground mt-2">
                     Выплаты производятся в течение 3-5 рабочих дней
                   </p>
                 </div>
 
-                <Button
-                  onClick={handleRequestPayment}
-                  disabled={requestPayment.isPending || !amount}
-                  className="bg-primary hover:bg-primary/90"
-                >
-                  {requestPayment.isPending ? (
-                    <>
-                      <Send className="w-4 h-4 mr-2 animate-pulse" />
-                      Отправка...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4 mr-2" />
-                      Запросить выплату
-                    </>
-                  )}
-                </Button>
+                {/* Referral Program — compact inline */}
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
+                      <Gift className="w-5 h-5 text-amber-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <h4 className="font-semibold text-amber-900 dark:text-amber-200 text-sm">Реферальная программа</h4>
+                        <div className="flex items-center gap-3 text-xs">
+                          <span className="flex items-center gap-1 text-muted-foreground">
+                            <Users className="w-3.5 h-3.5" />
+                            <strong>{referredAgentsCount}</strong> агентов
+                          </span>
+                          <span className="flex items-center gap-1 text-amber-700 dark:text-amber-300 font-medium">
+                            <Gift className="w-3.5 h-3.5" />
+                            {bonusPoints.toLocaleString('ru-RU')} ₽
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Приглашайте коллег — <strong>1 000 ₽</strong> за каждого.
+                        {!bonusUnlocked && ` Бонус разблокируется после ${bonusUnlockThreshold} оплаченных пациентов.`}
+                      </p>
+                      <div className="flex gap-2">
+                        <Input
+                          value={referralLink}
+                          readOnly
+                          className="text-xs font-mono bg-white/70 dark:bg-background/50 h-8"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={copyReferralLink}
+                          className="h-8 px-3 text-xs border-amber-300 hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900/30"
+                        >
+                          {copied ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </Button>
+                      </div>
+                      {copied && <p className="text-xs text-green-600 mt-1">Ссылка скопирована!</p>}
+                    </div>
+                  </div>
+                </div>
 
                 {/* Info Box */}
-                <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 mt-4">
-                  <h4 className="font-semibold text-primary mb-2">💡 Важная информация</h4>
-                  <ul className="text-sm space-y-1 text-muted-foreground">
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <ul className="text-xs space-y-1 text-muted-foreground">
                     <li>• Убедитесь, что ваши реквизиты заполнены в профиле</li>
                     <li>• Выплаты обрабатываются только по рабочим дням</li>
-                    <li>• При возникновении вопросов свяжитесь с поддержкой</li>
                   </ul>
                 </div>
               </CardContent>
             </Card>
           </div>
-
-          {/* Referral Program Section */}
-          <Card className="border-2 mb-8">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Gift className="w-5 h-5 text-amber-500" />
-                Реферальная программа
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Referral link */}
-                <div className="md:col-span-2">
-                  <p className="text-sm text-muted-foreground mb-3">
-                    Приглашайте коллег и получайте <strong>1 000 ₽</strong> за каждого зарегистрированного агента.
-                    Бонус разблокируется после {bonusUnlockThreshold} ваших оплаченных пациентов.
-                  </p>
-                  <div className="flex gap-2">
-                    <Input
-                      value={referralLink}
-                      readOnly
-                      className="text-sm font-mono bg-muted"
-                    />
-                    <Button variant="outline" size="icon" onClick={copyReferralLink} title="Копировать">
-                      <Copy className="w-4 h-4" />
-                    </Button>
-                  </div>
-                  {copied && <p className="text-xs text-green-600 mt-1">Ссылка скопирована!</p>}
-                </div>
-
-                {/* Referral stats */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                    <span className="text-sm text-muted-foreground flex items-center gap-2">
-                      <Users className="w-4 h-4" />
-                      Приглашено агентов
-                    </span>
-                    <span className="font-bold text-lg">{referredAgentsCount}</span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
-                    <span className="text-sm text-muted-foreground flex items-center gap-2">
-                      <Gift className="w-4 h-4 text-amber-500" />
-                      Бонус за рефералов
-                    </span>
-                    <div className="text-right">
-                      <span className="font-bold text-lg">{bonusPoints.toLocaleString('ru-RU')} ₽</span>
-                      {bonusPoints > 0 && (
-                        <div className="text-xs mt-0.5">
-                          {bonusUnlocked ? (
-                            <span className="text-green-600 flex items-center gap-1 justify-end">
-                              <Unlock className="w-3 h-3" /> Доступен
-                            </span>
-                          ) : (
-                            <span className="text-amber-600 flex items-center gap-1 justify-end">
-                              <Lock className="w-3 h-3" /> {paidReferralCount}/{bonusUnlockThreshold} пациентов
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
 
           {/* Payment History */}
           <Card className="border-2">
