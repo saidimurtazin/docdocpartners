@@ -538,6 +538,18 @@ DocDocPartner — B2B-платформа агентских рекомендац
           return { success: true };
         }),
 
+      // Hard-delete agent and all related records
+      hardDelete: protectedProcedure
+        .input(z.object({ agentId: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          const result = await db.hardDeleteAgent(input.agentId);
+          if (!result.deleted) {
+            throw new TRPCError({ code: "NOT_FOUND", message: result.reason });
+          }
+          return result;
+        }),
+
       // Update agent commission override (individual tiers)
       updateCommissionOverride: protectedProcedure
         .input(z.object({

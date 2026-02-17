@@ -1210,3 +1210,34 @@ export async function unlockBonusToEarnings(agentId: number): Promise<boolean> {
 
   return true;
 }
+
+/**
+ * Hard-delete agent and ALL related records (sessions, referrals, payments, paymentActs).
+ * Use with extreme caution — this is irreversible.
+ */
+export async function hardDeleteAgent(agentId: number) {
+  const db = await getDb();
+  if (!db) return { deleted: false, reason: "No DB connection" };
+
+  const [agent] = await db.select().from(agents).where(eq(agents.id, agentId)).limit(1);
+  if (!agent) return { deleted: false, reason: "Agent not found" };
+
+  // Delete related records in dependency order
+  // 1. Payment acts (references payments & agents)
+  await db.delete(paymentActs).where(eq(paymentActs.agentId, agentId));
+  // 2. Payments
+  await db.delete(payments).where(eq(payments.agentId, agentId));
+  // 3. Clinic reports linked to referrals of this agent
+  const agentReferrals = await db.select({ id: referrals.id }).from(referrals).where(eq(referrals.agentId, agentId));
+  for (const ref of agentReferrals) {
+    await db.delete(clinicReports).where(eq(clinicReports.referralId, ref.id));
+  }
+  // 4. Referrals
+  await db.delete(referrals).where(eq(referrals.agentId, agentId));
+  // 5. Sessions
+  await db.delete(sessions).where(eq(sessions.agentId, agentId));
+  // 6. Agent itself
+  await db.delete(agents).where(eq(agents.id, agentId));
+
+  return { deleted: true, agentName: agent.fullName, agentId: agent.id };
+}

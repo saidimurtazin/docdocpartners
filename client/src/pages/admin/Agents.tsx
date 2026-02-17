@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, ArrowLeft, Download, Search, ChevronLeft, ChevronRight, X, CreditCard, Smartphone, Building2, Shield, Percent } from "lucide-react";
+import { Loader2, ArrowLeft, Download, Search, ChevronLeft, ChevronRight, X, CreditCard, Smartphone, Building2, Shield, Percent, Trash2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -54,6 +54,10 @@ export default function AdminAgents() {
   });
   const updateCommissionOverride = trpc.admin.agents.updateCommissionOverride.useMutation({
     onSuccess: () => { refetch(); setEditingCommissionId(null); },
+    onError: (err) => alert(`Ошибка: ${err.message}`),
+  });
+  const hardDeleteAgent = trpc.admin.agents.hardDelete.useMutation({
+    onSuccess: (data) => { alert(`Агент "${data.agentName}" удалён`); refetch(); },
     onError: (err) => alert(`Ошибка: ${err.message}`),
   });
   const exportAgents = trpc.admin.export.agents.useMutation();
@@ -354,6 +358,20 @@ export default function AdminAgents() {
                             className="text-xs"
                           >
                             % Ставка
+                          </Button>
+                          {/* Hard delete */}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              if (confirm(`Удалить агента "${agent.fullName}" и ВСЕ связанные данные? Это необратимо!`)) {
+                                hardDeleteAgent.mutate({ agentId: agent.id });
+                              }
+                            }}
+                            disabled={hardDeleteAgent.isPending}
+                            className="text-xs text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="w-3 h-3" />
                           </Button>
                         </div>
                       </TableCell>
