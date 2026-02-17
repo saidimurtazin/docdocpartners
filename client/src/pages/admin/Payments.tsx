@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, ArrowLeft, Download, Search, ChevronLeft, ChevronRight, FileSpreadsheet, FileText, Send, CheckCircle2 } from "lucide-react";
+import { Loader2, ArrowLeft, Download, Search, ChevronLeft, ChevronRight, FileSpreadsheet, FileText, Send, CheckCircle2, Zap, RotateCw } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -67,6 +67,20 @@ export default function AdminPayments() {
   const batchMarkCompleted = trpc.admin.payments.batchMarkCompleted.useMutation({
     onSuccess: (data) => {
       alert(`${data.count} выплат помечены как выплаченные`);
+      refetch();
+    },
+    onError: (err) => alert(`Ошибка: ${err.message}`),
+  });
+  const payViaJump = trpc.admin.payments.payViaJump.useMutation({
+    onSuccess: (data) => {
+      alert(`Jump-выплата создана! ID: ${data.jumpPaymentId}`);
+      refetch();
+    },
+    onError: (err) => alert(`Ошибка Jump: ${err.message}`),
+  });
+  const retryJumpPayment = trpc.admin.payments.retryJumpPayment.useMutation({
+    onSuccess: () => {
+      alert("Платёж отправлен повторно!");
       refetch();
     },
     onError: (err) => alert(`Ошибка: ${err.message}`),
@@ -189,6 +203,11 @@ export default function AdminPayments() {
       failed: "Ошибка",
     };
     return <Badge variant={variants[status] || "outline"}>{labels[status] || status}</Badge>;
+  };
+
+  const jumpStatusLabels: Record<number, string> = {
+    1: "Выплачено", 2: "Отклонено", 3: "Обрабатывается", 4: "Ожидает оплаты",
+    5: "Ошибка Jump", 6: "Удалён", 7: "Подтверждение", 8: "На подписании",
   };
 
   const handleStatusChange = async (
@@ -318,8 +337,8 @@ export default function AdminPayments() {
                     <TableHead>Агент</TableHead>
                     <TableHead>Сумма</TableHead>
                     <TableHead>Статус</TableHead>
+                    <TableHead>Jump</TableHead>
                     <TableHead>Метод</TableHead>
-                    <TableHead>ID Транзакции</TableHead>
                     <TableHead>Запрошено</TableHead>
                     <TableHead>Выплачено</TableHead>
                     <TableHead>Действия</TableHead>
@@ -337,19 +356,23 @@ export default function AdminPayments() {
                       </TableCell>
                       <TableCell className="font-medium">{formatCurrency(payment.amount)}</TableCell>
                       <TableCell>{getStatusBadge(payment.status)}</TableCell>
-                      <TableCell>{payment.method || "—"}</TableCell>
                       <TableCell>
-                        {editingId === payment.id ? (
-                          <Input
-                            value={transactionId}
-                            onChange={(e) => setTransactionId(e.target.value)}
-                            placeholder="TX123456"
-                            className="w-32"
-                          />
+                        {payment.payoutVia === "jump" ? (
+                          <div className="flex flex-col gap-1">
+                            <Badge variant="outline" className="text-amber-600 border-amber-300 w-fit">
+                              <Zap className="w-3 h-3 mr-1" />Jump
+                            </Badge>
+                            {payment.jumpStatus && (
+                              <span className="text-xs text-muted-foreground">
+                                {jumpStatusLabels[payment.jumpStatus] || `#${payment.jumpStatus}`}
+                              </span>
+                            )}
+                          </div>
                         ) : (
-                          payment.transactionId || "—"
+                          <span className="text-xs text-muted-foreground">Ручной</span>
                         )}
                       </TableCell>
+                      <TableCell>{payment.method || "—"}</TableCell>
                       <TableCell>
                         {payment.requestedAt
                           ? format(new Date(payment.requestedAt), "dd.MM.yyyy HH:mm", { locale: ru })
@@ -362,10 +385,29 @@ export default function AdminPayments() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-2">
-                          {/* Step 1: Generate act */}
+                          {/* Jump: Pay via Jump.Finance */}
+                          {payment.status === "pending" && payment.payoutVia !== "jump" && (
+                            <Button
+                              size="sm"
+                              variant="default"
+                              onClick={() => {
+                                if (confirm("Выплатить через Jump.Finance?")) {
+                                  payViaJump.mutate({ paymentId: payment.id });
+                                }
+                              }}
+                              disabled={payViaJump.isPending}
+                              className="bg-amber-500 hover:bg-amber-600"
+                            >
+                              <Zap className="w-3 h-3 mr-1" />
+                              Jump-выплата
+                            </Button>
+                          )}
+
+                          {/* Step 1: Generate act (manual flow) */}
                           {payment.status === "pending" && (
                             <Button
                               size="sm"
+                              variant="outline"
                               onClick={() => generateAct.mutate({ paymentId: payment.id })}
                               disabled={generateAct.isPending}
                             >
@@ -400,6 +442,27 @@ export default function AdminPayments() {
                                 Выплатить
                               </Button>
                             </>
+                          )}
+
+                          {/* Jump: retry failed payment */}
+                          {payment.status === "failed" && payment.payoutVia === "jump" && payment.jumpPaymentId && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => retryJumpPayment.mutate({ paymentId: payment.id })}
+                              disabled={retryJumpPayment.isPending}
+                            >
+                              <RotateCw className="w-3 h-3 mr-1" />
+                              Повторить Jump
+                            </Button>
+                          )}
+
+                          {/* Jump: processing status indicator */}
+                          {payment.payoutVia === "jump" && payment.status === "processing" && (
+                            <span className="text-xs text-blue-600">
+                              <Zap className="w-3 h-3 inline mr-1" />
+                              Обрабатывается Jump
+                            </span>
                           )}
 
                           {/* Legacy: manual processing for older payments */}

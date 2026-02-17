@@ -1,4 +1,4 @@
-import { eq, desc, and, like, sql } from "drizzle-orm";
+import { eq, desc, and, like, sql, isNotNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users, agents, referrals, payments, doctors, sessions, otpCodes, clinics, clinicReports, paymentActs, type InsertSession, type InsertClinicReport, type InsertPaymentAct } from "../drizzle/schema";
 import { ENV } from './_core/env';
@@ -341,6 +341,12 @@ export async function getAllPayments() {
     completedAt: payments.completedAt,
     createdAt: payments.createdAt,
     updatedAt: payments.updatedAt,
+    payoutVia: payments.payoutVia,
+    jumpPaymentId: payments.jumpPaymentId,
+    jumpStatus: payments.jumpStatus,
+    jumpStatusText: payments.jumpStatusText,
+    jumpAmountPaid: payments.jumpAmountPaid,
+    jumpCommission: payments.jumpCommission,
   })
     .from(payments)
     .leftJoin(agents, eq(payments.agentId, agents.id))
@@ -533,6 +539,8 @@ export async function getStatistics() {
 export async function updateAgentRequisites(agentId: number, data: {
   inn?: string;
   isSelfEmployed?: "yes" | "no" | "unknown";
+  payoutMethod?: "card" | "sbp" | "bank_account";
+  cardNumber?: string;
   bankName?: string;
   bankAccount?: string;
   bankBik?: string;
@@ -540,6 +548,60 @@ export async function updateAgentRequisites(agentId: number, data: {
   const db = await getDb();
   if (!db) return;
   await db.update(agents).set(data).where(eq(agents.id, agentId));
+}
+
+export async function updateAgentJumpData(agentId: number, data: {
+  jumpContractorId?: number;
+  jumpRequisiteId?: number;
+  jumpIdentified?: boolean;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(agents).set(data).where(eq(agents.id, agentId));
+}
+
+export async function getPendingJumpVerificationAgents() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(agents)
+    .where(and(
+      isNotNull(agents.jumpContractorId),
+      eq(agents.jumpIdentified, false),
+    ));
+}
+
+export async function updatePaymentJumpData(paymentId: number, data: {
+  jumpPaymentId?: string;
+  jumpStatus?: number;
+  jumpStatusText?: string;
+  jumpAmountPaid?: number;
+  jumpCommission?: number;
+  payoutVia?: "manual" | "jump";
+  status?: string;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  const updateData: Record<string, unknown> = { ...data };
+  if (data.status) {
+    updateData.status = data.status;
+  }
+  await db.update(payments).set(updateData as any).where(eq(payments.id, paymentId));
+}
+
+export async function getProcessingJumpPayments() {
+  const db = await getDb();
+  if (!db) return [];
+  const { and, isNotNull } = await import("drizzle-orm");
+  return db
+    .select()
+    .from(payments)
+    .where(
+      and(
+        eq(payments.payoutVia, "jump"),
+        eq(payments.status, "processing"),
+        isNotNull(payments.jumpPaymentId)
+      )
+    );
 }
 
 export async function updateAgentPersonalInfo(agentId: number, data: {

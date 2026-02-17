@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { User, CreditCard, Save, CheckCircle2, Edit } from "lucide-react";
+import { User, CreditCard, Save, CheckCircle2, Edit, Smartphone } from "lucide-react";
 import { useState, useEffect } from "react";
 import DashboardLayoutWrapper from "@/components/DashboardLayoutWrapper";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
@@ -25,6 +25,8 @@ export default function AgentProfile() {
 
   // Payment details state
   const [inn, setInn] = useState("");
+  const [payoutMethod, setPayoutMethod] = useState<"card" | "sbp" | "bank_account">("card");
+  const [cardNumber, setCardNumber] = useState("");
   const [bankName, setBankName] = useState("");
   const [bankAccount, setBankAccount] = useState("");
   const [bankBik, setBankBik] = useState("");
@@ -40,6 +42,8 @@ export default function AgentProfile() {
       setSpecialization(profile.specialization || "");
       setRole(profile.role || "");
       setInn(profile.inn || "");
+      setPayoutMethod(profile.payoutMethod || "card");
+      setCardNumber(profile.cardNumber || "");
       setBankName(profile.bankName || "");
       setBankAccount(profile.bankAccount || "");
       setBankBik(profile.bankBik || "");
@@ -69,9 +73,11 @@ export default function AgentProfile() {
     try {
       await updateProfile.mutateAsync({
         inn,
-        bankName,
-        bankAccount,
-        bankBik,
+        payoutMethod,
+        cardNumber: payoutMethod === "card" ? cardNumber : undefined,
+        bankName: payoutMethod === "bank_account" ? bankName : undefined,
+        bankAccount: payoutMethod === "bank_account" ? bankAccount : undefined,
+        bankBik: payoutMethod === "bank_account" ? bankBik : undefined,
         isSelfEmployed,
       });
       await refetch();
@@ -301,49 +307,109 @@ export default function AgentProfile() {
                 </p>
               </div>
 
-              {/* Bank Name */}
+              {/* Payout Method Selector */}
               <div>
-                <Label htmlFor="bankName">Название банка</Label>
-                <Input
-                  id="bankName"
-                  value={bankName}
-                  onChange={(e) => setBankName(e.target.value)}
-                  placeholder="Сбербанк"
-                  className="mt-2"
-                />
+                <Label>Способ получения выплат</Label>
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setPayoutMethod("card")}
+                    className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-colors ${
+                      payoutMethod === "card"
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "border-border hover:border-primary/50"
+                    }`}
+                  >
+                    <CreditCard className="w-5 h-5" />
+                    <span className="font-medium">На карту</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPayoutMethod("sbp")}
+                    className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-colors ${
+                      payoutMethod === "sbp"
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "border-border hover:border-primary/50"
+                    }`}
+                  >
+                    <Smartphone className="w-5 h-5" />
+                    <span className="font-medium">По СБП</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Bank Account */}
-              <div>
-                <Label htmlFor="bankAccount">Номер счета</Label>
-                <Input
-                  id="bankAccount"
-                  value={bankAccount}
-                  onChange={(e) => setBankAccount(e.target.value)}
-                  placeholder="40817810099910004312"
-                  maxLength={20}
-                  className="mt-2"
-                />
-                <p className="text-sm text-muted-foreground mt-1">
-                  20 цифр расчетного счета
-                </p>
-              </div>
+              {/* Card Number (shown when card selected) */}
+              {payoutMethod === "card" && (
+                <div>
+                  <Label htmlFor="cardNumber">Номер карты</Label>
+                  <Input
+                    id="cardNumber"
+                    value={cardNumber}
+                    onChange={(e) => setCardNumber(e.target.value.replace(/\D/g, ""))}
+                    placeholder="0000 0000 0000 0000"
+                    maxLength={19}
+                    className="mt-2"
+                  />
+                  <p className="text-sm text-muted-foreground mt-1">
+                    16-19 цифр номера банковской карты
+                  </p>
+                </div>
+              )}
 
-              {/* Bank BIK */}
-              <div>
-                <Label htmlFor="bankBik">БИК банка</Label>
-                <Input
-                  id="bankBik"
-                  value={bankBik}
-                  onChange={(e) => setBankBik(e.target.value)}
-                  placeholder="044525225"
-                  maxLength={9}
-                  className="mt-2"
-                />
-                <p className="text-sm text-muted-foreground mt-1">
-                  9 цифр банковского идентификационного кода
-                </p>
-              </div>
+              {/* SBP info (shown when SBP selected) */}
+              {payoutMethod === "sbp" && (
+                <div className="bg-muted/50 border border-border rounded-lg p-4">
+                  <Label className="text-muted-foreground">Телефон для СБП</Label>
+                  <p className="font-semibold text-lg mt-1">{phone || "Не указан"}</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Выплаты по СБП приходят на номер телефона из вашего профиля
+                  </p>
+                </div>
+              )}
+
+              {/* Bank details (legacy, shown when bank_account selected) */}
+              {payoutMethod === "bank_account" && (
+                <>
+                  <div>
+                    <Label htmlFor="bankName">Название банка</Label>
+                    <Input
+                      id="bankName"
+                      value={bankName}
+                      onChange={(e) => setBankName(e.target.value)}
+                      placeholder="Сбербанк"
+                      className="mt-2"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="bankAccount">Номер счета</Label>
+                    <Input
+                      id="bankAccount"
+                      value={bankAccount}
+                      onChange={(e) => setBankAccount(e.target.value)}
+                      placeholder="40817810099910004312"
+                      maxLength={20}
+                      className="mt-2"
+                    />
+                    <p className="text-sm text-muted-foreground mt-1">
+                      20 цифр расчетного счета
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="bankBik">БИК банка</Label>
+                    <Input
+                      id="bankBik"
+                      value={bankBik}
+                      onChange={(e) => setBankBik(e.target.value)}
+                      placeholder="044525225"
+                      maxLength={9}
+                      className="mt-2"
+                    />
+                    <p className="text-sm text-muted-foreground mt-1">
+                      9 цифр банковского идентификационного кода
+                    </p>
+                  </div>
+                </>
+              )}
 
               {/* Save Button */}
               <div className="flex items-center gap-3 pt-4">
@@ -376,8 +442,8 @@ export default function AgentProfile() {
                 <h4 className="font-semibold text-primary mb-2">💡 Важная информация</h4>
                 <ul className="text-sm space-y-1 text-muted-foreground">
                   <li>• Реквизиты нужны для выплаты вознаграждения</li>
-                  <li>• Проверьте правильность всех данных перед сохранением</li>
-                  <li>• Выплаты производятся в течение 3-5 рабочих дней</li>
+                  <li>• Выплаты на карту и по СБП обрабатываются автоматически</li>
+                  <li>• Для СБП используется номер телефона из профиля</li>
                   <li>• Минимальная сумма для вывода — 1 000 ₽</li>
                 </ul>
               </div>

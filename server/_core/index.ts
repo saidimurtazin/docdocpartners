@@ -75,18 +75,15 @@ async function startServer() {
       const session = await db.getSessionByToken(sessionToken);
       if (!session) { res.status(401).json({ error: "Unauthorized" }); return; }
 
-      const user = await db.getUserById(session.userId);
-      if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
+      const sessionAgent = await db.getAgentById(session.agentId);
+      if (!sessionAgent) { res.status(401).json({ error: "Unauthorized" }); return; }
 
       const act = await db.getPaymentActById(actId);
       if (!act) { res.status(404).json({ error: "Act not found" }); return; }
 
-      // Allow admins or the agent who owns the act
-      if (user.role !== "admin") {
-        const agent = await db.getAgentByTelegramId(user.openId);
-        if (!agent || agent.id !== act.agentId) {
-          res.status(403).json({ error: "Forbidden" }); return;
-        }
+      // Allow only the agent who owns the act (admins use separate auth)
+      if (sessionAgent.id !== act.agentId) {
+        res.status(403).json({ error: "Forbidden" }); return;
       }
 
       // Generate PDF on the fly
@@ -177,6 +174,109 @@ async function startServer() {
     }
   });
   console.log("[Cron] Clinic email polling scheduled (every 5 minutes)");
+
+  // Jump.Finance payment status polling — every minute
+  cron.schedule("* * * * *", async () => {
+    try {
+      const { jumpFinance, JUMP_STATUS } = await import("../jump-finance");
+      if (!jumpFinance.isConfigured) return;
+
+      const { getProcessingJumpPayments, updatePaymentJumpData, getAgentById } = await import("../db");
+      const processingPayments = await getProcessingJumpPayments();
+      if (processingPayments.length === 0) return;
+
+      console.log(`[Jump Cron] Polling ${processingPayments.length} payment(s)...`);
+
+      for (const payment of processingPayments) {
+        if (!payment.jumpPaymentId) continue;
+        try {
+          const { item } = await jumpFinance.getPayment(payment.jumpPaymentId);
+          const statusChanged = item.status.id !== payment.jumpStatus;
+
+          await updatePaymentJumpData(payment.id, {
+            jumpStatus: item.status.id,
+            jumpStatusText: item.status.title,
+            jumpAmountPaid: item.amount_paid ? Math.round(item.amount_paid * 100) : undefined,
+            jumpCommission: item.commission ? Math.round(item.commission * 100) : undefined,
+          });
+
+          // Handle final statuses
+          if (item.is_final && statusChanged) {
+            const agent = await getAgentById(payment.agentId);
+            const { notifyAgent } = await import("../telegram-bot-webhook");
+            const amountRub = (payment.amount / 100).toLocaleString("ru-RU");
+
+            if (item.status.id === JUMP_STATUS.PAID) {
+              await updatePaymentJumpData(payment.id, { status: "completed" });
+              if (agent?.telegramId) {
+                await notifyAgent(agent.telegramId, `✅ <b>Выплата ${amountRub} ₽ зачислена!</b>\n\nДеньги поступили на ваш счёт.`);
+              }
+            } else if (item.status.id === JUMP_STATUS.REJECTED) {
+              await updatePaymentJumpData(payment.id, { status: "failed" });
+              if (agent?.telegramId) {
+                await notifyAgent(agent.telegramId, `❌ <b>Выплата ${amountRub} ₽ отклонена</b>\n\nПроверьте ваши реквизиты и обратитесь в поддержку.`);
+              }
+            } else if (item.status.id === JUMP_STATUS.DELETED) {
+              await updatePaymentJumpData(payment.id, { status: "failed" });
+            }
+          }
+
+          // Notify about awaiting signature (non-final)
+          if (item.status.id === JUMP_STATUS.AWAITING_SIGNATURE && statusChanged) {
+            const agent = await getAgentById(payment.agentId);
+            if (agent?.telegramId) {
+              const { notifyAgent } = await import("../telegram-bot-webhook");
+              await notifyAgent(agent.telegramId, `📝 <b>Подпишите документы</b>\n\nДля завершения выплаты необходимо подписать акт в Jump.Finance.`);
+            }
+          }
+
+          // Notify admin about errors
+          if (item.status.id === JUMP_STATUS.ERROR && statusChanged) {
+            const { ENV: envConfig } = await import("./env");
+            if (envConfig.adminTelegramId) {
+              const agent = await getAgentById(payment.agentId);
+              const { notifyAgent } = await import("../telegram-bot-webhook");
+              await notifyAgent(envConfig.adminTelegramId, `⚠️ <b>Ошибка выплаты Jump</b>\n\nАгент: ${agent?.fullName || payment.agentId}\nСумма: ${(payment.amount / 100).toLocaleString("ru-RU")} ₽\nJump ID: ${payment.jumpPaymentId}`);
+            }
+          }
+        } catch (err) {
+          console.error(`[Jump Cron] Failed to poll payment ${payment.id}:`, err);
+        }
+      }
+    } catch (error) {
+      console.error("[Jump Cron] Poll failed:", error);
+    }
+  });
+  if (process.env.JUMP_FINANCE_API_KEY) {
+    console.log("[Cron] Jump.Finance payment polling scheduled (every minute)");
+  }
+
+  // Jump.Finance identification status polling — every 10 minutes
+  cron.schedule("*/10 * * * *", async () => {
+    try {
+      const { jumpFinance } = await import("../jump-finance");
+      if (!jumpFinance.isConfigured) return;
+
+      const { getPendingJumpVerificationAgents, updateAgentJumpData } = await import("../db");
+      const pendingAgents = await getPendingJumpVerificationAgents();
+      if (pendingAgents.length === 0) return;
+
+      for (const agent of pendingAgents) {
+        if (!agent.jumpContractorId) continue;
+        try {
+          const result = await jumpFinance.getIdentificationStatus(agent.jumpContractorId);
+          if (result.item.status === "approved") {
+            await updateAgentJumpData(agent.id, { jumpIdentified: true });
+            console.log(`[Jump Cron] Agent ${agent.id} verified successfully`);
+          }
+        } catch (err) {
+          // Ignore errors for individual agents (may not have identification yet)
+        }
+      }
+    } catch (error) {
+      console.error("[Jump Cron] Identification poll failed:", error);
+    }
+  });
 }
 
 startServer().catch(console.error);

@@ -448,6 +448,56 @@ DocDocPartner — B2B-платформа агентских рекомендац
           await db.removeAgentExcludedClinic(input.agentId, input.clinicId);
           return { success: true };
         }),
+
+      // Jump.Finance: verify self-employment via force-identify
+      verifyViaJump: protectedProcedure
+        .input(z.object({ agentId: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          const { jumpFinance, parseAgentName, getLegalFormId } = await import("./jump-finance");
+
+          if (!jumpFinance.isConfigured) {
+            throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Jump.Finance API не настроен" });
+          }
+
+          const agent = await db.getAgentById(input.agentId);
+          if (!agent) throw new TRPCError({ code: "NOT_FOUND", message: "Агент не найден" });
+          if (!agent.inn) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "У агента не указан ИНН" });
+          if (!agent.phone) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "У агента не указан телефон" });
+
+          // Create contractor in Jump if not exists
+          if (!agent.jumpContractorId) {
+            const { firstName, lastName, middleName } = parseAgentName(agent.fullName);
+            const result = await jumpFinance.createContractor({
+              phone: agent.phone,
+              firstName,
+              lastName,
+              middleName,
+              legalFormId: getLegalFormId(agent.isSelfEmployed),
+              tin: agent.inn,
+            });
+            await db.updateAgentJumpData(agent.id, { jumpContractorId: result.item.id });
+            agent.jumpContractorId = result.item.id;
+          }
+
+          // Force-identify to check self-employment
+          await jumpFinance.forceIdentify(agent.jumpContractorId);
+          await db.updateAgentJumpData(agent.id, { jumpIdentified: false });
+
+          return { success: true, message: "Проверка запущена. Результат появится в течение нескольких минут." };
+        }),
+
+      // Jump.Finance: toggle self-employment manually
+      updateSelfEmployment: protectedProcedure
+        .input(z.object({
+          agentId: z.number(),
+          isSelfEmployed: z.enum(["yes", "no", "unknown"]),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          await db.updateAgentRequisites(input.agentId, { isSelfEmployed: input.isSelfEmployed });
+          return { success: true };
+        }),
     }),
 
     // REFERRALS
@@ -586,6 +636,136 @@ DocDocPartner — B2B-платформа агентских рекомендац
             await db.updatePaymentStatus(id, "completed");
           }
           return { success: true, count: input.paymentIds.length };
+        }),
+
+      // Jump.Finance: pay out via Jump
+      payViaJump: protectedProcedure
+        .input(z.object({ paymentId: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          const { jumpFinance, parseAgentName, makeCustomerPaymentId, REQUISITE_TYPE, getLegalFormId } = await import("./jump-finance");
+
+          if (!jumpFinance.isConfigured) {
+            throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Jump.Finance API не настроен. Добавьте JUMP_FINANCE_API_KEY." });
+          }
+
+          const payment = await db.getPaymentById(input.paymentId);
+          if (!payment) throw new TRPCError({ code: "NOT_FOUND", message: "Платёж не найден" });
+          if (payment.status !== "pending") {
+            throw new TRPCError({ code: "BAD_REQUEST", message: `Платёж в статусе "${payment.status}", ожидается "pending"` });
+          }
+
+          const agent = await db.getAgentById(payment.agentId);
+          if (!agent) throw new TRPCError({ code: "NOT_FOUND", message: "Агент не найден" });
+          if (!agent.inn) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "У агента не указан ИНН" });
+          if (!agent.phone) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "У агента не указан телефон" });
+
+          // Determine payout method
+          const payoutMethod = agent.payoutMethod || "card";
+          if (payoutMethod === "card" && !agent.cardNumber) {
+            throw new TRPCError({ code: "PRECONDITION_FAILED", message: "У агента не указан номер карты" });
+          }
+          if (payoutMethod === "sbp" && !agent.phone) {
+            throw new TRPCError({ code: "PRECONDITION_FAILED", message: "У агента не указан телефон для СБП" });
+          }
+          if (payoutMethod === "bank_account" && (!agent.bankAccount || !agent.bankBik)) {
+            throw new TRPCError({ code: "PRECONDITION_FAILED", message: "У агента не заполнены банковские реквизиты" });
+          }
+
+          const { firstName, lastName, middleName } = parseAgentName(agent.fullName);
+          const amountRubles = payment.amount / 100; // convert kopecks to rubles
+          const customerPaymentId = makeCustomerPaymentId(payment.id);
+          const legalFormId = getLegalFormId(agent.isSelfEmployed);
+
+          let jumpPayment;
+
+          // If agent already has a Jump contractor ID and requisite ID, use standard payment
+          if (agent.jumpContractorId && agent.jumpRequisiteId) {
+            const result = await jumpFinance.createPayment({
+              contractorId: agent.jumpContractorId,
+              amount: amountRubles,
+              requisiteId: agent.jumpRequisiteId,
+              serviceName: "Вознаграждение за рекомендацию пациентов",
+              paymentPurpose: `Выплата агенту #${agent.id} по заявке #${payment.id}`,
+              customerPaymentId,
+            });
+            jumpPayment = result.item;
+          } else {
+            // Use smart payment (creates contractor + payment in one call)
+            const requisite: { typeId: number; accountNumber?: string } = payoutMethod === "card"
+              ? { typeId: REQUISITE_TYPE.CARD, accountNumber: agent.cardNumber! }
+              : payoutMethod === "sbp"
+                ? { typeId: REQUISITE_TYPE.SBP }
+                : { typeId: REQUISITE_TYPE.BANK_ACCOUNT, accountNumber: agent.bankAccount! };
+
+            const result = await jumpFinance.createSmartPayment({
+              phone: agent.phone,
+              firstName,
+              lastName,
+              middleName,
+              amount: amountRubles,
+              requisite,
+              serviceName: "Вознаграждение за рекомендацию пациентов",
+              paymentPurpose: `Выплата агенту #${agent.id} по заявке #${payment.id}`,
+              customerPaymentId,
+            });
+            jumpPayment = result.item;
+
+            // Save contractor ID from smart payment response
+            if (jumpPayment.contractor?.id && !agent.jumpContractorId) {
+              await db.updateAgentJumpData(agent.id, {
+                jumpContractorId: jumpPayment.contractor.id,
+              });
+            }
+          }
+
+          // Update payment with Jump data
+          await db.updatePaymentJumpData(payment.id, {
+            jumpPaymentId: jumpPayment.id,
+            jumpStatus: jumpPayment.status.id,
+            jumpStatusText: jumpPayment.status.title,
+            payoutVia: "jump",
+            status: "processing",
+          });
+
+          // Notify agent
+          try {
+            const { notifyAgent } = await import("./telegram-bot-webhook");
+            const methodText = payoutMethod === "card" ? "на карту" : payoutMethod === "sbp" ? "по СБП" : "на счёт";
+            await notifyAgent(
+              agent.telegramId,
+              `💳 <b>Выплата отправлена ${methodText}</b>\n\nСумма: ${amountRubles.toLocaleString("ru-RU")} ₽\nСтатус: Обрабатывается\n\nВы получите уведомление когда деньги поступят.`
+            );
+          } catch (err) {
+            console.error("[Jump] Failed to notify agent:", err);
+          }
+
+          return { success: true, jumpPaymentId: jumpPayment.id };
+        }),
+
+      // Jump.Finance: retry failed payment
+      retryJumpPayment: protectedProcedure
+        .input(z.object({ paymentId: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          const { jumpFinance, JUMP_STATUS } = await import("./jump-finance");
+
+          const payment = await db.getPaymentById(input.paymentId);
+          if (!payment?.jumpPaymentId) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Jump-платёж не найден" });
+          }
+          if (payment.jumpStatus !== JUMP_STATUS.ERROR) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Повторить можно только платежи со статусом Error" });
+          }
+
+          const result = await jumpFinance.repeatPayment(payment.jumpPaymentId);
+          await db.updatePaymentJumpData(payment.id, {
+            jumpStatus: result.item.status.id,
+            jumpStatusText: result.item.status.title,
+            status: "processing",
+          });
+
+          return { success: true };
         }),
     }),
 
@@ -1011,15 +1191,17 @@ DocDocPartner — B2B-платформа агентских рекомендац
         return { agent };
       }),
 
-    // Update agent requisites (INN, bank details)
+    // Update agent requisites (INN, bank details, card, SBP)
     updateRequisites: publicProcedure
       .input(z.object({
         telegramId: z.string(),
         inn: z.string(),
         isSelfEmployed: z.enum(["yes", "no", "unknown"]),
-        bankName: z.string(),
-        bankAccount: z.string(),
-        bankBik: z.string(),
+        payoutMethod: z.enum(["card", "sbp", "bank_account"]).optional(),
+        cardNumber: z.string().optional(),
+        bankName: z.string().optional(),
+        bankAccount: z.string().optional(),
+        bankBik: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         const agent = await db.getAgentByTelegramId(input.telegramId);
@@ -1030,9 +1212,11 @@ DocDocPartner — B2B-платформа агентских рекомендац
         await db.updateAgentRequisites(agent.id, {
           inn: input.inn,
           isSelfEmployed: input.isSelfEmployed,
-          bankName: input.bankName,
-          bankAccount: input.bankAccount,
-          bankBik: input.bankBik,
+          ...(input.payoutMethod && { payoutMethod: input.payoutMethod }),
+          ...(input.cardNumber && { cardNumber: input.cardNumber }),
+          ...(input.bankName && { bankName: input.bankName }),
+          ...(input.bankAccount && { bankAccount: input.bankAccount }),
+          ...(input.bankBik && { bankBik: input.bankBik }),
         });
 
         return { success: true };
@@ -1278,12 +1462,21 @@ DocDocPartner — B2B-платформа агентских рекомендац
     updateProfile: agentProcedure
       .input(z.object({
         inn: z.string().regex(/^\d{12}$/, "ИНН должен содержать 12 цифр").optional(),
+        isSelfEmployed: z.enum(["yes", "no", "unknown"]).optional(),
+        payoutMethod: z.enum(["card", "sbp", "bank_account"]).optional(),
+        cardNumber: z.string().optional(),
         bankAccount: z.string().regex(/^\d{20}$/, "Расчётный счёт должен содержать 20 цифр").optional(),
         bankName: z.string().min(2, "Укажите название банка").max(255).optional(),
         bankBik: z.string().regex(/^\d{9}$/, "БИК должен содержать 9 цифр").optional(),
-        isSelfEmployed: z.enum(["yes", "no", "unknown"]).optional(),
       }))
       .mutation(async ({ input, ctx }) => {
+        // Validate card number if provided
+        if (input.cardNumber) {
+          const { validateCardNumber } = await import("./jump-finance");
+          if (!validateCardNumber(input.cardNumber)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Некорректный номер карты" });
+          }
+        }
         await db.updateAgentRequisites(ctx.agentId, input);
         return { success: true };
       }),
@@ -1327,10 +1520,30 @@ DocDocPartner — B2B-платформа агентских рекомендац
 
         // Check agent has filled requisites
         const agent = await db.getAgentById(ctx.agentId);
-        if (!agent?.inn || !agent?.bankAccount || !agent?.bankName || !agent?.bankBik) {
+        if (!agent?.inn) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
-            message: "Заполните все реквизиты (ИНН, банк, счёт, БИК) в профиле перед запросом выплаты.",
+            message: "Заполните ИНН в профиле перед запросом выплаты.",
+          });
+        }
+
+        const pm = agent.payoutMethod || "card";
+        if (pm === "card" && !agent.cardNumber) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Укажите номер карты в профиле перед запросом выплаты.",
+          });
+        }
+        if (pm === "sbp" && !agent.phone) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Укажите номер телефона для выплаты по СБП.",
+          });
+        }
+        if (pm === "bank_account" && (!agent.bankAccount || !agent.bankName || !agent.bankBik)) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Заполните все банковские реквизиты (счёт, банк, БИК) в профиле.",
           });
         }
 

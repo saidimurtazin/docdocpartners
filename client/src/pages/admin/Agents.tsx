@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Download, Search, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Loader2, ArrowLeft, Download, Search, ChevronLeft, ChevronRight, X, CreditCard, Smartphone, Building2, Shield } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -42,6 +42,14 @@ export default function AdminAgents() {
   });
   const removeExcludedClinic = trpc.admin.agents.removeExcludedClinic.useMutation({
     onSuccess: () => refetch(),
+  });
+  const verifyViaJump = trpc.admin.agents.verifyViaJump.useMutation({
+    onSuccess: (data) => { alert(data.message); refetch(); },
+    onError: (err) => alert(`Ошибка: ${err.message}`),
+  });
+  const updateSelfEmployment = trpc.admin.agents.updateSelfEmployment.useMutation({
+    onSuccess: () => refetch(),
+    onError: (err) => alert(`Ошибка: ${err.message}`),
   });
   const exportAgents = trpc.admin.export.agents.useMutation();
 
@@ -206,13 +214,32 @@ export default function AdminAgents() {
                         {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB" }).format((agent.totalEarnings || 0) / 100)}
                       </TableCell>
                       <TableCell>
-                        {agent.inn || agent.bankAccount ? (
+                        {agent.inn || agent.bankAccount || (agent as any).cardNumber ? (
                           <div className="text-xs space-y-0.5">
                             <div>ИНН: {agent.inn || "—"}</div>
-                            <div>Банк: {agent.bankName || "—"}</div>
-                            <div>Счёт: {agent.bankAccount || "—"}</div>
-                            <div>БИК: {agent.bankBik || "—"}</div>
-                            <div>СЗ: {agent.isSelfEmployed === "yes" ? "Да" : agent.isSelfEmployed === "no" ? "Нет" : "?"}</div>
+                            {/* Payout method */}
+                            <div className="flex items-center gap-1">
+                              {(agent as any).payoutMethod === "sbp" ? (
+                                <><Smartphone className="w-3 h-3 text-blue-500" /> СБП: {agent.phone || "—"}</>
+                              ) : (agent as any).payoutMethod === "bank_account" ? (
+                                <><Building2 className="w-3 h-3" /> {agent.bankName || "—"} / {agent.bankAccount?.slice(-4) || "—"}</>
+                              ) : (
+                                <><CreditCard className="w-3 h-3 text-amber-500" /> {(agent as any).cardNumber ? `**** ${(agent as any).cardNumber.slice(-4)}` : "—"}</>
+                              )}
+                            </div>
+                            {/* Self-employment */}
+                            <div className="flex items-center gap-1">
+                              СЗ: {agent.isSelfEmployed === "yes" ? (
+                                <Badge variant="default" className="text-[10px] px-1 py-0 h-4">Да</Badge>
+                              ) : agent.isSelfEmployed === "no" ? (
+                                <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">Нет</Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">?</Badge>
+                              )}
+                              {(agent as any).jumpIdentified && (
+                                <span title="Верифицирован в Jump"><Shield className="w-3 h-3 text-green-500" /></span>
+                              )}
+                            </div>
                           </div>
                         ) : (
                           <span className="text-muted-foreground">Не указаны</span>
@@ -245,25 +272,63 @@ export default function AdminAgents() {
                         {agent.createdAt ? format(new Date(agent.createdAt), "dd.MM.yyyy", { locale: ru }) : "—"}
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
-                          {agent.status === "pending" && (
-                            <>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex gap-2">
+                            {agent.status === "pending" && (
+                              <>
+                                <Button size="sm" variant="default" onClick={() => handleStatusChangeAction(agent.id, "active")} disabled={updateStatus.isPending}>
+                                  Активировать
+                                </Button>
+                                <Button size="sm" variant="destructive" onClick={() => handleStatusChangeAction(agent.id, "rejected")} disabled={updateStatus.isPending}>
+                                  Отклонить
+                                </Button>
+                              </>
+                            )}
+                            {agent.status === "active" && (
+                              <Button size="sm" variant="destructive" onClick={() => handleStatusChangeAction(agent.id, "blocked")} disabled={updateStatus.isPending}>
+                                Заблокировать
+                              </Button>
+                            )}
+                            {agent.status === "blocked" && (
                               <Button size="sm" variant="default" onClick={() => handleStatusChangeAction(agent.id, "active")} disabled={updateStatus.isPending}>
-                                Активировать
+                                Разблокировать
                               </Button>
-                              <Button size="sm" variant="destructive" onClick={() => handleStatusChangeAction(agent.id, "rejected")} disabled={updateStatus.isPending}>
-                                Отклонить
-                              </Button>
-                            </>
-                          )}
-                          {agent.status === "active" && (
-                            <Button size="sm" variant="destructive" onClick={() => handleStatusChangeAction(agent.id, "blocked")} disabled={updateStatus.isPending}>
-                              Заблокировать
+                            )}
+                          </div>
+                          {/* Jump verification */}
+                          {agent.inn && !(agent as any).jumpIdentified && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => verifyViaJump.mutate({ agentId: agent.id })}
+                              disabled={verifyViaJump.isPending}
+                              className="text-xs"
+                            >
+                              <Shield className="w-3 h-3 mr-1" />
+                              Проверить Jump
                             </Button>
                           )}
-                          {agent.status === "blocked" && (
-                            <Button size="sm" variant="default" onClick={() => handleStatusChangeAction(agent.id, "active")} disabled={updateStatus.isPending}>
-                              Разблокировать
+                          {/* Self-employment toggle */}
+                          {agent.isSelfEmployed !== "yes" && agent.inn && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => updateSelfEmployment.mutate({ agentId: agent.id, isSelfEmployed: "yes" })}
+                              disabled={updateSelfEmployment.isPending}
+                              className="text-xs text-muted-foreground"
+                            >
+                              СЗ: Да
+                            </Button>
+                          )}
+                          {agent.isSelfEmployed === "yes" && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => updateSelfEmployment.mutate({ agentId: agent.id, isSelfEmployed: "no" })}
+                              disabled={updateSelfEmployment.isPending}
+                              className="text-xs text-muted-foreground"
+                            >
+                              СЗ: Нет
                             </Button>
                           )}
                         </div>

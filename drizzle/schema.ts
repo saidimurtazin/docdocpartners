@@ -74,6 +74,12 @@ export const agents = mysqlTable("agents", {
   bankAccount: varchar("bankAccount", { length: 20 }), // номер счета
   bankName: varchar("bankName", { length: 255 }), // название банка
   bankBik: varchar("bankBik", { length: 9 }), // БИК банка
+  // Jump.Finance integration
+  jumpContractorId: int("jumpContractorId"), // ID контрагента в Jump.Finance
+  payoutMethod: mysqlEnum("payoutMethod", ["card", "sbp", "bank_account"]).default("card").notNull(),
+  cardNumber: varchar("cardNumber", { length: 19 }), // номер карты (16-19 цифр)
+  jumpRequisiteId: int("jumpRequisiteId"), // ID реквизита в Jump.Finance
+  jumpIdentified: boolean("jumpIdentified").default(false), // прошёл идентификацию в Jump
   excludedClinics: text("excludedClinics"), // JSON array of clinic IDs, e.g. "[1,3,5]"
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -115,7 +121,14 @@ export const payments = mysqlTable("payments", {
   amount: int("amount").notNull(), // в копейках
   status: mysqlEnum("status", ["pending", "act_generated", "sent_for_signing", "signed", "ready_for_payment", "processing", "completed", "failed"]).default("pending").notNull(),
   method: varchar("method", { length: 50 }), // card, bank_transfer, etc.
+  payoutVia: mysqlEnum("payoutVia", ["manual", "jump"]).default("manual").notNull(),
   transactionId: varchar("transactionId", { length: 255 }),
+  // Jump.Finance payment tracking
+  jumpPaymentId: varchar("jumpPaymentId", { length: 50 }),
+  jumpStatus: int("jumpStatus"), // Jump status (1-8)
+  jumpStatusText: varchar("jumpStatusText", { length: 50 }),
+  jumpAmountPaid: int("jumpAmountPaid"), // фактически выплачено (копейки)
+  jumpCommission: int("jumpCommission"), // комиссия Jump (копейки)
   notes: text("notes"),
   requestedAt: timestamp("requestedAt").defaultNow().notNull(),
   completedAt: timestamp("completedAt"),
