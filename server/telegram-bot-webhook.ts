@@ -398,6 +398,17 @@ bot.command('start', async (ctx) => {
   const startPayload = (ctx.message?.text || '').split(' ')[1];
   const referredBy = startPayload && startPayload.startsWith('ref_') ? startPayload.replace('ref_', '') : undefined;
 
+  // Persist referral link in DB so it survives bot restarts
+  if (referredBy) {
+    try {
+      const { setAppSetting } = await import('./db');
+      await setAppSetting(`ref_pending_${userId}`, referredBy);
+      console.log(`[Telegram Bot] Saved pending referral: user ${userId} -> ref ${referredBy}`);
+    } catch (e) {
+      console.error('[Telegram Bot] Failed to save pending referral:', e);
+    }
+  }
+
   await ctx.reply(
     '👋 <b>Добро пожаловать в DocDocPartner!</b>\n\n' +
     'Я помогу вам зарегистрироваться в партнерской программе для врачей и медицинских специалистов.\n\n' +
@@ -1447,9 +1458,24 @@ bot.action('contract_accept', async (ctx) => {
     const referralCode = crypto.randomBytes(6).toString('hex');
 
     // Validate referredBy agent exists (if provided)
+    // First check session, then fallback to DB (survives bot restarts)
+    let referredByValue = data.referredBy;
+    if (!referredByValue) {
+      try {
+        const { getAppSetting } = await import('./db');
+        const dbRef = await getAppSetting(`ref_pending_${userId}`);
+        if (dbRef) {
+          referredByValue = dbRef;
+          console.log(`[Telegram Bot] Restored referral from DB: user ${userId} -> ref ${dbRef}`);
+        }
+      } catch (e) {
+        console.error('[Telegram Bot] Failed to read pending referral:', e);
+      }
+    }
+
     let referredByAgentId: number | null = null;
-    if (data.referredBy) {
-      const parsedId = parseInt(data.referredBy, 10);
+    if (referredByValue) {
+      const parsedId = parseInt(referredByValue, 10);
       if (!isNaN(parsedId) && parsedId > 0) {
         const [referrer] = await db.select({ id: agents.id }).from(agents).where(eq(agents.id, parsedId));
         if (referrer) {
@@ -1476,6 +1502,17 @@ bot.action('contract_accept', async (ctx) => {
       referredBy: referredByAgentId,
       excludedClinics: excludedClinicsJson,
     });
+
+    // Clean up pending referral from DB
+    try {
+      const { setAppSetting } = await import('./db');
+      // Delete by setting empty — or we could add a delete function, but this is fine
+      const settingsDb = await getDb();
+      if (settingsDb) {
+        const { appSettings } = await import('../drizzle/schema');
+        await settingsDb.delete(appSettings).where(eq(appSettings.key, `ref_pending_${userId}`));
+      }
+    } catch (e) { /* ignore cleanup errors */ }
 
     // Credit referral bonus to inviting agent (1000 RUB = 100000 kopecks)
     if (referredByAgentId) {
