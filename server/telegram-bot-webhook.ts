@@ -1545,9 +1545,26 @@ bot.action(/^excl_clinic_(\d+)$/, async (ctx) => {
   if (isCallbackSpamming(userId)) { await ctx.answerCbQuery(); return; }
 
   const session = getSession(userId);
+
+  // If session was lost (e.g. after bot restart), restore it for clinic exclusion
   if (session.registrationStep !== 'excluded_clinics') {
-    await ctx.answerCbQuery();
-    return;
+    // Check if this user is in the middle of registration (agent exists but pending, or not yet created)
+    const checkDb = await getDb();
+    if (checkDb) {
+      const [existingAgent] = await checkDb.select().from(schema.agents).where(eq(schema.agents.telegramId, userId.toString()));
+      if (!existingAgent) {
+        // Agent not yet created — session was lost during registration, restore excluded_clinics step
+        session.registrationStep = 'excluded_clinics';
+        if (!session.tempData) session.tempData = {};
+        if (!session.tempData.excludedClinics) session.tempData.excludedClinics = [];
+      } else {
+        await ctx.answerCbQuery('Регистрация уже завершена');
+        return;
+      }
+    } else {
+      await ctx.answerCbQuery();
+      return;
+    }
   }
 
   const clinicId = parseInt(ctx.match[1], 10);
@@ -1604,9 +1621,24 @@ bot.action('excl_clinics_done', async (ctx) => {
   if (isCallbackSpamming(userId)) { await ctx.answerCbQuery(); return; }
 
   const session = getSession(userId);
+
+  // Restore session if lost after bot restart
   if (session.registrationStep !== 'excluded_clinics') {
-    await ctx.answerCbQuery();
-    return;
+    const checkDb = await getDb();
+    if (checkDb) {
+      const [existingAgent] = await checkDb.select().from(schema.agents).where(eq(schema.agents.telegramId, userId.toString()));
+      if (!existingAgent) {
+        session.registrationStep = 'excluded_clinics';
+        if (!session.tempData) session.tempData = {};
+        if (!session.tempData.excludedClinics) session.tempData.excludedClinics = [];
+      } else {
+        await ctx.answerCbQuery('Регистрация уже завершена');
+        return;
+      }
+    } else {
+      await ctx.answerCbQuery();
+      return;
+    }
   }
 
   await ctx.answerCbQuery();
