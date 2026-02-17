@@ -64,9 +64,7 @@ const mainMenuKeyboard = Markup.keyboard([
 // Role selection keyboard
 const roleKeyboard = Markup.inlineKeyboard([
   [Markup.button.callback('Врач', 'role_doctor')],
-  [Markup.button.callback('Медсестра', 'role_nurse')],
   [Markup.button.callback('Координатор', 'role_coordinator')],
-  [Markup.button.callback('Администратор', 'role_admin')],
   [Markup.button.callback('Регистратор', 'role_registrar')],
   [Markup.button.callback('Прочее', 'role_other')]
 ]);
@@ -258,9 +256,7 @@ bot.action(/^role_(.+)$/, async (ctx) => {
 
   const roleMap: Record<string, string> = {
     doctor: 'Врач',
-    nurse: 'Медсестра',
     coordinator: 'Координатор',
-    admin: 'Администратор',
     registrar: 'Регистратор',
     other: 'Прочее'
   };

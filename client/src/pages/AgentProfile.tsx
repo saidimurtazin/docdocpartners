@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { User, CreditCard, Save, CheckCircle2, Edit, Smartphone } from "lucide-react";
+import { User, CreditCard, Save, CheckCircle2, Edit, Smartphone, ExternalLink } from "lucide-react";
 import { useState, useEffect } from "react";
 import DashboardLayoutWrapper from "@/components/DashboardLayoutWrapper";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
@@ -291,19 +291,53 @@ export default function AgentProfile() {
               {/* Self-employed Status */}
               <div>
                 <Label htmlFor="selfEmployed">Статус самозанятого</Label>
-                <select
-                  id="selfEmployed"
-                  value={isSelfEmployed}
-                  onChange={(e) => setIsSelfEmployed(e.target.value as "yes" | "no" | "unknown")}
-                  className="w-full mt-2 px-3 py-2 border border-input rounded-md bg-background"
-                >
-                  <option value="unknown">Не указано</option>
-                  <option value="yes">Да, я самозанятый</option>
-                  <option value="no">Нет</option>
-                </select>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Самозанятые получают 10% вознаграждения, остальные — 7%
-                </p>
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsSelfEmployed("yes")}
+                    className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-colors ${
+                      isSelfEmployed === "yes"
+                        ? "border-green-500 bg-green-50 text-green-700"
+                        : "border-border hover:border-green-300"
+                    }`}
+                  >
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span className="font-medium">Да, самозанятый</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsSelfEmployed("no")}
+                    className={`flex items-center gap-2 p-3 rounded-lg border-2 transition-colors ${
+                      isSelfEmployed === "no"
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "border-border hover:border-primary/50"
+                    }`}
+                  >
+                    <span className="font-medium">Нет, не самозанятый</span>
+                  </button>
+                </div>
+
+                {/* Benefit box for self-employed */}
+                <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-green-800 mb-2">Почему стоит стать самозанятым?</h4>
+                  <ul className="text-sm space-y-1 text-green-700">
+                    <li>&#x2022; Вознаграждение <b>10%</b> вместо 7%</li>
+                    <li>&#x2022; Налог всего <b>6%</b> (платится автоматически)</li>
+                    <li>&#x2022; Регистрация за <b>10 минут</b> в приложении</li>
+                    <li>&#x2022; Никакой отчётности — всё делает приложение</li>
+                  </ul>
+                  {isSelfEmployed !== "yes" && (
+                    <a
+                      href="https://lknpd.nalog.ru/auth/login"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Стать самозанятым (Мой Налог)
+                    </a>
+                  )}
+                </div>
               </div>
 
               {/* INN */}
