@@ -1,21 +1,25 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Shield, 
-  FileCheck, 
-  Phone, 
-  Calendar, 
-  CheckCircle2, 
+import {
+  Shield,
+  FileCheck,
+  Phone,
+  Calendar,
+  CheckCircle2,
   AlertCircle,
   Banknote,
   Clock,
   Users,
   FileText,
   Lock,
-  TrendingUp
+  TrendingUp,
+  Building2,
+  Loader2
 } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 
 export default function KnowledgeBase() {
+  const { data: clinics, isLoading: clinicsLoading } = trpc.public.clinics.useQuery();
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -283,55 +287,97 @@ export default function KnowledgeBase() {
               <CardContent className="space-y-6">
                 <div className="prose prose-sm max-w-none">
                   <p className="text-muted-foreground leading-relaxed">
-                    Все договоры и документы подписываются электронно через <strong>Контур.Сайн</strong> — 
-                    сервис электронной подписи от СКБ Контур, имеющий юридическую силу согласно 63-ФЗ.
+                    Выплаты и подписание документов осуществляются через нашего партнёра <strong>Jump.Finance</strong> с
+                    использованием сервиса электронной подписи <strong>Контур.Сайн</strong> (юридическая сила согласно 63-ФЗ).
                   </p>
                 </div>
 
                 <div className="space-y-4">
                   <div className="p-4 rounded-lg border">
-                    <h4 className="font-semibold mb-3">Процесс подписания:</h4>
-                    <ol className="space-y-3 text-sm text-muted-foreground">
-                      <li className="flex gap-3">
-                        <span className="flex-shrink-0 font-semibold text-primary">1.</span>
-                        <span>После регистрации вы получаете договор оферты на email</span>
-                      </li>
-                      <li className="flex gap-3">
-                        <span className="flex-shrink-0 font-semibold text-primary">2.</span>
-                        <span>Переходите по ссылке в письме и проверяете условия договора</span>
-                      </li>
-                      <li className="flex gap-3">
-                        <span className="flex-shrink-0 font-semibold text-primary">3.</span>
-                        <span>Подписываете документ через SMS-код (простая электронная подпись)</span>
-                      </li>
-                      <li className="flex gap-3">
-                        <span className="flex-shrink-0 font-semibold text-primary">4.</span>
-                        <span>Получаете подписанный экземпляр на email</span>
-                      </li>
-                    </ol>
+                    <h4 className="font-semibold mb-3">📋 Договор оферты</h4>
+                    <p className="text-sm text-muted-foreground">
+                      При регистрации вы соглашаетесь с договором оферты, который размещён по ссылке:{' '}
+                      <a href="/oferta" className="text-primary hover:underline font-medium">договор оферты</a>.
+                    </p>
                   </div>
 
                   <div className="grid md:grid-cols-2 gap-4">
                     <div className="p-4 rounded-lg bg-muted/50">
-                      <h4 className="font-semibold mb-2">Какие документы подписываются:</h4>
+                      <h4 className="font-semibold mb-2">👤 Физическое лицо</h4>
+                      <p className="text-sm text-muted-foreground mb-2">При выводе средств:</p>
                       <ul className="text-sm text-muted-foreground space-y-1">
-                        <li>• Договор оферты (при регистрации)</li>
-                        <li>• Акт оказанных услуг (при выплате)</li>
-                        <li>• Дополнительные соглашения (при изменении условий)</li>
+                        <li>• Вы подписываете <strong>Акт оказанных услуг</strong> через Контур.Сайн</li>
+                        <li>• После подписания получаете выплату на карту</li>
                       </ul>
                     </div>
 
                     <div className="p-4 rounded-lg bg-muted/50">
-                      <h4 className="font-semibold mb-2">Преимущества Контур.Сайн:</h4>
+                      <h4 className="font-semibold mb-2">📱 Самозанятый</h4>
+                      <p className="text-sm text-muted-foreground mb-2">При выводе средств:</p>
                       <ul className="text-sm text-muted-foreground space-y-1">
-                        <li>• Юридическая сила согласно 63-ФЗ</li>
-                        <li>• Подписание за 1 минуту</li>
-                        <li>• Не нужна квалифицированная ЭП</li>
-                        <li>• Хранение документов в облаке</li>
+                        <li>• Вы получаете <strong>поручение на оказание услуг</strong> с суммой выплаты</li>
+                        <li>• Получаете оплату на карту</li>
+                        <li>• Чек формируется <strong>автоматически</strong> — он является фактом оказания услуг</li>
+                        <li>• Отдельно подписывать акт <strong>не нужно</strong></li>
                       </ul>
                     </div>
                   </div>
+
+                  <div className="p-4 rounded-lg border bg-primary/5">
+                    <h4 className="font-semibold mb-2">Преимущества:</h4>
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      <li>✅ Юридическая сила (63-ФЗ)</li>
+                      <li>✅ Быстрая выплата через Jump.Finance</li>
+                      <li>✅ Автоматическое формирование чеков для самозанятых</li>
+                      <li>✅ Электронное подписание за 1 минуту</li>
+                    </ul>
+                  </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Partner Clinics - dynamic from DB */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <Building2 className="w-6 h-6 text-primary" />
+                  </div>
+                  <CardTitle className="text-2xl">Клиники-партнёры</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {clinicsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : clinics && clinics.length > 0 ? (
+                  <>
+                    <p className="text-muted-foreground">
+                      {clinics.length} клиник в программе:
+                    </p>
+                    <div className="grid md:grid-cols-2 gap-3">
+                      {clinics.map((clinic: any, idx: number) => (
+                        <div key={clinic.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                          <span className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold text-primary">
+                            {idx + 1}
+                          </span>
+                          <div>
+                            <div className="font-medium">{clinic.name}</div>
+                            {clinic.specialization && (
+                              <div className="text-xs text-muted-foreground">{clinic.specialization}</div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-4">
+                      Все клиники проверены и имеют лицензии Минздрава.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-muted-foreground">Список клиник загружается...</p>
+                )}
               </CardContent>
             </Card>
 
