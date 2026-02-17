@@ -18,6 +18,7 @@ export default function AgentPayments() {
   const [amount, setAmount] = useState("");
   const [error, setError] = useState("");
   const [signingPaymentId, setSigningPaymentId] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const handleRequestPayment = async () => {
     setError("");
@@ -141,7 +142,6 @@ export default function AgentPayments() {
   const bonusUnlocked = paidReferralCount >= bonusUnlockThreshold;
   const referredAgentsCount = stats?.referredAgentsCount || 0;
   const referralLink = stats?.referralLink || '';
-  const [copied, setCopied] = useState(false);
 
   const copyReferralLink = () => {
     if (referralLink) {
