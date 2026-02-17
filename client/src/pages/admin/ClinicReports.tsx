@@ -37,7 +37,7 @@ export default function AdminClinicReports() {
   // Dialogs
   const [rejectDialog, setRejectDialog] = useState<{ id: number } | null>(null);
   const [rejectNotes, setRejectNotes] = useState("");
-  const [approveDialog, setApproveDialog] = useState<{ id: number; referralId: number | null; treatmentAmount: number } | null>(null);
+  const [approveDialog, setApproveDialog] = useState<{ id: number; referralId: number | null; treatmentAmount: number; clinicName?: string } | null>(null);
   const [approveReferralId, setApproveReferralId] = useState("");
   const [approveTreatmentAmount, setApproveTreatmentAmount] = useState("");
   const [approveNotes, setApproveNotes] = useState("");
@@ -55,6 +55,7 @@ export default function AdminClinicReports() {
     pageSize: PAGE_SIZE,
   });
   const { data: stats } = trpc.admin.clinicReports.stats.useQuery();
+  const { data: clinicsList } = trpc.admin.clinics.list.useQuery();
   const { data: searchReferrals } = trpc.admin.clinicReports.searchReferrals.useQuery(
     { search: linkSearch },
     { enabled: linkDialog !== null && linkSearch.length >= 2 }
@@ -114,7 +115,7 @@ export default function AdminClinicReports() {
   };
 
   const openApproveDialog = (report: any) => {
-    setApproveDialog({ id: report.id, referralId: report.referralId, treatmentAmount: report.treatmentAmount || 0 });
+    setApproveDialog({ id: report.id, referralId: report.referralId, treatmentAmount: report.treatmentAmount || 0, clinicName: report.clinicName });
     setApproveReferralId(report.referralId ? String(report.referralId) : "");
     setApproveTreatmentAmount(report.treatmentAmount ? String(report.treatmentAmount / 100) : "");
     setApproveNotes("");
@@ -422,11 +423,16 @@ export default function AdminClinicReports() {
                 onChange={(e) => setApproveTreatmentAmount(e.target.value)}
                 placeholder="0"
               />
-              {approveTreatmentAmount && parseFloat(approveTreatmentAmount) > 0 && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Комиссия агента (10%): {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB" }).format(parseFloat(approveTreatmentAmount) * 0.1)}
-                </p>
-              )}
+              {approveTreatmentAmount && parseFloat(approveTreatmentAmount) > 0 && (() => {
+                const clinicRate = clinicsList?.find((c: any) =>
+                  c.name?.toLowerCase() === approveDialog?.clinicName?.toLowerCase()
+                )?.commissionRate || 10;
+                return (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Комиссия агента ({clinicRate}%): {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB" }).format(parseFloat(approveTreatmentAmount) * clinicRate / 100)}
+                  </p>
+                );
+              })()}
             </div>
             <div>
               <label className="text-sm font-medium">Комментарий</label>

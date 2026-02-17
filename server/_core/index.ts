@@ -208,6 +208,9 @@ async function startServer() {
 
             if (item.status.id === JUMP_STATUS.PAID) {
               await updatePaymentJumpData(payment.id, { status: "completed" });
+              // Deduct from agent's totalEarnings
+              const { deductPaymentFromEarnings } = await import("../db");
+              await deductPaymentFromEarnings(payment.agentId, payment.amount);
               if (agent?.telegramId) {
                 await notifyAgent(agent.telegramId, `✅ <b>Выплата ${amountRub} ₽ зачислена!</b>\n\nДеньги поступили на ваш счёт.`);
               }
@@ -277,6 +280,47 @@ async function startServer() {
       console.error("[Jump Cron] Identification poll failed:", error);
     }
   });
+
+  // Referral bonus unlock check — every hour
+  cron.schedule("0 * * * *", async () => {
+    try {
+      const { getDb, unlockBonusToEarnings } = await import("../db");
+      const { agents: agentsTable } = await import("../../drizzle/schema");
+      const { gt } = await import("drizzle-orm");
+
+      const database = await getDb();
+      if (!database) return;
+
+      // Find agents with pending bonus points
+      const agentsWithBonus = await database.select()
+        .from(agentsTable)
+        .where(gt(agentsTable.bonusPoints, 0));
+
+      if (agentsWithBonus.length === 0) return;
+      console.log(`[Bonus Cron] Checking ${agentsWithBonus.length} agent(s) with pending bonus...`);
+
+      for (const agent of agentsWithBonus) {
+        try {
+          const unlocked = await unlockBonusToEarnings(agent.id);
+          if (unlocked && agent.telegramId) {
+            const { notifyAgent } = await import("../telegram-bot-webhook");
+            const bonusRub = ((agent.bonusPoints || 0) / 100).toLocaleString("ru-RU");
+            await notifyAgent(
+              agent.telegramId,
+              `🎉 <b>Бонус разблокирован!</b>\n\n` +
+              `Ваш реферальный бонус ${bonusRub} ₽ добавлен к балансу.\n` +
+              `Поздравляем — вы рекомендовали 10+ пациентов с оплатой!`
+            );
+          }
+        } catch (err) {
+          console.error(`[Bonus Cron] Error for agent ${agent.id}:`, err);
+        }
+      }
+    } catch (error) {
+      console.error("[Bonus Cron] Failed:", error);
+    }
+  });
+  console.log("[Cron] Referral bonus unlock check scheduled (every hour)");
 }
 
 startServer().catch(console.error);

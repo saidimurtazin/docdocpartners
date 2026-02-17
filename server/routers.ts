@@ -9,6 +9,45 @@ import { TRPCError } from "@trpc/server";
 import { SignJWT } from "jose";
 import { notifyNewDeviceLogin } from "./telegram-notifications";
 
+/**
+ * Определить эффективную ставку комиссии для агента
+ * Приоритет: индивидуальные тарифы агента > глобальные тарифы > null (использовать ставку клиники)
+ */
+async function getAgentEffectiveCommissionRate(agentId: number): Promise<number | null> {
+  const agent = await db.getAgentById(agentId);
+  if (!agent) return null;
+
+  let tiers: { minMonthlyRevenue: number; commissionRate: number }[] = [];
+
+  // 1. Check per-agent override
+  if (agent.commissionOverride) {
+    try { tiers = JSON.parse(agent.commissionOverride); } catch { /* ignore */ }
+  }
+
+  // 2. If no agent override, check global settings
+  if (tiers.length === 0) {
+    const globalJson = await db.getAppSetting("agentCommissionTiers");
+    if (globalJson) {
+      try { tiers = JSON.parse(globalJson); } catch { /* ignore */ }
+    }
+  }
+
+  if (tiers.length === 0) return null; // no tier config → use clinic rate
+
+  // Get agent's monthly revenue
+  const monthlyRevenue = await db.getAgentMonthlyRevenue(agentId);
+
+  // Sort descending by threshold, pick the first matching tier
+  const sorted = [...tiers].sort((a, b) => b.minMonthlyRevenue - a.minMonthlyRevenue);
+  for (const tier of sorted) {
+    if (monthlyRevenue >= tier.minMonthlyRevenue) {
+      return tier.commissionRate;
+    }
+  }
+
+  return tiers[0]?.commissionRate || null;
+}
+
 function getJwtSecret(): Uint8Array {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
@@ -498,6 +537,35 @@ DocDocPartner — B2B-платформа агентских рекомендац
           await db.updateAgentRequisites(input.agentId, { isSelfEmployed: input.isSelfEmployed });
           return { success: true };
         }),
+
+      // Update agent commission override (individual tiers)
+      updateCommissionOverride: protectedProcedure
+        .input(z.object({
+          agentId: z.number(),
+          commissionOverride: z.string().nullable(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          if (input.commissionOverride) {
+            try {
+              const parsed = JSON.parse(input.commissionOverride);
+              if (!Array.isArray(parsed)) throw new Error("Must be array");
+              for (const tier of parsed) {
+                if (typeof tier.minMonthlyRevenue !== "number" || typeof tier.commissionRate !== "number") {
+                  throw new Error("Invalid tier format");
+                }
+              }
+            } catch (e: any) {
+              throw new TRPCError({ code: "BAD_REQUEST", message: `Неверный формат: ${e.message}` });
+            }
+          }
+          const database = await db.getDb();
+          if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+          const { agents } = await import("../drizzle/schema");
+          const { eq } = await import("drizzle-orm");
+          await database.update(agents).set({ commissionOverride: input.commissionOverride }).where(eq(agents.id, input.agentId));
+          return { success: true };
+        }),
     }),
 
     // REFERRALS
@@ -653,6 +721,11 @@ DocDocPartner — B2B-платформа агентских рекомендац
           if (!payment) throw new TRPCError({ code: "NOT_FOUND", message: "Платёж не найден" });
           if (payment.status !== "pending") {
             throw new TRPCError({ code: "BAD_REQUEST", message: `Платёж в статусе "${payment.status}", ожидается "pending"` });
+          }
+
+          // Idempotency: if payment already has a Jump ID, don't create another
+          if (payment.jumpPaymentId) {
+            throw new TRPCError({ code: "CONFLICT", message: `Платёж уже отправлен в Jump (ID: ${payment.jumpPaymentId}). Используйте повторную отправку.` });
           }
 
           const agent = await db.getAgentById(payment.agentId);
@@ -920,6 +993,23 @@ DocDocPartner — B2B-платформа агентских рекомендац
       return db.getStatistics();
     }),
 
+    // APP SETTINGS (global commission tiers, etc.)
+    settings: router({
+      get: protectedProcedure
+        .input(z.object({ key: z.string() }))
+        .query(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          return db.getAppSetting(input.key);
+        }),
+      set: protectedProcedure
+        .input(z.object({ key: z.string(), value: z.string() }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          await db.setAppSetting(input.key, input.value);
+          return { success: true };
+        }),
+    }),
+
     // EXPORT
     export: router({
       referrals: protectedProcedure
@@ -1031,10 +1121,24 @@ DocDocPartner — B2B-платформа агентских рекомендац
           if (refId) {
             await db.linkClinicReportToReferral(input.id, refId);
 
-            // Update referral amounts
+            // Update referral amounts — use clinic commission rate + agent tier override
             const amount = input.treatmentAmount || report.treatmentAmount || 0;
             if (amount > 0) {
-              const commission = Math.round(amount * 0.1); // 10%
+              // 1. Get clinic commission rate (default 10%)
+              let commissionRate = 10;
+              const referral = await db.getReferralById(refId);
+              if (referral?.clinic) {
+                const clinic = await db.getClinicByName(referral.clinic);
+                if (clinic?.commissionRate) commissionRate = clinic.commissionRate;
+              }
+
+              // 2. Check agent commission tier override
+              if (referral) {
+                const agentRate = await getAgentEffectiveCommissionRate(referral.agentId);
+                if (agentRate !== null) commissionRate = agentRate;
+              }
+
+              const commission = Math.round(amount * commissionRate / 100);
               await db.updateReferralAmounts(refId, amount, commission);
               await db.updateReferralStatus(refId, "visited");
             }
@@ -1347,13 +1451,21 @@ DocDocPartner — B2B-платформа агентских рекомендац
         ? Math.round((completedReferrals.length / referrals.length) * 100)
         : 0;
 
+      // Bonus info
+      const paidReferralCount = referrals.filter(r => r.status === "paid").length;
+      const pendingPaymentsSum = await db.getAgentPendingPaymentsSum(ctx.agentId);
+
       return {
         totalEarnings: agent.totalEarnings || 0,
+        availableBalance: Math.max(0, (agent.totalEarnings || 0) - pendingPaymentsSum),
         activeReferrals: activeReferrals.length,
         conversionRate,
         thisMonthEarnings,
         totalReferrals: referrals.length,
         completedReferrals: completedReferrals.length,
+        bonusPoints: agent.bonusPoints || 0,
+        paidReferralCount,
+        bonusUnlockThreshold: 10,
       };
     }),
 
@@ -1545,6 +1657,16 @@ DocDocPartner — B2B-платформа агентских рекомендац
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
             message: "Заполните все банковские реквизиты (счёт, банк, БИК) в профиле.",
+          });
+        }
+
+        // Validate amount against available balance
+        const pendingSum = await db.getAgentPendingPaymentsSum(ctx.agentId);
+        const availableBalance = (agent.totalEarnings || 0) - pendingSum;
+        if (input.amount > availableBalance) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Недостаточно средств. Доступно: ${(availableBalance / 100).toLocaleString("ru-RU")} ₽`,
           });
         }
 

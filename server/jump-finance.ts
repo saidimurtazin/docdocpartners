@@ -169,30 +169,76 @@ class JumpFinanceClient {
       "Client-Key": this.apiKey,
     };
 
-    const opts: RequestInit = { method, headers };
-    if (body && (method === "POST" || method === "PUT" || method === "PATCH")) {
-      opts.body = JSON.stringify(body);
-    }
+    const MAX_RETRIES = 3;
+    const TIMEOUT_MS = 30000;
 
-    console.log(`[Jump.Finance] ${method} ${path}`, body ? JSON.stringify(body).slice(0, 200) : "");
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-    const res = await fetch(url, opts);
+      const opts: RequestInit = { method, headers, signal: controller.signal };
+      if (body && (method === "POST" || method === "PUT" || method === "PATCH")) {
+        opts.body = JSON.stringify(body);
+      }
 
-    if (!res.ok) {
-      let errorBody: JumpErrorResponse | null = null;
+      if (attempt === 0) {
+        console.log(`[Jump.Finance] ${method} ${path}`, body ? JSON.stringify(body).slice(0, 200) : "");
+      } else {
+        console.log(`[Jump.Finance] Retry #${attempt} ${method} ${path}`);
+      }
+
       try {
-        errorBody = await res.json() as JumpErrorResponse;
-      } catch { /* ignore parse errors */ }
+        const res = await fetch(url, opts);
+        clearTimeout(timeoutId);
 
-      const detail = errorBody?.error?.detail || res.statusText;
-      console.error(`[Jump.Finance] Error ${res.status}: ${detail}`, errorBody?.error?.fields);
-      throw new JumpFinanceError(res.status, errorBody, `Jump.Finance API error ${res.status}: ${detail}`);
+        // Retry on 5xx or 429 (rate limit)
+        if ((res.status >= 500 || res.status === 429) && attempt < MAX_RETRIES) {
+          const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+          console.warn(`[Jump.Finance] ${res.status} on ${path}, retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+
+        if (!res.ok) {
+          let errorBody: JumpErrorResponse | null = null;
+          try {
+            errorBody = await res.json() as JumpErrorResponse;
+          } catch { /* ignore parse errors */ }
+
+          const detail = errorBody?.error?.detail || res.statusText;
+          console.error(`[Jump.Finance] Error ${res.status}: ${detail}`, errorBody?.error?.fields);
+          throw new JumpFinanceError(res.status, errorBody, `Jump.Finance API error ${res.status}: ${detail}`);
+        }
+
+        // Some endpoints return 204 No Content
+        if (res.status === 204) return {} as T;
+
+        return await res.json() as T;
+      } catch (error: any) {
+        clearTimeout(timeoutId);
+
+        // If it's already a JumpFinanceError, throw it directly
+        if (error instanceof JumpFinanceError) throw error;
+
+        // Timeout (AbortError) or network error — retry
+        if (attempt < MAX_RETRIES) {
+          const delay = Math.pow(2, attempt) * 1000;
+          const reason = error.name === "AbortError" ? "Timeout" : "Network error";
+          console.warn(`[Jump.Finance] ${reason} on ${path}, retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+
+        // Max retries exceeded
+        if (error.name === "AbortError") {
+          throw new JumpFinanceError(0, null, `Jump.Finance API timeout after ${TIMEOUT_MS}ms on ${path}`);
+        }
+        throw error;
+      }
     }
 
-    // Some endpoints return 204 No Content
-    if (res.status === 204) return {} as T;
-
-    return await res.json() as T;
+    // TypeScript safety — should never reach
+    throw new JumpFinanceError(0, null, `Jump.Finance API max retries exceeded on ${path}`);
   }
 
   private get<T>(path: string, query?: Record<string, string | number>) {

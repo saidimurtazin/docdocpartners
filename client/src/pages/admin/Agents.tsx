@@ -19,7 +19,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Download, Search, ChevronLeft, ChevronRight, X, CreditCard, Smartphone, Building2, Shield } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Loader2, ArrowLeft, Download, Search, ChevronLeft, ChevronRight, X, CreditCard, Smartphone, Building2, Shield, Percent } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -51,7 +52,15 @@ export default function AdminAgents() {
     onSuccess: () => refetch(),
     onError: (err) => alert(`Ошибка: ${err.message}`),
   });
+  const updateCommissionOverride = trpc.admin.agents.updateCommissionOverride.useMutation({
+    onSuccess: () => { refetch(); setEditingCommissionId(null); },
+    onError: (err) => alert(`Ошибка: ${err.message}`),
+  });
   const exportAgents = trpc.admin.export.agents.useMutation();
+
+  // Commission override dialog state
+  const [editingCommissionId, setEditingCommissionId] = useState<number | null>(null);
+  const [agentTiers, setAgentTiers] = useState<{minMonthlyRevenue: number; commissionRate: number}[]>([]);
 
   // Helper: parse excludedClinics JSON and resolve names
   const getExcludedClinicNames = (excludedJson: string | null): { id: number; name: string }[] => {
@@ -331,6 +340,21 @@ export default function AdminAgents() {
                               СЗ: Нет
                             </Button>
                           )}
+                          {/* Commission override */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setEditingCommissionId(agent.id);
+                              try {
+                                const parsed = JSON.parse((agent as any).commissionOverride || "[]");
+                                setAgentTiers(Array.isArray(parsed) ? parsed : []);
+                              } catch { setAgentTiers([]); }
+                            }}
+                            className="text-xs"
+                          >
+                            % Ставка
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -359,6 +383,71 @@ export default function AdminAgents() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Commission Override Dialog */}
+      <Dialog open={editingCommissionId !== null} onOpenChange={() => setEditingCommissionId(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Percent className="w-4 h-4" />
+              Индивидуальная ставка агента
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Если пусто — используются глобальные тарифы. Если заданы — перекрывают глобальные.
+          </p>
+          <div className="space-y-2">
+            {agentTiers.map((tier, idx) => (
+              <div key={idx} className="flex gap-2 items-center">
+                <Input
+                  type="number"
+                  placeholder="Мин. выручка (руб.)"
+                  value={tier.minMonthlyRevenue / 100 || ""}
+                  onChange={(e) => {
+                    const updated = [...agentTiers];
+                    updated[idx] = { ...updated[idx], minMonthlyRevenue: Math.round((parseFloat(e.target.value) || 0) * 100) };
+                    setAgentTiers(updated);
+                  }}
+                  className="w-40"
+                />
+                <span className="text-xs text-muted-foreground">→</span>
+                <Input
+                  type="number"
+                  placeholder="%"
+                  value={tier.commissionRate || ""}
+                  onChange={(e) => {
+                    const updated = [...agentTiers];
+                    updated[idx] = { ...updated[idx], commissionRate: parseInt(e.target.value) || 0 };
+                    setAgentTiers(updated);
+                  }}
+                  className="w-20"
+                />
+                <span className="text-xs">%</span>
+                <Button variant="ghost" size="sm" onClick={() => setAgentTiers(agentTiers.filter((_, i) => i !== idx))}>
+                  <X className="w-3 h-3" />
+                </Button>
+              </div>
+            ))}
+            <Button variant="outline" size="sm" onClick={() => setAgentTiers([...agentTiers, { minMonthlyRevenue: 0, commissionRate: 10 }])}>
+              + Добавить уровень
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingCommissionId(null)}>Отмена</Button>
+            <Button onClick={async () => {
+              if (editingCommissionId) {
+                await updateCommissionOverride.mutateAsync({
+                  agentId: editingCommissionId,
+                  commissionOverride: agentTiers.length > 0 ? JSON.stringify(agentTiers) : null,
+                });
+              }
+            }} disabled={updateCommissionOverride.isPending}>
+              {updateCommissionOverride.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+              Сохранить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AdminLayoutWrapper>
   );
 }

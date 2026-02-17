@@ -1,7 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { TrendingUp, Users, Percent, Activity, Banknote } from "lucide-react";
+import { TrendingUp, Users, Percent, Activity, Banknote, Gift } from "lucide-react";
 import DashboardLayoutWrapper from "@/components/DashboardLayoutWrapper";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 
@@ -66,16 +66,16 @@ export default function AgentDashboard() {
           <Card className="border-2 hover:border-primary/50 transition-all">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Всего заработано
+                Доступно к выводу
               </CardTitle>
               <Banknote className="w-5 h-5 text-primary" />
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-primary">
-                {formatCurrency(stats?.totalEarnings || 0)}
+                {formatCurrency(stats?.availableBalance || stats?.totalEarnings || 0)}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                За все время
+                Всего заработано: {formatCurrency(stats?.totalEarnings || 0)}
               </p>
             </CardContent>
           </Card>
@@ -131,6 +131,32 @@ export default function AgentDashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Referral Bonus Card */}
+        {stats && (stats.bonusPoints || 0) > 0 && (
+          <Card className="border-2 border-amber-200 bg-amber-50/50 mb-8">
+            <CardContent className="flex items-center gap-4 py-4">
+              <Gift className="w-8 h-8 text-amber-500 flex-shrink-0" />
+              <div className="flex-1">
+                <div className="font-semibold text-amber-900">
+                  Реферальный бонус: {formatCurrency(stats.bonusPoints ?? 0)}
+                </div>
+                <div className="text-sm text-amber-700">
+                  {(stats.paidReferralCount ?? 0) >= (stats.bonusUnlockThreshold ?? 10)
+                    ? "Бонус будет автоматически добавлен к балансу"
+                    : `Разблокируется после ${(stats.bonusUnlockThreshold ?? 10) - (stats.paidReferralCount ?? 0)} оплаченных пациентов (сейчас ${stats.paidReferralCount ?? 0}/${stats.bonusUnlockThreshold ?? 10})`
+                  }
+                </div>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <div className="text-2xl font-bold text-amber-600">
+                  {stats.paidReferralCount ?? 0}/{stats.bonusUnlockThreshold ?? 10}
+                </div>
+                <div className="text-xs text-amber-600">пациентов</div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">

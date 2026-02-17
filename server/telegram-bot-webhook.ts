@@ -1466,6 +1466,28 @@ bot.action('contract_accept', async (ctx) => {
       excludedClinics: excludedClinicsJson,
     });
 
+    // Credit referral bonus to inviting agent (1000 RUB = 100000 kopecks)
+    if (referredByAgentId) {
+      try {
+        const { addBonusPoints } = await import('./db');
+        await addBonusPoints(referredByAgentId, 100000);
+
+        // Notify inviting agent
+        const [inviter] = await db.select().from(agents).where(eq(agents.id, referredByAgentId));
+        if (inviter?.telegramId) {
+          await notifyAgent(
+            inviter.telegramId,
+            `🎁 <b>Новый реферал!</b>\n\n` +
+            `Агент ${escapeHtml(data.fullName || "")} зарегистрировался по вашей ссылке.\n` +
+            `+1 000 ₽ начислено в бонусы.\n\n` +
+            `💡 Бонусы станут доступны для вывода после 10 оплаченных пациентов.`
+          );
+        }
+      } catch (err) {
+        console.error('[Telegram Bot] Failed to credit referral bonus:', err);
+      }
+    }
+
     // Clear session before sending messages (prevents double-submit on retry)
     sessions.delete(userId);
 
@@ -2091,16 +2113,30 @@ bot.command('referral_program', async (ctx) => {
 
     const referralLink = `https://t.me/docpartnerbot?start=ref_${agent.id}`;
 
+    // Get paid referral count for bonus unlock progress
+    const { getAgentPaidReferralCount } = await import('./db');
+    const paidCount = await getAgentPaidReferralCount(agent.id);
+    const bonusRub = (bonusPoints / 100).toLocaleString("ru-RU");
+    const bonusUnlocked = paidCount >= 10;
+
     let message = '🎁 <b>Реферальная программа</b>\n\n';
-    message += '📢 Приглашайте коллег и получайте бонусы!\n\n';
-    message += `🔗 <b>Ваша реферальная ссылка:</b>\n${referralLink}\n\n`;
+    message += '📢 Приглашайте коллег и зарабатывайте!\n\n';
+    message += `🔗 <b>Ваша реферальная ссылка:</b>\n<code>${referralLink}</code>\n\n`;
     message += `👥 Приглашено агентов: ${referralCount}\n`;
-    message += `⭐ Бонусные баллы: ${bonusPoints}\n\n`;
-    message += '<b>Как это работает:</b>\n';
+    message += `💰 Бонус за рефералов: ${bonusRub} ₽`;
+    if (bonusPoints > 0 && !bonusUnlocked) {
+      message += ` (🔒 заблокирован)\n`;
+      message += `📊 Прогресс разблокировки: ${paidCount}/10 оплаченных пациентов\n`;
+    } else if (bonusPoints > 0 && bonusUnlocked) {
+      message += ` (✅ доступен)\n`;
+    } else {
+      message += `\n`;
+    }
+    message += '\n<b>Как это работает:</b>\n';
     message += '• Поделитесь ссылкой с коллегами\n';
-    message += '• Они регистрируются по вашей ссылке\n';
-    message += '• Вы получаете бонусные баллы\n';
-    message += '• Баллы можно обменять на вознаграждение';
+    message += '• За каждого зарегистрированного агента — 1 000 ₽\n';
+    message += '• Бонус разблокируется после 10 ваших оплаченных пациентов\n';
+    message += '• После разблокировки бонус доступен для вывода';
 
     await ctx.reply(message, { parse_mode: 'HTML' });
   } catch (error) {
@@ -2310,19 +2346,36 @@ bot.action('cmd_referral_program', async (ctx) => {
     }
 
     const referralLink = `https://t.me/docpartnerbot?start=ref_${agent.id}`;
-    const referredCount = 0; // TODO: implement referredAgentsCount tracking
     const bonusPoints = agent.bonusPoints || 0;
 
-    await ctx.reply(
-      '👥 <b>Реферальная программа</b>\n\n' +
-      '🎁 Приглашайте других агентов и получайте бонусы!\n\n' +
-      `🔗 <b>Ваша реферальная ссылка:</b>\n<code>${referralLink}</code>\n\n` +
-      `📈 <b>Ваша статистика:</b>\n` +
-      `• Приглашено агентов: ${referredCount}\n` +
-      `• Бонусные баллы: ${bonusPoints}\n\n` +
-      '💡 Бонусные баллы можно вывести после 10+ собственных рекомендаций.',
-      { parse_mode: 'HTML' }
-    );
+    // Count referred agents
+    const referredAgents = await db.select().from(agents)
+      .where(eq(agents.referredBy, agent.id));
+    const referredCount = referredAgents.length;
+
+    // Get paid referral count for bonus unlock progress
+    const { getAgentPaidReferralCount } = await import('./db');
+    const paidCount = await getAgentPaidReferralCount(agent.id);
+    const bonusRub = (bonusPoints / 100).toLocaleString("ru-RU");
+    const bonusUnlocked = paidCount >= 10;
+
+    let message = '👥 <b>Реферальная программа</b>\n\n';
+    message += '🎁 Приглашайте коллег и зарабатывайте!\n\n';
+    message += `🔗 <b>Ваша реферальная ссылка:</b>\n<code>${referralLink}</code>\n\n`;
+    message += `📈 <b>Ваша статистика:</b>\n`;
+    message += `• Приглашено агентов: ${referredCount}\n`;
+    message += `• Бонус за рефералов: ${bonusRub} ₽`;
+    if (bonusPoints > 0 && !bonusUnlocked) {
+      message += ` (🔒 заблокирован)\n`;
+      message += `• Прогресс: ${paidCount}/10 оплаченных пациентов\n`;
+    } else if (bonusPoints > 0 && bonusUnlocked) {
+      message += ` (✅ доступен для вывода)\n`;
+    } else {
+      message += `\n`;
+    }
+    message += '\n💡 За каждого приглашённого — 1 000 ₽. Разблокировка после 10 оплаченных пациентов.';
+
+    await ctx.reply(message, { parse_mode: 'HTML' });
   } catch (error) {
     console.error('[Telegram Bot] Referral program callback error:', error);
     await ctx.reply('❌ Произошла ошибка.');

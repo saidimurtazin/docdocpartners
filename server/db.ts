@@ -1,6 +1,6 @@
 import { eq, desc, and, like, sql, isNotNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, agents, referrals, payments, doctors, sessions, otpCodes, clinics, clinicReports, paymentActs, type InsertSession, type InsertClinicReport, type InsertPaymentAct } from "../drizzle/schema";
+import { InsertUser, users, agents, referrals, payments, doctors, sessions, otpCodes, clinics, clinicReports, paymentActs, appSettings, type InsertSession, type InsertClinicReport, type InsertPaymentAct } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -421,7 +421,12 @@ export async function updatePaymentStatus(
     updateData.transactionId = transactionId;
   }
   await db.update(payments).set(updateData).where(eq(payments.id, id));
-  
+
+  // Deduct from agent's totalEarnings when payment is completed (prevent double-deduction)
+  if (status === "completed" && oldStatus !== "completed") {
+    await deductPaymentFromEarnings(oldPayment.agentId, oldPayment.amount);
+  }
+
   // Send Telegram notification if status changed
   if (oldStatus !== status) {
     // Get agent telegram ID
@@ -1066,4 +1071,142 @@ export async function getAgentPaidReferrals(agentId: number) {
       sql`${referrals.status} IN ('visited', 'paid')`
     ))
     .orderBy(desc(referrals.createdAt));
+}
+
+// ==================== COMMISSION & BALANCE ====================
+
+/**
+ * Поиск клиники по имени (для расчёта комиссии из referrals.clinic)
+ * Сначала exact match, потом case-insensitive
+ */
+export async function getClinicByName(name: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  // Exact match first
+  const [exact] = await db.select().from(clinics)
+    .where(eq(clinics.name, name))
+    .limit(1);
+  if (exact) return exact;
+  // Fallback: case-insensitive LIKE
+  const [fuzzy] = await db.select().from(clinics)
+    .where(sql`LOWER(${clinics.name}) = LOWER(${name})`)
+    .limit(1);
+  return fuzzy;
+}
+
+/**
+ * Списание с баланса агента при выплате (атомарно через SQL)
+ */
+export async function deductPaymentFromEarnings(agentId: number, amount: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(agents)
+    .set({ totalEarnings: sql`GREATEST(0, ${agents.totalEarnings} - ${amount})` } as any)
+    .where(eq(agents.id, agentId));
+}
+
+/**
+ * Сумма всех незавершённых платежей агента (для валидации при запросе выплаты)
+ */
+export async function getAgentPendingPaymentsSum(agentId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.select({
+    sum: sql<number>`COALESCE(SUM(${payments.amount}), 0)`
+  }).from(payments)
+    .where(and(
+      eq(payments.agentId, agentId),
+      sql`${payments.status} IN ('pending', 'processing', 'act_generated', 'sent_for_signing', 'signed', 'ready_for_payment')`
+    ));
+  return result.sum;
+}
+
+/**
+ * Месячная выручка агента (сумма treatmentAmount за текущий месяц, visited/paid)
+ */
+export async function getAgentMonthlyRevenue(agentId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const now = new Date();
+  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const [result] = await db.select({
+    sum: sql<number>`COALESCE(SUM(${referrals.treatmentAmount}), 0)`
+  }).from(referrals)
+    .where(and(
+      eq(referrals.agentId, agentId),
+      sql`${referrals.status} IN ('visited', 'paid')`,
+      sql`${referrals.createdAt} >= ${firstOfMonth}`
+    ));
+  return result.sum;
+}
+
+// ==================== APP SETTINGS ====================
+
+export async function getAppSetting(key: string): Promise<string | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db.select().from(appSettings).where(eq(appSettings.key, key)).limit(1);
+  return row?.value || null;
+}
+
+export async function setAppSetting(key: string, value: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(appSettings).values({ key, value })
+    .onDuplicateKeyUpdate({ set: { value } });
+}
+
+// ==================== REFERRAL BONUS ====================
+
+/**
+ * Начислить бонус агенту (в копейках)
+ */
+export async function addBonusPoints(agentId: number, amountKopecks: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(agents)
+    .set({ bonusPoints: sql`${agents.bonusPoints} + ${amountKopecks}` } as any)
+    .where(eq(agents.id, agentId));
+}
+
+/**
+ * Количество оплаченных пациентов агента (status='paid')
+ */
+export async function getAgentPaidReferralCount(agentId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.select({
+    count: sql<number>`count(*)`
+  }).from(referrals)
+    .where(and(
+      eq(referrals.agentId, agentId),
+      eq(referrals.status, "paid")
+    ));
+  return result.count;
+}
+
+/**
+ * Разблокировать бонус → перенести bonusPoints в totalEarnings
+ * Только если агент имеет >= 10 оплаченных пациентов
+ * Возвращает true если бонус был разблокирован
+ */
+export async function unlockBonusToEarnings(agentId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+
+  const [agent] = await db.select().from(agents).where(eq(agents.id, agentId)).limit(1);
+  if (!agent || !agent.bonusPoints || agent.bonusPoints <= 0) return false;
+
+  // Check if agent has 10+ paid referrals
+  const paidCount = await getAgentPaidReferralCount(agentId);
+  if (paidCount < 10) return false;
+
+  // Atomically move bonusPoints to totalEarnings
+  const bonus = agent.bonusPoints;
+  await db.update(agents).set({
+    totalEarnings: sql`${agents.totalEarnings} + ${bonus}`,
+    bonusPoints: 0,
+  } as any).where(eq(agents.id, agentId));
+
+  return true;
 }

@@ -81,6 +81,7 @@ export const agents = mysqlTable("agents", {
   jumpRequisiteId: int("jumpRequisiteId"), // ID реквизита в Jump.Finance
   jumpIdentified: boolean("jumpIdentified").default(false), // прошёл идентификацию в Jump
   excludedClinics: text("excludedClinics"), // JSON array of clinic IDs, e.g. "[1,3,5]"
+  commissionOverride: text("commissionOverride"), // JSON: [{minMonthlyRevenue: number, commissionRate: number}] — индивидуальные тарифы
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -190,6 +191,7 @@ export const clinics = mysqlTable("clinics", {
   certifications: text("certifications"),
   description: text("description"),
   commissionRate: int("commissionRate").default(10), // % комиссии агенту
+  commissionTiers: text("commissionTiers"), // JSON: [{threshold: число_копеек, rate: %}] — тарифные уровни для владельца (инфо)
   averageCheck: int("averageCheck").default(0), // средний чек в копейках
   foundedYear: int("foundedYear"),
   languages: varchar("languages", { length: 255 }).default("Русский"),
@@ -297,3 +299,16 @@ export const paymentActs = mysqlTable("payment_acts", {
 
 export type PaymentAct = typeof paymentActs.$inferSelect;
 export type InsertPaymentAct = typeof paymentActs.$inferInsert;
+
+/**
+ * Application settings — глобальные настройки (тарифы агентов и т.д.)
+ */
+export const appSettings = mysqlTable("app_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  key: varchar("key", { length: 100 }).notNull().unique(),
+  value: text("value").notNull(), // JSON value
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AppSetting = typeof appSettings.$inferSelect;
+export type InsertAppSetting = typeof appSettings.$inferInsert;

@@ -43,6 +43,7 @@ export default function AdminClinics() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingClinic, setEditingClinic] = useState<any>(null);
   const [form, setForm] = useState(emptyClinic);
+  const [commissionTiers, setCommissionTiers] = useState<{threshold: number; rate: number}[]>([]);
   const [search, setSearch] = useState("");
 
   const { data: clinicsList, isLoading, refetch } = trpc.admin.clinics.list.useQuery();
@@ -58,6 +59,7 @@ export default function AdminClinics() {
 
   const resetForm = () => {
     setForm(emptyClinic);
+    setCommissionTiers([]);
     setEditingClinic(null);
   };
 
@@ -87,16 +89,26 @@ export default function AdminClinics() {
       imageUrl: clinic.imageUrl || "",
       reportEmails: clinic.reportEmails || "",
     });
+    // Load commission tiers
+    try {
+      const tiers = clinic.commissionTiers ? JSON.parse(clinic.commissionTiers) : [];
+      setCommissionTiers(Array.isArray(tiers) ? tiers : []);
+    } catch { setCommissionTiers([]); }
     setIsDialogOpen(true);
   };
 
   const handleSubmit = async () => {
     if (!form.name.trim()) { toast.error("Введите название клиники"); return; }
 
+    const dataWithTiers = {
+      ...form,
+      commissionTiers: commissionTiers.length > 0 ? JSON.stringify(commissionTiers) : null,
+    };
+
     if (editingClinic) {
-      await updateClinic.mutateAsync({ id: editingClinic.id, ...form });
+      await updateClinic.mutateAsync({ id: editingClinic.id, ...dataWithTiers });
     } else {
-      await createClinic.mutateAsync(form);
+      await createClinic.mutateAsync(dataWithTiers);
     }
   };
 
@@ -321,6 +333,45 @@ export default function AdminClinics() {
               <div>
                 <label className="text-sm font-medium">Средний чек (руб.)</label>
                 <Input type="number" value={form.averageCheck / 100} onChange={(e) => setForm({...form, averageCheck: Math.round((parseFloat(e.target.value) || 0) * 100)})} />
+              </div>
+              {/* Commission Tiers (informational for owner) */}
+              <div className="col-span-2 border rounded-lg p-3 bg-muted/30">
+                <label className="text-sm font-medium">Тарифные уровни (условия с клиникой)</label>
+                <p className="text-xs text-muted-foreground mb-2">Информационный раздел. Не влияет на расчёт комиссии агентам.</p>
+                {commissionTiers.map((tier, idx) => (
+                  <div key={idx} className="flex gap-2 mb-2 items-center">
+                    <Input
+                      type="number"
+                      placeholder="Порог выручки (руб.)"
+                      value={tier.threshold / 100 || ""}
+                      onChange={(e) => {
+                        const updated = [...commissionTiers];
+                        updated[idx] = { ...updated[idx], threshold: Math.round((parseFloat(e.target.value) || 0) * 100) };
+                        setCommissionTiers(updated);
+                      }}
+                      className="w-44"
+                    />
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">руб. →</span>
+                    <Input
+                      type="number"
+                      placeholder="%"
+                      value={tier.rate || ""}
+                      onChange={(e) => {
+                        const updated = [...commissionTiers];
+                        updated[idx] = { ...updated[idx], rate: parseInt(e.target.value) || 0 };
+                        setCommissionTiers(updated);
+                      }}
+                      className="w-20"
+                    />
+                    <span className="text-xs">%</span>
+                    <Button variant="ghost" size="sm" onClick={() => setCommissionTiers(commissionTiers.filter((_, i) => i !== idx))}>
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ))}
+                <Button variant="outline" size="sm" onClick={() => setCommissionTiers([...commissionTiers, { threshold: 0, rate: 10 }])}>
+                  + Добавить уровень
+                </Button>
               </div>
               <div className="col-span-2">
                 <label className="text-sm font-medium">Специализации</label>

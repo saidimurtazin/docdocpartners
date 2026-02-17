@@ -39,6 +39,7 @@ export default function AdminReferrals() {
   const [page, setPage] = useState(1);
 
   const { data: referrals, isLoading, refetch } = trpc.admin.referrals.list.useQuery();
+  const { data: clinicsList } = trpc.admin.clinics.list.useQuery();
   const updateStatus = trpc.admin.referrals.updateStatus.useMutation({ onSuccess: () => refetch() });
   const updateAmounts = trpc.admin.referrals.updateAmounts.useMutation({
     onSuccess: () => { refetch(); setEditingId(null); setTreatmentAmount(""); setCommissionAmount(""); },
@@ -129,17 +130,30 @@ export default function AdminReferrals() {
     await updateStatus.mutateAsync({ id, status });
   };
 
+  // Get clinic commission rate by name (fallback 10%)
+  const getClinicRate = (clinicName: string | null): number => {
+    if (!clinicName || !clinicsList) return 10;
+    const clinic = clinicsList.find((c: any) =>
+      c.name.toLowerCase() === clinicName.toLowerCase()
+    );
+    return clinic?.commissionRate || 10;
+  };
+
   const handleEditAmounts = (referral: any) => {
     setEditingId(referral.id);
     const treatment = (referral.treatmentAmount || 0) / 100;
     setTreatmentAmount(String(treatment));
-    setCommissionAmount(String((treatment * 0.1).toFixed(2)));
+    const rate = getClinicRate(referral.clinic);
+    setCommissionAmount(String((treatment * rate / 100).toFixed(2)));
   };
 
   const handleTreatmentAmountChange = (value: string) => {
     setTreatmentAmount(value);
     const treatment = parseFloat(value) || 0;
-    setCommissionAmount(String((treatment * 0.1).toFixed(2)));
+    // Use the editing referral's clinic rate
+    const editingRef = referrals?.find((r: any) => r.id === editingId);
+    const rate = getClinicRate(editingRef?.clinic || null);
+    setCommissionAmount(String((treatment * rate / 100).toFixed(2)));
   };
 
   const handleSaveAmounts = async (id: number) => {
