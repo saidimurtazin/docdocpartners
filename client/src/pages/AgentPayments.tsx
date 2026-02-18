@@ -96,8 +96,9 @@ export default function AgentPayments() {
       } else {
         alert("✅ Заявка на выплату успешно создана! Она будет обработана в ближайшее время.");
       }
-    } catch (error) {
-      alert("❌ Ошибка создания заявки. Попробуйте еще раз.");
+    } catch (err: any) {
+      const message = err?.message || err?.data?.message || "Неизвестная ошибка";
+      alert(`❌ ${message}`);
     }
   };
 
