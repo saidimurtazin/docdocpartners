@@ -32,7 +32,7 @@ export async function generateAct(paymentId: number): Promise<{ actId: number; a
   // Load payment
   const payment = await db.getPaymentById(paymentId);
   if (!payment) throw new Error(`Payment ${paymentId} not found`);
-  if (payment.status !== "pending") throw new Error(`Payment ${paymentId} is not in pending status (current: ${payment.status})`);
+  if (payment.status !== "pending" && payment.status !== "failed") throw new Error(`Payment ${paymentId} is not in pending/failed status (current: ${payment.status})`);
 
   // Load agent
   const allAgents = await db.getAllAgents();
