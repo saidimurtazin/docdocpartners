@@ -264,6 +264,8 @@ export default function Register() {
                       <Input
                         id="otp"
                         type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
                         placeholder="000000"
                         value={otpCode}
                         onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
