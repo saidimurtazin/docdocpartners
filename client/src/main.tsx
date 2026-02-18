@@ -1,4 +1,5 @@
 import { trpc } from "@/lib/trpc";
+import { registerServiceWorker, listenForInstallPrompt } from "@/lib/pwa";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
@@ -6,6 +7,10 @@ import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
 import "./index.css";
+
+// Register PWA service worker & install prompt listener
+registerServiceWorker();
+listenForInstallPrompt();
 
 const queryClient = new QueryClient();
 
