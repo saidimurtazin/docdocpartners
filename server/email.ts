@@ -39,16 +39,19 @@ function getNoReplyTransporter() {
       return null;
     }
 
+    // Try port 587 (STARTTLS) first, fallback info logged
+    // Railway blocks outbound port 465 — use 587 with STARTTLS instead
     noReplyTransporter = nodemailer.createTransport({
       host: SMTP_HOST_IPV4,
-      port: 465,
-      secure: true,
+      port: 587,
+      secure: false, // STARTTLS — upgrades to TLS after connection
       auth: {
         user: smtpUser,
         pass: smtpPass,
       },
       tls: {
-        servername: SMTP_HOSTNAME, // SNI for TLS certificate validation
+        servername: SMTP_HOSTNAME,
+        rejectUnauthorized: true,
       },
       connectionTimeout: 15000,
       greetingTimeout: 15000,
@@ -57,7 +60,7 @@ function getNoReplyTransporter() {
 
     // Verify SMTP connection on first creation
     noReplyTransporter.verify().then(() => {
-      console.log('[Email] NoReply SMTP connection verified ✓');
+      console.log('[Email] NoReply SMTP connection verified ✓ (port 587)');
     }).catch((err: any) => {
       console.error('[Email] NoReply SMTP verification FAILED:', err.code, err.responseCode, err.message);
     });
@@ -83,14 +86,15 @@ function getInfoTransporter() {
 
     infoTransporter = nodemailer.createTransport({
       host: SMTP_HOST_IPV4,
-      port: 465,
-      secure: true,
+      port: 587,
+      secure: false,
       auth: {
         user: smtpUser,
         pass: smtpPass,
       },
       tls: {
-        servername: SMTP_HOSTNAME, // SNI for TLS certificate validation
+        servername: SMTP_HOSTNAME,
+        rejectUnauthorized: true,
       },
       connectionTimeout: 15000,
       greetingTimeout: 15000,
@@ -99,7 +103,7 @@ function getInfoTransporter() {
 
     // Verify SMTP connection on first creation
     infoTransporter.verify().then(() => {
-      console.log('[Email] Info SMTP connection verified ✓');
+      console.log('[Email] Info SMTP connection verified ✓ (port 587)');
     }).catch((err: any) => {
       console.error('[Email] Info SMTP verification FAILED:', err.code, err.responseCode, err.message);
     });
