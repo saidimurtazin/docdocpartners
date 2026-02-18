@@ -62,6 +62,47 @@ export function calculatePayout(input: PayoutCalculationInput): PayoutCalculatio
   };
 }
 
+// ==================== РАСЧЁТ НАЛОГОВ ПРИ ВЫВОДЕ ====================
+
+export interface WithdrawalTaxBreakdown {
+  grossAmount: number; // валовая сумма (списывается с баланса) — копейки
+  netAmount: number; // к выплате (после вычетов) — копейки
+  taxAmount: number; // НДФЛ 13% для физлица — копейки
+  socialContributions: number; // соц. отчисления 30% для физлица — копейки
+  npdEstimate: number; // оценка НПД 6% для СЗ (информационно) — копейки
+  isSelfEmployed: boolean;
+}
+
+/**
+ * Рассчитать налоговый breakdown при запросе выплаты
+ * grossAmount — запрошенная сумма (= сумма, списываемая с баланса агента)
+ */
+export function calculateWithdrawalTax(grossAmount: number, isSelfEmployed: boolean): WithdrawalTaxBreakdown {
+  if (isSelfEmployed) {
+    // Самозанятый: получает полную сумму, платит 6% НПД самостоятельно
+    return {
+      grossAmount,
+      netAmount: grossAmount,
+      taxAmount: 0,
+      socialContributions: 0,
+      npdEstimate: Math.floor(grossAmount * 0.06),
+      isSelfEmployed: true,
+    };
+  }
+
+  // Физлицо: удерживаем НДФЛ 13% + соц. отчисления 30%
+  const ndfl = Math.floor(grossAmount * 0.13);
+  const social = Math.floor(grossAmount * 0.30);
+  return {
+    grossAmount,
+    netAmount: grossAmount - ndfl - social,
+    taxAmount: ndfl,
+    socialContributions: social,
+    npdEstimate: 0,
+    isSelfEmployed: false,
+  };
+}
+
 /**
  * Проверить, может ли агент запросить выплату
  */

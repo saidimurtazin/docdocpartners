@@ -120,7 +120,12 @@ export type InsertReferral = typeof referrals.$inferInsert;
 export const payments = mysqlTable("payments", {
   id: int("id").autoincrement().primaryKey(),
   agentId: int("agentId").notNull(),
-  amount: int("amount").notNull(), // в копейках
+  amount: int("amount").notNull(), // в копейках (gross — списывается с баланса)
+  grossAmount: int("grossAmount"), // валовая сумма = amount (дублирование для явности)
+  netAmount: int("netAmount"), // чистая сумма к выплате (после вычетов)
+  taxAmount: int("taxAmount").default(0), // НДФЛ 13% для физлица (копейки)
+  socialContributions: int("socialContributions").default(0), // соц. отчисления 30% для физлица (копейки)
+  isSelfEmployedSnapshot: mysqlEnum("isSelfEmployedSnapshot", ["yes", "no"]), // налоговый статус на момент запроса
   status: mysqlEnum("status", ["pending", "act_generated", "sent_for_signing", "signed", "ready_for_payment", "processing", "completed", "failed"]).default("pending").notNull(),
   method: varchar("method", { length: 50 }), // card, bank_transfer, etc.
   payoutVia: mysqlEnum("payoutVia", ["manual", "jump"]).default("manual").notNull(),

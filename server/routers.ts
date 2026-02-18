@@ -8,6 +8,7 @@ import * as db from "./db";
 import { TRPCError } from "@trpc/server";
 import { SignJWT } from "jose";
 import { notifyNewDeviceLogin } from "./telegram-notifications";
+import { calculateWithdrawalTax } from "./payout-calculator";
 
 /**
  * Определить эффективную ставку комиссии для агента за конкретный месяц.
@@ -1545,6 +1546,7 @@ DocDocPartner — B2B-платформа агентских рекомендац
         bonusUnlockThreshold: 10,
         referredAgentsCount,
         referralLink: `https://t.me/docpartnerbot?start=ref_${ctx.agentId}`,
+        isSelfEmployed: agent.isSelfEmployed || "unknown",
       };
     }),
 
@@ -1704,6 +1706,7 @@ DocDocPartner — B2B-платформа агентских рекомендац
     requestPayment: agentProcedure
       .input(z.object({
         amount: z.number().min(100000, "Минимальная сумма — 1 000 ₽"),
+        isSelfEmployed: z.boolean(),
       }))
       .mutation(async ({ input, ctx }) => {
         // Check for pending payment requests (deduplication)
@@ -1745,7 +1748,18 @@ DocDocPartner — B2B-платформа агентских рекомендац
           });
         }
 
+        // If agent's isSelfEmployed is "unknown", update it now
+        if (agent.isSelfEmployed === "unknown") {
+          await db.updateAgentRequisites(ctx.agentId, {
+            isSelfEmployed: input.isSelfEmployed ? "yes" : "no",
+          });
+        }
+
+        // Calculate tax breakdown
+        const breakdown = calculateWithdrawalTax(input.amount, input.isSelfEmployed);
+
         // Validate amount against available balance (earnings minus already paid and pending)
+        // Balance check uses GROSS amount (what's deducted from totalEarnings)
         const pendingSum = await db.getAgentPendingPaymentsSum(ctx.agentId);
         const completedSum = await db.getAgentCompletedPaymentsSum(ctx.agentId);
         const availableBalance = (agent.totalEarnings || 0) - completedSum - pendingSum;
@@ -1756,7 +1770,14 @@ DocDocPartner — B2B-платформа агентских рекомендац
           });
         }
 
-        await db.createPaymentRequest(ctx.agentId, input.amount);
+        await db.createPaymentRequest(ctx.agentId, {
+          amount: breakdown.grossAmount,
+          grossAmount: breakdown.grossAmount,
+          netAmount: breakdown.netAmount,
+          taxAmount: breakdown.taxAmount,
+          socialContributions: breakdown.socialContributions,
+          isSelfEmployedSnapshot: input.isSelfEmployed ? "yes" : "no",
+        });
         return { success: true };
       }),
 

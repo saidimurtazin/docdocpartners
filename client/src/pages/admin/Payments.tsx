@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, ArrowLeft, Download, Search, ChevronLeft, ChevronRight, FileSpreadsheet, FileText, Send, CheckCircle2, Zap, RotateCw } from "lucide-react";
+import { Loader2, ArrowLeft, Download, Search, ChevronLeft, ChevronRight, FileSpreadsheet, FileText, Send, CheckCircle2, Zap, RotateCw, Building2, User } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -335,10 +335,10 @@ export default function AdminPayments() {
                   <TableRow>
                     <TableHead>ID</TableHead>
                     <TableHead>Агент</TableHead>
+                    <TableHead>Тип</TableHead>
                     <TableHead>Сумма</TableHead>
                     <TableHead>Статус</TableHead>
                     <TableHead>Jump</TableHead>
-                    <TableHead>Метод</TableHead>
                     <TableHead>Запрошено</TableHead>
                     <TableHead>Выплачено</TableHead>
                     <TableHead>Действия</TableHead>
@@ -354,7 +354,41 @@ export default function AdminPayments() {
                           <div className="text-xs text-muted-foreground">ID: {payment.agentId}</div>
                         </div>
                       </TableCell>
-                      <TableCell className="font-medium">{formatCurrency(payment.amount)}</TableCell>
+                      <TableCell>
+                        {payment.isSelfEmployedSnapshot ? (
+                          <Badge variant="outline" className={
+                            payment.isSelfEmployedSnapshot === "yes"
+                              ? "text-green-700 border-green-300 bg-green-50"
+                              : "text-blue-700 border-blue-300 bg-blue-50"
+                          }>
+                            {payment.isSelfEmployedSnapshot === "yes" ? (
+                              <><Building2 className="w-3 h-3 mr-1" />СЗ</>
+                            ) : (
+                              <><User className="w-3 h-3 mr-1" />Физлицо</>
+                            )}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{formatCurrency(payment.grossAmount || payment.amount)}</div>
+                          {payment.isSelfEmployedSnapshot === "no" && payment.netAmount != null && (
+                            <div className="text-xs space-y-0.5 mt-1">
+                              <div className="text-red-600">
+                                НДФЛ: -{formatCurrency(payment.taxAmount || 0)}
+                              </div>
+                              <div className="text-red-600">
+                                Взносы: -{formatCurrency(payment.socialContributions || 0)}
+                              </div>
+                              <div className="font-semibold text-foreground">
+                                К выплате: {formatCurrency(payment.netAmount)}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>{getStatusBadge(payment.status)}</TableCell>
                       <TableCell>
                         {payment.payoutVia === "jump" ? (
@@ -372,7 +406,6 @@ export default function AdminPayments() {
                           <span className="text-xs text-muted-foreground">Ручной</span>
                         )}
                       </TableCell>
-                      <TableCell>{payment.method || "—"}</TableCell>
                       <TableCell>
                         {payment.requestedAt
                           ? format(new Date(payment.requestedAt), "dd.MM.yyyy HH:mm", { locale: ru })

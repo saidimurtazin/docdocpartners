@@ -347,6 +347,12 @@ export async function getAllPayments() {
     jumpStatusText: payments.jumpStatusText,
     jumpAmountPaid: payments.jumpAmountPaid,
     jumpCommission: payments.jumpCommission,
+    // Tax breakdown fields
+    grossAmount: payments.grossAmount,
+    netAmount: payments.netAmount,
+    taxAmount: payments.taxAmount,
+    socialContributions: payments.socialContributions,
+    isSelfEmployedSnapshot: payments.isSelfEmployedSnapshot,
   })
     .from(payments)
     .leftJoin(agents, eq(payments.agentId, agents.id))
@@ -657,12 +663,24 @@ export function parseExcludedClinics(raw: string | null): number[] {
   }
 }
 
-export async function createPaymentRequest(agentId: number, amount: number) {
+export async function createPaymentRequest(agentId: number, data: {
+  amount: number;
+  grossAmount: number;
+  netAmount: number;
+  taxAmount: number;
+  socialContributions: number;
+  isSelfEmployedSnapshot: "yes" | "no";
+}) {
   const db = await getDb();
   if (!db) return;
   await db.insert(payments).values({
     agentId,
-    amount,
+    amount: data.amount,
+    grossAmount: data.grossAmount,
+    netAmount: data.netAmount,
+    taxAmount: data.taxAmount,
+    socialContributions: data.socialContributions,
+    isSelfEmployedSnapshot: data.isSelfEmployedSnapshot,
     status: "pending",
     createdAt: new Date(),
   });

@@ -3,8 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Wallet, Send, CheckCircle2, Clock, XCircle, AlertCircle, FileText, FileSignature, Banknote, Download, Zap, Gift, Users, Copy, Lock, Unlock, Link2, TrendingUp } from "lucide-react";
-import { useState } from "react";
+import { Wallet, Send, CheckCircle2, Clock, XCircle, AlertCircle, FileText, FileSignature, Banknote, Download, Zap, Gift, Users, Copy, Lock, Unlock, Link2, TrendingUp, Building2, User, Calculator, Info } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
 import DashboardLayoutWrapper from "@/components/DashboardLayoutWrapper";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import ActSigningDialog from "@/components/ActSigningDialog";
@@ -19,31 +19,76 @@ export default function AgentPayments() {
   const [error, setError] = useState("");
   const [signingPaymentId, setSigningPaymentId] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
+  const [isSelfEmployed, setIsSelfEmployed] = useState<boolean | null>(null);
+
+  // Initialize isSelfEmployed from agent profile
+  useEffect(() => {
+    if (stats?.isSelfEmployed) {
+      if (stats.isSelfEmployed === "yes") setIsSelfEmployed(true);
+      else if (stats.isSelfEmployed === "no") setIsSelfEmployed(false);
+      // "unknown" → stays null, forcing selection
+    }
+  }, [stats?.isSelfEmployed]);
+
+  // Tax preview calculation (client-side, same logic as server)
+  const taxPreview = useMemo(() => {
+    const amountNum = parseInt(amount);
+    if (!amount || isNaN(amountNum) || amountNum < 1000 || isSelfEmployed === null) return null;
+
+    const grossKopecks = amountNum * 100;
+    if (isSelfEmployed) {
+      return {
+        gross: amountNum,
+        net: amountNum,
+        tax: 0,
+        social: 0,
+        npdEstimate: Math.floor(grossKopecks * 0.06) / 100,
+        isSelfEmployed: true,
+      };
+    }
+    const tax = Math.floor(grossKopecks * 0.13) / 100;
+    const social = Math.floor(grossKopecks * 0.30) / 100;
+    return {
+      gross: amountNum,
+      net: amountNum - tax - social,
+      tax,
+      social,
+      npdEstimate: 0,
+      isSelfEmployed: false,
+    };
+  }, [amount, isSelfEmployed]);
 
   const handleRequestPayment = async () => {
     setError("");
-    
+
     const amountNum = parseInt(amount);
-    
-    // Validation
+
     if (!amount || isNaN(amountNum)) {
       setError("Введите корректную сумму");
       return;
     }
-    
+
     if (amountNum < 1000) {
       setError("Минимальная сумма для вывода — 1 000 ₽");
       return;
     }
 
-    const availBal = (stats?.availableBalance || 0) / 100; // convert from kopecks
+    if (isSelfEmployed === null) {
+      setError("Выберите налоговый статус (самозанятый или физлицо)");
+      return;
+    }
+
+    const availBal = (stats?.availableBalance || 0) / 100;
     if (amountNum > availBal) {
       setError(`Недостаточно средств. Доступно: ${availBal.toLocaleString('ru-RU')} ₽`);
       return;
     }
 
     try {
-      await requestPayment.mutateAsync({ amount: amountNum * 100 }); // convert to kopecks
+      await requestPayment.mutateAsync({
+        amount: amountNum * 100,
+        isSelfEmployed,
+      });
       await refetch();
       setAmount("");
       alert("✅ Заявка на выплату успешно создана!");
@@ -57,7 +102,7 @@ export default function AgentPayments() {
       style: 'currency',
       currency: 'RUB',
       minimumFractionDigits: 0,
-    }).format(amount / 100); // convert from kopecks
+    }).format(amount / 100);
   };
 
   const formatDate = (date: Date | string) => {
@@ -90,7 +135,6 @@ export default function AgentPayments() {
     failed: "Ошибка",
   };
 
-  // Jump.Finance status labels (jumpStatus field, 1-8)
   const jumpStatusLabels: Record<number, string> = {
     1: "Выплачено",
     2: "Отклонено",
@@ -245,6 +289,58 @@ export default function AgentPayments() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Tax Status Selector */}
+                <div>
+                  <Label className="mb-2 block">Налоговый статус</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsSelfEmployed(true)}
+                      className={`relative flex items-start gap-3 p-3 rounded-lg border-2 transition-all text-left ${
+                        isSelfEmployed === true
+                          ? "border-green-500 bg-green-50 dark:bg-green-950/20"
+                          : "border-border hover:border-green-300 hover:bg-green-50/50"
+                      }`}
+                    >
+                      <Building2 className={`w-5 h-5 mt-0.5 flex-shrink-0 ${isSelfEmployed === true ? "text-green-600" : "text-muted-foreground"}`} />
+                      <div>
+                        <div className={`text-sm font-semibold ${isSelfEmployed === true ? "text-green-700 dark:text-green-400" : ""}`}>
+                          Самозанятый
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Получаю полную сумму, плачу 6% НПД сам
+                        </p>
+                      </div>
+                      {isSelfEmployed === true && (
+                        <CheckCircle2 className="w-4 h-4 text-green-500 absolute top-2 right-2" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsSelfEmployed(false)}
+                      className={`relative flex items-start gap-3 p-3 rounded-lg border-2 transition-all text-left ${
+                        isSelfEmployed === false
+                          ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
+                          : "border-border hover:border-blue-300 hover:bg-blue-50/50"
+                      }`}
+                    >
+                      <User className={`w-5 h-5 mt-0.5 flex-shrink-0 ${isSelfEmployed === false ? "text-blue-600" : "text-muted-foreground"}`} />
+                      <div>
+                        <div className={`text-sm font-semibold ${isSelfEmployed === false ? "text-blue-700 dark:text-blue-400" : ""}`}>
+                          Физлицо
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Удерживается ~43% (НДФЛ 13% + взносы 30%)
+                        </p>
+                      </div>
+                      {isSelfEmployed === false && (
+                        <CheckCircle2 className="w-4 h-4 text-blue-500 absolute top-2 right-2" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Amount Input */}
                 <div>
                   <Label htmlFor="amount">Сумма вывода (₽)</Label>
                   <div className="flex gap-2 mt-2">
@@ -261,7 +357,7 @@ export default function AgentPayments() {
                     />
                     <Button
                       onClick={handleRequestPayment}
-                      disabled={requestPayment.isPending || !amount}
+                      disabled={requestPayment.isPending || !amount || isSelfEmployed === null}
                       className="bg-primary hover:bg-primary/90 whitespace-nowrap"
                     >
                       {requestPayment.isPending ? (
@@ -280,10 +376,59 @@ export default function AgentPayments() {
                   {error && (
                     <p className="text-sm text-destructive mt-2">{error}</p>
                   )}
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Выплаты производятся в течение 3-5 рабочих дней
-                  </p>
                 </div>
+
+                {/* Tax Preview */}
+                {taxPreview && (
+                  <div className={`rounded-lg border-2 p-4 ${
+                    taxPreview.isSelfEmployed
+                      ? "border-green-200 bg-green-50/50 dark:bg-green-950/10"
+                      : "border-blue-200 bg-blue-50/50 dark:bg-blue-950/10"
+                  }`}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Calculator className={`w-4 h-4 ${taxPreview.isSelfEmployed ? "text-green-600" : "text-blue-600"}`} />
+                      <span className="text-sm font-semibold">Расчёт выплаты</span>
+                    </div>
+                    <div className="space-y-1.5 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Начислено</span>
+                        <span className="font-medium">{taxPreview.gross.toLocaleString('ru-RU')} ₽</span>
+                      </div>
+                      {!taxPreview.isSelfEmployed && (
+                        <>
+                          <div className="flex justify-between text-red-600">
+                            <span>НДФЛ 13%</span>
+                            <span>-{taxPreview.tax.toLocaleString('ru-RU')} ₽</span>
+                          </div>
+                          <div className="flex justify-between text-red-600">
+                            <span>Соц. взносы 30%</span>
+                            <span>-{taxPreview.social.toLocaleString('ru-RU')} ₽</span>
+                          </div>
+                          <div className="border-t pt-1.5 mt-1.5">
+                            <div className="flex justify-between font-bold text-base">
+                              <span>К выплате</span>
+                              <span>{taxPreview.net.toLocaleString('ru-RU')} ₽</span>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                      {taxPreview.isSelfEmployed && (
+                        <>
+                          <div className="border-t pt-1.5 mt-1.5">
+                            <div className="flex justify-between font-bold text-base">
+                              <span>К выплате</span>
+                              <span className="text-green-700 dark:text-green-400">{taxPreview.net.toLocaleString('ru-RU')} ₽</span>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-1.5 mt-2 text-xs text-muted-foreground">
+                            <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                            <span>НПД 6% (~{taxPreview.npdEstimate.toLocaleString('ru-RU')} ₽) оплачивается вами самостоятельно</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Referral Program — compact inline */}
                 <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
@@ -360,64 +505,94 @@ export default function AgentPayments() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {payments.map((payment: any) => (
-                    <div
-                      key={payment.id}
-                      className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-accent/50 transition-colors"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="flex-shrink-0">
-                          {statusIcons[payment.status]}
+                  {payments.map((payment: any) => {
+                    const gross = payment.grossAmount || payment.amount;
+                    const net = payment.netAmount || payment.amount;
+                    const isIndividual = payment.isSelfEmployedSnapshot === "no";
+                    const hasTaxInfo = payment.isSelfEmployedSnapshot != null;
+
+                    return (
+                      <div
+                        key={payment.id}
+                        className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-accent/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="flex-shrink-0">
+                            {statusIcons[payment.status]}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold">
+                                {formatCurrency(gross)}
+                              </span>
+                              {hasTaxInfo && (
+                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                  isIndividual
+                                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                                    : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                }`}>
+                                  {isIndividual ? (
+                                    <><User className="w-2.5 h-2.5" /> Физлицо</>
+                                  ) : (
+                                    <><Building2 className="w-2.5 h-2.5" /> СЗ</>
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                            {isIndividual && net !== gross && (
+                              <div className="text-xs text-muted-foreground mt-0.5">
+                                К выплате: <span className="font-medium">{formatCurrency(net)}</span>
+                                <span className="text-red-500 ml-1">
+                                  (НДФЛ {formatCurrency(payment.taxAmount || 0)}, взносы {formatCurrency(payment.socialContributions || 0)})
+                                </span>
+                              </div>
+                            )}
+                            <div className="text-sm text-muted-foreground">
+                              {formatDate(payment.createdAt)}
+                            </div>
+                            {payment.payoutVia === "jump" && (
+                              <div className="flex items-center gap-1 mt-1">
+                                <Zap className="w-3 h-3 text-amber-500" />
+                                <span className="text-xs text-muted-foreground">Jump.Finance</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <div className="font-semibold">
-                            {formatCurrency(payment.amount)}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {formatDate(payment.createdAt)}
-                          </div>
-                          {payment.payoutVia === "jump" && (
-                            <div className="flex items-center gap-1 mt-1">
-                              <Zap className="w-3 h-3 text-amber-500" />
-                              <span className="text-xs text-muted-foreground">Jump.Finance</span>
+                        <div className="text-right flex flex-col items-end gap-2">
+                          <span
+                            className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${
+                              statusColors[payment.status] || "bg-gray-100 text-gray-800 border-gray-200"
+                            }`}
+                          >
+                            {getPaymentStatusLabel(payment)}
+                          </span>
+                          {/* OTP signing — only for manual (non-Jump) payments */}
+                          {payment.status === "sent_for_signing" && payment.payoutVia !== "jump" && (
+                            <Button
+                              size="sm"
+                              variant="default"
+                              onClick={() => setSigningPaymentId(payment.id)}
+                              className="text-xs"
+                            >
+                              <FileSignature className="w-3 h-3 mr-1" />
+                              Подписать акт
+                            </Button>
+                          )}
+                          {/* Jump: awaiting signature message */}
+                          {payment.payoutVia === "jump" && payment.jumpStatus === 8 && (
+                            <span className="text-xs text-amber-600">
+                              Подпишите документы в Jump.Finance
+                            </span>
+                          )}
+                          {payment.processedAt && (
+                            <div className="text-xs text-muted-foreground">
+                              Обработано: {formatDate(payment.processedAt)}
                             </div>
                           )}
                         </div>
                       </div>
-                      <div className="text-right flex flex-col items-end gap-2">
-                        <span
-                          className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${
-                            statusColors[payment.status] || "bg-gray-100 text-gray-800 border-gray-200"
-                          }`}
-                        >
-                          {getPaymentStatusLabel(payment)}
-                        </span>
-                        {/* OTP signing — only for manual (non-Jump) payments */}
-                        {payment.status === "sent_for_signing" && payment.payoutVia !== "jump" && (
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={() => setSigningPaymentId(payment.id)}
-                            className="text-xs"
-                          >
-                            <FileSignature className="w-3 h-3 mr-1" />
-                            Подписать акт
-                          </Button>
-                        )}
-                        {/* Jump: awaiting signature message */}
-                        {payment.payoutVia === "jump" && payment.jumpStatus === 8 && (
-                          <span className="text-xs text-amber-600">
-                            Подпишите документы в Jump.Finance
-                          </span>
-                        )}
-                        {payment.processedAt && (
-                          <div className="text-xs text-muted-foreground">
-                            Обработано: {formatDate(payment.processedAt)}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
