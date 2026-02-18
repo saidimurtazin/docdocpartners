@@ -144,6 +144,13 @@ export async function getAgentByEmail(email: string) {
   return agent;
 }
 
+export async function getAgentByPhone(phone: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [agent] = await db.select().from(agents).where(eq(agents.phone, phone));
+  return agent;
+}
+
 export async function getAgentByReferralCode(code: string) {
   const db = await getDb();
   if (!db) return undefined;

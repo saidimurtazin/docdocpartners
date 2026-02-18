@@ -17,7 +17,7 @@ const bot = new Telegraf(ENV.telegramBotToken);
 
 // Session interface
 interface SessionData {
-  registrationStep?: 'fullName' | 'email' | 'phone' | 'role' | 'specialization' | 'city' | 'excluded_clinics' | 'contract' | 'patient_name' | 'patient_birthdate' | 'patient_phone' | 'patient_contact_consent' | 'patient_consent' | 'payout_inn' | 'payout_self_employed' | 'payout_method' | 'payout_card_number' | 'payout_bank_name' | 'payout_bank_account' | 'payout_bank_bik';
+  registrationStep?: 'fullName' | 'email' | 'phone' | 'role' | 'specialization' | 'city' | 'excluded_clinics' | 'contract' | 'patient_name' | 'patient_birthdate' | 'patient_phone' | 'patient_contact_consent' | 'patient_consent' | 'payout_inn' | 'payout_self_employed' | 'payout_method' | 'payout_card_number' | 'payout_bank_name' | 'payout_bank_account' | 'payout_bank_bik' | 'link_email' | 'link_otp' | 'link_phone';
   tempData?: {
     fullName?: string;
     email?: string;
@@ -32,6 +32,8 @@ interface SessionData {
     patientPhone?: string;
     contactConsent?: boolean;
     referredBy?: string;
+    // Account linking
+    linkAgentId?: number;
     // Payout requisites input
     payoutInn?: string;
     payoutSelfEmployed?: "yes" | "no";
@@ -288,19 +290,122 @@ bot.command('start', async (ctx) => {
     }
   }
 
+  // Initialize session with referral data
+  const session = getSession(userId);
+  session.tempData = { referredBy };
+
+  // Ask if user already has an account (web registration)
   await ctx.reply(
     '👋 <b>Добро пожаловать в DocDocPartner!</b>\n\n' +
-    'Я помогу вам зарегистрироваться в партнерской программе для врачей и медицинских специалистов.\n\n' +
     '💰 Зарабатывайте до 10% за каждого направленного пациента\n' +
     '🏥 Работайте с проверенными клиниками\n' +
     '📱 Управляйте рекомендациями прямо в Telegram\n\n' +
-    '📝 <b>Для начала регистрации введите ваше полное имя (Фамилия Имя Отчество):</b>',
-    { parse_mode: 'HTML' }
+    'Вы уже зарегистрированы на сайте <b>doc-partner.ru</b>?',
+    {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('✅ Да, привязать Telegram', 'link_existing')],
+        [Markup.button.callback('📝 Нет, зарегистрироваться', 'register_new')],
+      ])
+    }
   );
+});
+
+// Handle "Link existing account" button
+bot.action('link_existing', async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+  await ctx.answerCbQuery();
+  if (isCallbackSpamming(userId)) return;
+
+  await ctx.reply(
+    '🔗 <b>Привязка аккаунта</b>\n\n' +
+    'Выберите способ подтверждения:',
+    {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('📧 По Email (код подтверждения)', 'link_via_email')],
+        [Markup.button.callback('📱 По номеру телефона', 'link_via_phone')],
+        [Markup.button.callback('◀️ Назад', 'link_back')],
+      ])
+    }
+  );
+});
+
+// Handle "Register new" button
+bot.action('register_new', async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+  await ctx.answerCbQuery();
+  if (isCallbackSpamming(userId)) return;
 
   const session = getSession(userId);
   session.registrationStep = 'fullName';
-  session.tempData = { referredBy };
+
+  await ctx.reply(
+    '📝 <b>Регистрация в DocDocPartner</b>\n\n' +
+    'Я помогу вам зарегистрироваться в партнерской программе.\n\n' +
+    '<b>Введите ваше полное имя (Фамилия Имя Отчество):</b>',
+    { parse_mode: 'HTML' }
+  );
+});
+
+// Handle "Back" button from link choice
+bot.action('link_back', async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+  await ctx.answerCbQuery();
+
+  await ctx.reply(
+    'Вы уже зарегистрированы на сайте <b>doc-partner.ru</b>?',
+    {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('✅ Да, привязать Telegram', 'link_existing')],
+        [Markup.button.callback('📝 Нет, зарегистрироваться', 'register_new')],
+      ])
+    }
+  );
+});
+
+// Handle "Link via Email" button
+bot.action('link_via_email', async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+  await ctx.answerCbQuery();
+  if (isCallbackSpamming(userId)) return;
+
+  const session = getSession(userId);
+  session.registrationStep = 'link_email';
+
+  await ctx.reply(
+    '📧 <b>Привязка по Email</b>\n\n' +
+    'Введите email, который вы использовали при регистрации на сайте:',
+    { parse_mode: 'HTML' }
+  );
+});
+
+// Handle "Link via Phone" button
+bot.action('link_via_phone', async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+  await ctx.answerCbQuery();
+  if (isCallbackSpamming(userId)) return;
+
+  const session = getSession(userId);
+  session.registrationStep = 'link_phone';
+
+  await ctx.reply(
+    '📱 <b>Привязка по номеру телефона</b>\n\n' +
+    'Нажмите кнопку ниже, чтобы поделиться вашим номером телефона.\n' +
+    'Номер должен совпадать с тем, что вы указали при регистрации.',
+    {
+      parse_mode: 'HTML',
+      ...Markup.keyboard([
+        [Markup.button.contactRequest('📱 Поделиться номером телефона')]
+      ]).oneTime().resize()
+    }
+  );
 });
 
 // Handle text messages
@@ -733,6 +838,143 @@ bot.on(message('text'), async (ctx) => {
     } catch (error) {
       console.error('[Telegram Bot] Referral program error:', error);
       await ctx.reply('❌ Произошла ошибка.');
+    }
+    return;
+  }
+
+  // Handle account linking: email input
+  if (session.registrationStep === 'link_email') {
+    const emailLower = text.trim().toLowerCase();
+    const emailValidation = validateEmailAdvanced(emailLower);
+    if (!emailValidation.valid) {
+      await ctx.reply(
+        `❌ <b>Некорректный email:</b>\n${emailValidation.error}\n\nПопробуйте ещё раз:`,
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
+    try {
+      const { getAgentByEmail } = await import('./db');
+      const agent = await getAgentByEmail(emailLower);
+
+      if (!agent) {
+        await ctx.reply(
+          '❌ <b>Аккаунт с таким email не найден.</b>\n\n' +
+          'Проверьте email или зарегистрируйтесь: /start',
+          { parse_mode: 'HTML' }
+        );
+        session.registrationStep = undefined;
+        return;
+      }
+
+      if (agent.telegramId) {
+        await ctx.reply(
+          '⚠️ <b>Этот аккаунт уже привязан к другому Telegram.</b>\n\n' +
+          'Если это ваш аккаунт, обратитесь в поддержку.',
+          { parse_mode: 'HTML' }
+        );
+        session.registrationStep = undefined;
+        return;
+      }
+
+      // Generate and send OTP
+      const { createAndSendOTP } = await import('./otp');
+      const sent = await createAndSendOTP(emailLower, 'login');
+      if (!sent) {
+        await ctx.reply('❌ Не удалось отправить код на email. Попробуйте позже.');
+        session.registrationStep = undefined;
+        return;
+      }
+
+      if (!session.tempData) session.tempData = {};
+      session.tempData.linkAgentId = agent.id;
+      session.tempData.email = emailLower;
+      session.registrationStep = 'link_otp';
+
+      await ctx.reply(
+        `📧 <b>Код отправлен на ${escapeHtml(emailLower)}</b>\n\n` +
+        'Введите 6-значный код подтверждения:',
+        { parse_mode: 'HTML' }
+      );
+    } catch (error) {
+      console.error('[Telegram Bot] Error in link_email:', error);
+      await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
+      session.registrationStep = undefined;
+    }
+    return;
+  }
+
+  // Handle account linking: OTP verification
+  if (session.registrationStep === 'link_otp') {
+    const code = text.trim().replace(/\D/g, '');
+    if (code.length !== 6) {
+      await ctx.reply('❌ Код должен состоять из 6 цифр. Попробуйте ещё раз:');
+      return;
+    }
+
+    const email = session.tempData?.email;
+    const linkAgentId = session.tempData?.linkAgentId;
+    if (!email || !linkAgentId) {
+      await ctx.reply('❌ Сессия истекла. Начните заново: /start');
+      session.registrationStep = undefined;
+      return;
+    }
+
+    try {
+      const { verifyOTP } = await import('./otp');
+      const valid = await verifyOTP(email, code);
+
+      if (!valid) {
+        await ctx.reply(
+          '❌ <b>Неверный или истекший код.</b>\n\nПопробуйте ещё раз или введите /start для начала заново.',
+          { parse_mode: 'HTML' }
+        );
+        return;
+      }
+
+      // OTP verified — link Telegram to the account
+      const { updateAgentTelegramData } = await import('./db');
+      await updateAgentTelegramData(linkAgentId, {
+        telegramId: String(userId),
+        firstName: ctx.from?.first_name || '',
+        lastName: ctx.from?.last_name || null,
+        username: ctx.from?.username || null,
+        photoUrl: null,
+      });
+
+      // Get updated agent to show status
+      const db = await getDb();
+      const [agent] = await db!.select().from(agents).where(eq(agents.id, linkAgentId));
+
+      sessions.delete(userId);
+
+      const statusLabels: Record<string, string> = {
+        pending: 'ожидает проверки',
+        active: 'активен',
+        rejected: 'отклонена',
+        blocked: 'заблокирован'
+      };
+
+      const keyboard = agent?.status === 'active' ? mainMenuKeyboard : Markup.removeKeyboard();
+
+      await ctx.reply(
+        '✅ <b>Telegram успешно привязан к вашему аккаунту!</b>\n\n' +
+        `👤 <b>Имя:</b> ${escapeHtml(agent?.fullName || '')}\n` +
+        `📧 <b>Email:</b> ${escapeHtml(agent?.email || '')}\n` +
+        `📍 <b>Город:</b> ${escapeHtml(agent?.city || '')}\n` +
+        `🎯 <b>Статус:</b> <b>${statusLabels[agent?.status || ''] || agent?.status}</b>\n\n` +
+        (agent?.status === 'active'
+          ? '✅ Вы можете отправлять рекомендации пациентов. Выберите действие:'
+          : agent?.status === 'pending'
+          ? '⏳ Ваша заявка находится на проверке. Мы свяжемся с вами в течение 24 часов.'
+          : ''),
+        { parse_mode: 'HTML', ...keyboard }
+      );
+    } catch (error) {
+      console.error('[Telegram Bot] Error in link_otp:', error);
+      await ctx.reply('❌ Произошла ошибка при проверке кода. Попробуйте позже.');
+      session.registrationStep = undefined;
     }
     return;
   }
@@ -1187,6 +1429,98 @@ bot.on(message('contact'), async (ctx) => {
 
   const session = getSession(userId);
 
+  // Handle account linking via phone contact
+  if (session.registrationStep === 'link_phone') {
+    const contact = ctx.message.contact;
+    if (!contact?.phone_number) {
+      await ctx.reply('❌ Не удалось получить номер. Попробуйте ещё раз.');
+      return;
+    }
+
+    // Security: verify this is the user's own contact
+    if (contact.user_id !== userId) {
+      await ctx.reply(
+        '⚠️ <b>Необходимо поделиться своим номером телефона.</b>\n\nНажмите кнопку «📱 Поделиться номером телефона» ниже.',
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
+    const validation = validatePhoneAdvanced(contact.phone_number);
+    if (!validation.valid) {
+      await ctx.reply(
+        `❌ <b>Ошибка валидации:</b>\n${validation.error}`,
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
+    try {
+      const { getAgentByPhone, updateAgentTelegramData } = await import('./db');
+      const agent = await getAgentByPhone(validation.normalized!);
+
+      if (!agent) {
+        await ctx.reply(
+          '❌ <b>Аккаунт с таким номером телефона не найден.</b>\n\n' +
+          'Проверьте номер или зарегистрируйтесь: /start',
+          { parse_mode: 'HTML', ...Markup.removeKeyboard() }
+        );
+        session.registrationStep = undefined;
+        return;
+      }
+
+      if (agent.telegramId) {
+        await ctx.reply(
+          '⚠️ <b>Этот аккаунт уже привязан к другому Telegram.</b>\n\n' +
+          'Если это ваш аккаунт, обратитесь в поддержку.',
+          { parse_mode: 'HTML', ...Markup.removeKeyboard() }
+        );
+        session.registrationStep = undefined;
+        return;
+      }
+
+      // Phone verified — link Telegram to the account
+      await updateAgentTelegramData(agent.id, {
+        telegramId: String(userId),
+        firstName: ctx.from?.first_name || '',
+        lastName: ctx.from?.last_name || null,
+        username: ctx.from?.username || null,
+        photoUrl: null,
+      });
+
+      sessions.delete(userId);
+
+      const statusLabels: Record<string, string> = {
+        pending: 'ожидает проверки',
+        active: 'активен',
+        rejected: 'отклонена',
+        blocked: 'заблокирован'
+      };
+
+      const keyboard = agent.status === 'active' ? mainMenuKeyboard : Markup.removeKeyboard();
+
+      await ctx.reply(
+        '✅ <b>Telegram успешно привязан к вашему аккаунту!</b>\n\n' +
+        `👤 <b>Имя:</b> ${escapeHtml(agent.fullName || '')}\n` +
+        `📧 <b>Email:</b> ${escapeHtml(agent.email || '')}\n` +
+        `📍 <b>Город:</b> ${escapeHtml(agent.city || '')}\n` +
+        `🎯 <b>Статус:</b> <b>${statusLabels[agent.status || ''] || agent.status}</b>\n\n` +
+        (agent.status === 'active'
+          ? '✅ Вы можете отправлять рекомендации пациентов. Выберите действие:'
+          : agent.status === 'pending'
+          ? '⏳ Ваша заявка находится на проверке. Мы свяжемся с вами в течение 24 часов.'
+          : ''),
+        { parse_mode: 'HTML', ...keyboard }
+      );
+    } catch (error) {
+      console.error('[Telegram Bot] Error in link_phone:', error);
+      await ctx.reply('❌ Произошла ошибка. Попробуйте позже.', Markup.removeKeyboard());
+      session.registrationStep = undefined;
+    }
+    return;
+  }
+
+  // Handle phone number during registration
   if (session.registrationStep === 'phone') {
     const contact = ctx.message.contact;
     if (!contact?.phone_number) {
