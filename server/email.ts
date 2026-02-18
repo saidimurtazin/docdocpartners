@@ -1,4 +1,8 @@
 import nodemailer from 'nodemailer';
+import dns from 'dns';
+
+// Force IPv4 for DNS resolution — Railway's IPv6 can't reach smtp.mail.ru
+dns.setDefaultResultOrder('ipv4first');
 
 interface SendEmailParams {
   to: string;
@@ -38,6 +42,9 @@ function getNoReplyTransporter() {
         user: smtpUser,
         pass: smtpPass,
       },
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 15000,
     });
 
     // Verify SMTP connection on first creation
@@ -74,6 +81,9 @@ function getInfoTransporter() {
         user: smtpUser,
         pass: smtpPass,
       },
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 15000,
     });
 
     // Verify SMTP connection on first creation
