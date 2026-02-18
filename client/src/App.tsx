@@ -12,6 +12,7 @@ import AdminPayments from "./pages/admin/Payments";
 import AdminDoctors from "./pages/admin/Doctors";
 import AdminClinics from "./pages/admin/Clinics";
 import AdminClinicReports from "./pages/admin/ClinicReports";
+import AdminSettings from "./pages/admin/Settings";
 import AgentClinics from "./pages/AgentClinics";
 import AdminLogin from "./pages/AdminLogin";
 import AgentCabinet from "./pages/AgentCabinet";
@@ -36,6 +37,7 @@ function Router() {
       <Route path={"/admin/doctors"} component={AdminDoctors} />
       <Route path={"/admin/clinics"} component={AdminClinics} />
       <Route path={"/admin/clinic-reports"} component={AdminClinicReports} />
+      <Route path={"/admin/settings"} component={AdminSettings} />
 
       {/* Agent panel routes */}
       <Route path={"/"} component={Home} />

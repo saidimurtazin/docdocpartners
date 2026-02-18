@@ -1,18 +1,19 @@
 /**
  * Payout Calculation Service
- * Handles commission calculations based on self-employment status and monthly volume
+ * Handles commission calculations based on self-employment status
+ * Commission rate is now determined by global tiers in admin settings
  */
 
 export interface PayoutCalculationInput {
   treatmentAmount: number; // в копейках
   isSelfEmployed: boolean;
-  monthlyVolume: number; // общая сумма рекомендаций за месяц в копейках
+  commissionRate: number;  // процент комиссии (определяется тирами)
 }
 
 export interface PayoutCalculationResult {
   grossAmount: number; // валовая сумма до вычетов (в копейках)
   netAmount: number; // чистая сумма к выплате (в копейках)
-  commissionRate: number; // процент комиссии (7% или 10%)
+  commissionRate: number; // процент комиссии
   taxAmount: number; // сумма налогов (в копейках)
   socialContributions: number; // соц. отчисления (в копейках)
   details: string; // описание расчета
@@ -22,13 +23,13 @@ export interface PayoutCalculationResult {
  * Рассчитать вознаграждение агента
  */
 export function calculatePayout(input: PayoutCalculationInput): PayoutCalculationResult {
-  const { treatmentAmount, isSelfEmployed, monthlyVolume } = input;
+  const { treatmentAmount, isSelfEmployed, commissionRate } = input;
 
-  // Определяем ставку комиссии
-  const commissionRate = monthlyVolume > 100_000_000 ? 0.10 : 0.07; // >1M RUB = 10%, иначе 7%
+  // Ставка как десятичная дробь
+  const rate = commissionRate / 100;
 
   // Валовая сумма
-  const grossAmount = Math.floor(treatmentAmount * commissionRate);
+  const grossAmount = Math.floor(treatmentAmount * rate);
 
   let netAmount: number;
   let taxAmount: number;
@@ -36,19 +37,19 @@ export function calculatePayout(input: PayoutCalculationInput): PayoutCalculatio
   let details: string;
 
   if (isSelfEmployed) {
-    // Самозанятый: платит 6% налог сам
+    // Самозанятый: платит 6% НПД сам, мы выплачиваем полную сумму
     netAmount = grossAmount;
-    taxAmount = 0; // агент платит сам
+    taxAmount = 0;
     socialContributions = 0;
-    details = `Самозанятый: ${commissionRate * 100}% от ${treatmentAmount / 100} ₽ = ${grossAmount / 100} ₽. Налог 6% (${Math.floor(grossAmount * 0.06) / 100} ₽) агент платит самостоятельно.`;
+    details = `Самозанятый: ${commissionRate}% от ${treatmentAmount / 100} ₽ = ${grossAmount / 100} ₽. Налог 6% НПД (${Math.floor(grossAmount * 0.06) / 100} ₽) агент платит самостоятельно.`;
   } else {
-    // Не самозанятый: вычитаем НДФЛ 13% + соц. отчисления ~30%
-    const ndfl = Math.floor(grossAmount * 0.13); // 13% НДФЛ
-    socialContributions = Math.floor(grossAmount * 0.30); // ~30% соц. отчисления
+    // Физлицо: вычитаем НДФЛ 13% + соц. отчисления 30%
+    const ndfl = Math.floor(grossAmount * 0.13);
+    socialContributions = Math.floor(grossAmount * 0.30);
     taxAmount = ndfl;
     netAmount = grossAmount - ndfl - socialContributions;
-    
-    details = `Не самозанятый: ${commissionRate * 100}% от ${treatmentAmount / 100} ₽ = ${grossAmount / 100} ₽. Минус НДФЛ 13% (${ndfl / 100} ₽) и соц. отчисления 30% (${socialContributions / 100} ₽) = ${netAmount / 100} ₽ к выплате.`;
+
+    details = `Физлицо: ${commissionRate}% от ${treatmentAmount / 100} ₽ = ${grossAmount / 100} ₽. Минус НДФЛ 13% (${ndfl / 100} ₽) и соц. отчисления 30% (${socialContributions / 100} ₽) = ${netAmount / 100} ₽ к выплате.`;
   }
 
   return {

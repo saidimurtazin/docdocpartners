@@ -10,32 +10,20 @@ import { SignJWT } from "jose";
 import { notifyNewDeviceLogin } from "./telegram-notifications";
 
 /**
- * Определить эффективную ставку комиссии для агента
- * Приоритет: индивидуальные тарифы агента > глобальные тарифы > null (использовать ставку клиники)
+ * Определить эффективную ставку комиссии для агента за конкретный месяц.
+ * Читает глобальные тиры из app_settings["agentCommissionTiers"].
+ * Возвращает null если тиры не настроены (используется ставка клиники).
  */
-async function getAgentEffectiveCommissionRate(agentId: number): Promise<number | null> {
-  const agent = await db.getAgentById(agentId);
-  if (!agent) return null;
+async function getAgentEffectiveCommissionRate(agentId: number, treatmentMonth: string): Promise<number | null> {
+  const globalJson = await db.getAppSetting("agentCommissionTiers");
+  if (!globalJson) return null;
 
   let tiers: { minMonthlyRevenue: number; commissionRate: number }[] = [];
+  try { tiers = JSON.parse(globalJson); } catch { return null; }
+  if (tiers.length === 0) return null;
 
-  // 1. Check per-agent override
-  if (agent.commissionOverride) {
-    try { tiers = JSON.parse(agent.commissionOverride); } catch { /* ignore */ }
-  }
-
-  // 2. If no agent override, check global settings
-  if (tiers.length === 0) {
-    const globalJson = await db.getAppSetting("agentCommissionTiers");
-    if (globalJson) {
-      try { tiers = JSON.parse(globalJson); } catch { /* ignore */ }
-    }
-  }
-
-  if (tiers.length === 0) return null; // no tier config → use clinic rate
-
-  // Get agent's monthly revenue
-  const monthlyRevenue = await db.getAgentMonthlyRevenue(agentId);
+  // Revenue за конкретный месяц (по treatmentMonth)
+  const monthlyRevenue = await db.getAgentMonthlyRevenueByTreatmentMonth(agentId, treatmentMonth);
 
   // Sort descending by threshold, pick the first matching tier
   const sorted = [...tiers].sort((a, b) => b.minMonthlyRevenue - a.minMonthlyRevenue);
@@ -46,6 +34,52 @@ async function getAgentEffectiveCommissionRate(agentId: number): Promise<number 
   }
 
   return tiers[0]?.commissionRate || null;
+}
+
+/**
+ * Парсит дату визита в формат "YYYY-MM" для treatmentMonth.
+ * Поддерживает: "DD.MM.YYYY", "YYYY-MM-DD", generic Date.
+ */
+function parseTreatmentMonth(visitDate: string): string | null {
+  // DD.MM.YYYY (Русский формат, самый частый)
+  const ruMatch = visitDate.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (ruMatch) {
+    return `${ruMatch[3]}-${ruMatch[2].padStart(2, '0')}`;
+  }
+  // YYYY-MM-DD (ISO)
+  const isoMatch = visitDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2]}`;
+  }
+  // Fallback — generic Date parse
+  const d = new Date(visitDate);
+  if (!isNaN(d.getTime())) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+  return null;
+}
+
+/**
+ * Пересчитать комиссию для ВСЕХ referrals агента за конкретный месяц.
+ * Вызывается после утверждения нового отчёта, потому что суммарная выручка за месяц
+ * могла изменить тир и комиссию для ВСЕХ referrals этого месяца.
+ */
+async function recalculateMonthlyCommissions(agentId: number, treatmentMonth: string): Promise<void> {
+  const effectiveRate = await getAgentEffectiveCommissionRate(agentId, treatmentMonth);
+  if (effectiveRate === null) return; // нет глобальных тиров — не пересчитываем
+
+  const monthReferrals = await db.getReferralsByAgentAndMonth(agentId, treatmentMonth);
+  if (monthReferrals.length === 0) return;
+
+  for (const ref of monthReferrals) {
+    const newCommission = Math.round((ref.treatmentAmount || 0) * effectiveRate / 100);
+    const oldCommission = ref.commissionAmount || 0;
+
+    if (newCommission !== oldCommission) {
+      // updateReferralAmounts применяет дельту к agent.totalEarnings
+      await db.updateReferralAmounts(ref.id, ref.treatmentAmount || 0, newCommission);
+    }
+  }
 }
 
 function getJwtSecret(): Uint8Array {
@@ -550,34 +584,7 @@ DocDocPartner — B2B-платформа агентских рекомендац
           return result;
         }),
 
-      // Update agent commission override (individual tiers)
-      updateCommissionOverride: protectedProcedure
-        .input(z.object({
-          agentId: z.number(),
-          commissionOverride: z.string().nullable(),
-        }))
-        .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
-          if (input.commissionOverride) {
-            try {
-              const parsed = JSON.parse(input.commissionOverride);
-              if (!Array.isArray(parsed)) throw new Error("Must be array");
-              for (const tier of parsed) {
-                if (typeof tier.minMonthlyRevenue !== "number" || typeof tier.commissionRate !== "number") {
-                  throw new Error("Invalid tier format");
-                }
-              }
-            } catch (e: any) {
-              throw new TRPCError({ code: "BAD_REQUEST", message: `Неверный формат: ${e.message}` });
-            }
-          }
-          const database = await db.getDb();
-          if (!database) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-          const { agents } = await import("../drizzle/schema");
-          const { eq } = await import("drizzle-orm");
-          await database.update(agents).set({ commissionOverride: input.commissionOverride }).where(eq(agents.id, input.agentId));
-          return { success: true };
-        }),
+      // Commission tiers removed from per-agent — now in global settings only
     }),
 
     // REFERRALS
@@ -1020,6 +1027,35 @@ DocDocPartner — B2B-платформа агентских рекомендац
           await db.setAppSetting(input.key, input.value);
           return { success: true };
         }),
+
+      // Commission tiers management
+      getCommissionTiers: protectedProcedure
+        .query(async ({ ctx }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          const raw = await db.getAppSetting("agentCommissionTiers");
+          if (!raw) return [];
+          try { return JSON.parse(raw) as { minMonthlyRevenue: number; commissionRate: number }[]; }
+          catch { return []; }
+        }),
+
+      setCommissionTiers: protectedProcedure
+        .input(z.object({
+          tiers: z.array(z.object({
+            minMonthlyRevenue: z.number().min(0),
+            commissionRate: z.number().min(0).max(100),
+          })),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          // Сортировать по порогу и проверить на дубликаты
+          const sorted = [...input.tiers].sort((a, b) => a.minMonthlyRevenue - b.minMonthlyRevenue);
+          const thresholds = sorted.map(t => t.minMonthlyRevenue);
+          if (new Set(thresholds).size !== thresholds.length) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Дублирующиеся пороги недопустимы" });
+          }
+          await db.setAppSetting("agentCommissionTiers", JSON.stringify(sorted));
+          return { success: true };
+        }),
     }),
 
     // EXPORT
@@ -1133,26 +1169,43 @@ DocDocPartner — B2B-платформа агентских рекомендац
           if (refId) {
             await db.linkClinicReportToReferral(input.id, refId);
 
-            // Update referral amounts — use clinic commission rate + agent tier override
             const amount = input.treatmentAmount || report.treatmentAmount || 0;
             if (amount > 0) {
-              // 1. Get clinic commission rate (default 10%)
-              let commissionRate = 10;
               const referral = await db.getReferralById(refId);
-              if (referral?.clinic) {
+              if (!referral) throw new TRPCError({ code: "NOT_FOUND", message: "Referral not found" });
+
+              // Определить treatmentMonth из visitDate отчёта
+              let treatmentMonth: string | null = null;
+              if (report.visitDate) {
+                treatmentMonth = parseTreatmentMonth(report.visitDate);
+              }
+              if (!treatmentMonth) {
+                // Fallback: текущий месяц
+                const now = new Date();
+                treatmentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+              }
+
+              // Установить treatmentMonth на referral
+              await db.setReferralTreatmentMonth(refId, treatmentMonth);
+
+              // 1. Базовая ставка клиники (default 10%)
+              let commissionRate = 10;
+              if (referral.clinic) {
                 const clinic = await db.getClinicByName(referral.clinic);
                 if (clinic?.commissionRate) commissionRate = clinic.commissionRate;
               }
 
-              // 2. Check agent commission tier override
-              if (referral) {
-                const agentRate = await getAgentEffectiveCommissionRate(referral.agentId);
-                if (agentRate !== null) commissionRate = agentRate;
-              }
+              // 2. Проверить глобальные тиры
+              const tierRate = await getAgentEffectiveCommissionRate(referral.agentId, treatmentMonth);
+              if (tierRate !== null) commissionRate = tierRate;
 
+              // 3. Обновить суммы этого referral
               const commission = Math.round(amount * commissionRate / 100);
               await db.updateReferralAmounts(refId, amount, commission);
               await db.updateReferralStatus(refId, "visited");
+
+              // 4. Пересчитать ВСЕ referrals этого месяца (новая выручка может изменить тир)
+              await recalculateMonthlyCommissions(referral.agentId, treatmentMonth);
             }
           }
 
@@ -1503,12 +1556,18 @@ DocDocPartner — B2B-платформа агентских рекомендац
       for (let i = 5; i >= 0; i--) {
         const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const monthName = date.toLocaleDateString('ru-RU', { month: 'short' });
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
         const nextMonth = new Date(date.getFullYear(), date.getMonth() + 1, 1);
 
         const earnings = referrals
           .filter(r => {
+            if (!(r.status === "paid" || r.status === "visited")) return false;
+            // Prefer treatmentMonth, fallback to createdAt for old data
+            if ((r as any).treatmentMonth) {
+              return (r as any).treatmentMonth === monthKey;
+            }
             const createdAt = new Date(r.createdAt);
-            return createdAt >= date && createdAt < nextMonth && (r.status === "paid" || r.status === "visited");
+            return createdAt >= date && createdAt < nextMonth;
           })
           .reduce((sum, r) => sum + (r.commissionAmount || 0), 0);
 

@@ -1156,6 +1156,50 @@ export async function getAgentMonthlyRevenue(agentId: number): Promise<number> {
   return result.sum;
 }
 
+/**
+ * Месячная выручка агента по treatmentMonth (YYYY-MM).
+ * Используется для определения тира комиссии за конкретный месяц.
+ */
+export async function getAgentMonthlyRevenueByTreatmentMonth(agentId: number, treatmentMonth: string): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.select({
+    sum: sql<number>`COALESCE(SUM(${referrals.treatmentAmount}), 0)`
+  }).from(referrals)
+    .where(and(
+      eq(referrals.agentId, agentId),
+      sql`${referrals.status} IN ('visited', 'paid')`,
+      eq(referrals.treatmentMonth, treatmentMonth)
+    ));
+  return result.sum;
+}
+
+/**
+ * Все referrals агента за конкретный treatmentMonth (visited/paid).
+ * Используется для пересчёта комиссий при изменении тира.
+ */
+export async function getReferralsByAgentAndMonth(agentId: number, treatmentMonth: string) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(referrals)
+    .where(and(
+      eq(referrals.agentId, agentId),
+      eq(referrals.treatmentMonth, treatmentMonth),
+      sql`${referrals.status} IN ('visited', 'paid')`
+    ));
+}
+
+/**
+ * Установить treatmentMonth на referral (при утверждении отчёта клиники).
+ */
+export async function setReferralTreatmentMonth(referralId: number, treatmentMonth: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(referrals)
+    .set({ treatmentMonth } as any)
+    .where(eq(referrals.id, referralId));
+}
+
 // ==================== APP SETTINGS ====================
 
 export async function getAppSetting(key: string): Promise<string | null> {

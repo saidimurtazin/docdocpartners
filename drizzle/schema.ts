@@ -104,6 +104,7 @@ export const referrals = mysqlTable("referrals", {
   status: mysqlEnum("status", ["new", "in_progress", "contacted", "scheduled", "visited", "paid", "duplicate", "no_answer", "cancelled"]).default("new").notNull(),
   treatmentAmount: int("treatmentAmount").default(0), // сумма лечения в копейках
   commissionAmount: int("commissionAmount").default(0), // вознаграждение агенту в копейках
+  treatmentMonth: varchar("treatmentMonth", { length: 7 }), // "YYYY-MM" — месяц лечения для расчёта тиров
   contactConsent: boolean("contactConsent"), // согласие пациента на связь от DocDoc
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
