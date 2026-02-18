@@ -5,29 +5,30 @@ import { generateOTP, sendOTPEmail } from "./email";
 
 /**
  * Create and send OTP code to email
+ * @param purpose - 'registration' for new signup, 'login' for existing user login
  */
-export async function createAndSendOTP(email: string): Promise<boolean> {
+export async function createAndSendOTP(email: string, purpose: 'registration' | 'login' = 'registration'): Promise<boolean> {
   try {
     // Generate OTP
     const code = generateOTP();
-    
+
     // Set expiration to 10 minutes from now
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-    
+
     // Save to database
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    
+
     await db.insert(otpCodes).values({
       email,
       code,
       expiresAt,
       used: "no",
     });
-    
+
     // Send email
-    const sent = await sendOTPEmail(email, code);
-    
+    const sent = await sendOTPEmail(email, code, purpose);
+
     return sent;
   } catch (error) {
     console.error("Error creating and sending OTP:", error);

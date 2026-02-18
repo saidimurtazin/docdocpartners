@@ -24,12 +24,12 @@ export default function Login() {
       await requestOtp.mutateAsync({ email });
       setOtpSent(true);
       toast.success("Код отправлен", {
-        description: "Проверьте Telegram для получения кода",
+        description: "Проверьте вашу почту для получения кода",
       });
     } catch (error: any) {
       if (error.message?.includes("not found") || error.message?.includes("не найден")) {
         toast.error("Пользователь не найден", {
-          description: "Зарегистрируйтесь через Telegram-бот @docpartnerbot",
+          description: "Зарегистрируйтесь на сайте или через Telegram-бот",
         });
       } else {
         toast.error("Ошибка", {
@@ -95,17 +95,17 @@ export default function Login() {
               {requestOtp.isPending ? (
                 <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Отправка...</>
               ) : (
-                "Получить код в Telegram"
+                "Получить код"
               )}
             </Button>
             <p className="text-xs text-muted-foreground text-center">
-              Код придёт в Telegram, привязанный к этому email
+              Код придёт на ваш email
             </p>
           </>
         ) : (
           <>
             <div className="space-y-2">
-              <Label htmlFor="otp">Код из Telegram</Label>
+              <Label htmlFor="otp">Код подтверждения</Label>
               <Input
                 id="otp"
                 type="text"
@@ -192,16 +192,25 @@ export default function Login() {
                 </div>
               </Button>
 
-              <div className="text-center pt-4">
+              <div className="text-center pt-4 space-y-1">
                 <p className="text-sm text-muted-foreground">
                   Ещё не зарегистрированы?{" "}
+                  <Link
+                    href="/register"
+                    className="text-primary hover:underline font-medium"
+                  >
+                    Зарегистрироваться
+                  </Link>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  или{" "}
                   <a
                     href="https://t.me/docpartnerbot"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-primary hover:underline font-medium"
+                    className="text-primary/70 hover:underline"
                   >
-                    Начните в Telegram-боте
+                    через Telegram-бот
                   </a>
                 </p>
               </div>

@@ -56,7 +56,7 @@ export type InsertDoctor = typeof doctors.$inferInsert;
  */
 export const agents = mysqlTable("agents", {
   id: int("id").autoincrement().primaryKey(),
-  telegramId: varchar("telegramId", { length: 64 }).notNull().unique(),
+  telegramId: varchar("telegramId", { length: 64 }).unique(),
   fullName: varchar("fullName", { length: 255 }).notNull(),
   email: varchar("email", { length: 320 }),
   phone: varchar("phone", { length: 50 }),

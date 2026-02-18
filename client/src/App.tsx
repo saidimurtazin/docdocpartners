@@ -24,6 +24,7 @@ import AgentProfile from "./pages/AgentProfile";
 import AgentPayments from "./pages/AgentPayments";
 import AgentReferrals from "./pages/AgentReferrals";
 import Login from "./pages/Login";
+import Register from "./pages/Register";
 
 function Router() {
   return (
@@ -42,6 +43,7 @@ function Router() {
       {/* Agent panel routes */}
       <Route path={"/"} component={Home} />
       <Route path={"/login"} component={Login} />
+      <Route path={"/register"} component={Register} />
       <Route path={"/dashboard"} component={AgentDashboard} />
       <Route path={"/dashboard/profile"} component={AgentProfile} />
       <Route path={"/dashboard/payments"} component={AgentPayments} />

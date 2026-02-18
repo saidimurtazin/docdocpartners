@@ -6,7 +6,7 @@ import { invokeLLM } from "./_core/llm";
 import { z } from "zod";
 import * as db from "./db";
 import { TRPCError } from "@trpc/server";
-import { SignJWT } from "jose";
+import { SignJWT, jwtVerify } from "jose";
 import { notifyNewDeviceLogin } from "./telegram-notifications";
 import { calculateWithdrawalTax } from "./payout-calculator";
 
@@ -220,7 +220,7 @@ export const appRouter = router({
         if (!agent) {
           throw new TRPCError({
             code: "NOT_FOUND",
-            message: "Пользователь не найден. Зарегистрируйтесь в Telegram-боте.",
+            message: "Пользователь не найден. Зарегистрируйтесь на сайте или в Telegram-боте.",
           });
         }
 
@@ -231,38 +231,42 @@ export const appRouter = router({
           });
         }
 
-        // Generate OTP code for agent
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-        if (process.env.NODE_ENV !== "production") console.log('[RequestOTP] Agent code generated for', input.email);
-
-        // Save OTP to database
-        const dbInstance = await db.getDb();
-        if (!dbInstance) {
+        // Send OTP via email (primary channel) using shared OTP module
+        const { createAndSendOTP } = await import("./otp");
+        const sent = await createAndSendOTP(input.email, 'login');
+        if (!sent) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message: "Database connection error",
+            message: "Не удалось отправить код. Попробуйте позже.",
           });
         }
 
-        const { otpCodes: otpCodesTable } = await import("../drizzle/schema");
-        await dbInstance.insert(otpCodesTable).values({
-          email: input.email,
-          code,
-          expiresAt,
-          used: "no",
-        });
-
-        // Send OTP via Telegram bot to agent (non-blocking — login proceeds even if Telegram fails)
-        try {
-          const { notifyAgent } = await import("./telegram-bot-webhook");
-          await notifyAgent(
-            agent.telegramId,
-            `🔐 <b>Код для входа в личный кабинет:</b>\n\n<code>${code}</code>\n\nКод действителен 5 минут.\n\n⚠️ Никому не сообщайте этот код!`
-          );
-        } catch (err) {
-          console.error("[RequestOTP] Failed to send Telegram notification to agent:", err);
-          // Don't throw — OTP saved to DB, user can retry
+        // Also send OTP via Telegram if agent has telegramId (secondary channel)
+        if (agent.telegramId) {
+          try {
+            // Read the last OTP code from DB for this email to send via Telegram
+            const dbInstance = await db.getDb();
+            if (dbInstance) {
+              const { otpCodes: otpCodesTable } = await import("../drizzle/schema");
+              const { and, eq, sql, desc } = await import("drizzle-orm");
+              const [lastOtp] = await dbInstance
+                .select()
+                .from(otpCodesTable)
+                .where(and(eq(otpCodesTable.email, input.email), eq(otpCodesTable.used, "no")))
+                .orderBy(desc(otpCodesTable.id))
+                .limit(1);
+              if (lastOtp) {
+                const { notifyAgent } = await import("./telegram-bot-webhook");
+                await notifyAgent(
+                  agent.telegramId,
+                  `🔐 <b>Код для входа в личный кабинет:</b>\n\n<code>${lastOtp.code}</code>\n\nКод действителен 10 минут.\n\n⚠️ Никому не сообщайте этот код!`
+                );
+              }
+            }
+          } catch (err) {
+            console.error("[RequestOTP] Failed to send Telegram notification to agent:", err);
+            // Non-blocking — email is the primary channel
+          }
         }
 
         return { success: true };
@@ -417,6 +421,258 @@ export const appRouter = router({
             email: agent.email,
           }
         };
+      }),
+
+    // ===== WEB REGISTRATION =====
+
+    requestRegistrationOtp: publicProcedure
+      .input(z.object({ email: z.string().email() }))
+      .mutation(async ({ input }) => {
+        // Check email not already registered as agent
+        const existingAgent = await db.getAgentByEmail(input.email);
+        if (existingAgent) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Этот email уже зарегистрирован. Войдите в личный кабинет.",
+          });
+        }
+
+        // Check email not admin
+        const adminUser = await db.getUserByEmail(input.email);
+        if (adminUser) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Этот email уже используется.",
+          });
+        }
+
+        // Send OTP via email
+        const { createAndSendOTP } = await import("./otp");
+        const sent = await createAndSendOTP(input.email);
+        if (!sent) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Не удалось отправить код. Попробуйте позже.",
+          });
+        }
+
+        return { success: true };
+      }),
+
+    verifyRegistrationOtp: publicProcedure
+      .input(z.object({
+        email: z.string().email(),
+        code: z.string().regex(/^\d{6}$/, "Код должен состоять из 6 цифр"),
+      }))
+      .mutation(async ({ input }) => {
+        const { verifyOTP } = await import("./otp");
+        const valid = await verifyOTP(input.email, input.code);
+        if (!valid) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Неверный или истекший код",
+          });
+        }
+
+        // Create short-lived registration token (15 min)
+        const secret = getJwtSecret();
+        const regToken = await new SignJWT({
+          email: input.email,
+          purpose: "registration",
+        })
+          .setProtectedHeader({ alg: "HS256" })
+          .setIssuedAt()
+          .setExpirationTime("15m")
+          .sign(secret);
+
+        return { success: true, registrationToken: regToken };
+      }),
+
+    register: publicProcedure
+      .input(z.object({
+        registrationToken: z.string(),
+        fullName: z.string().min(3).max(150),
+        phone: z.string().min(11).max(20),
+        role: z.string().min(1),
+        specialization: z.string().optional(),
+        city: z.string().min(2).max(50),
+        excludedClinics: z.array(z.number()).optional(),
+        referralCode: z.string().optional(),
+        contractAccepted: z.boolean(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        // 1. Verify registration token
+        const secret = getJwtSecret();
+        let email: string;
+        try {
+          const { payload } = await jwtVerify(input.registrationToken, secret);
+          if (payload.purpose !== "registration") {
+            throw new Error("Invalid token purpose");
+          }
+          email = payload.email as string;
+        } catch {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Токен регистрации истёк. Начните заново.",
+          });
+        }
+
+        // 2. Validate contract acceptance
+        if (!input.contractAccepted) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Необходимо принять условия договора.",
+          });
+        }
+
+        // 3. Server-side validation
+        const { validateFullName, validatePhoneAdvanced, validateCity, capitalizeWords } = await import("./validation");
+
+        const nameCheck = validateFullName(input.fullName);
+        if (!nameCheck.valid) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: nameCheck.error || "Неверное ФИО" });
+        }
+
+        const phoneCheck = validatePhoneAdvanced(input.phone);
+        if (!phoneCheck.valid) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: phoneCheck.error || "Неверный телефон" });
+        }
+
+        const cityCheck = validateCity(input.city);
+        if (!cityCheck.valid) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: cityCheck.error || "Неверный город" });
+        }
+
+        // 4. Check email not already taken (race condition guard)
+        const existingAgent = await db.getAgentByEmail(email);
+        if (existingAgent) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Этот email уже зарегистрирован.",
+          });
+        }
+
+        // 5. Generate referral code
+        const crypto = await import("crypto");
+        const referralCode = crypto.randomBytes(6).toString("hex");
+
+        // 6. Resolve referredBy
+        let referredByAgentId: number | null = null;
+        if (input.referralCode && input.referralCode.trim()) {
+          const referrer = await db.getAgentByReferralCode(input.referralCode.trim());
+          if (referrer) {
+            referredByAgentId = referrer.id;
+          } else {
+            // Try as agent ID (for backward compat with Telegram ref_ID links)
+            const parsedId = parseInt(input.referralCode.trim(), 10);
+            if (!isNaN(parsedId) && parsedId > 0) {
+              const agentById = await db.getAgentById(parsedId);
+              if (agentById) referredByAgentId = agentById.id;
+            }
+          }
+        }
+
+        // 7. Prepare excluded clinics
+        const excludedClinicsJson = input.excludedClinics?.length
+          ? JSON.stringify(input.excludedClinics)
+          : null;
+
+        // 8. Create agent (telegramId is null for web registration)
+        const agentId = await db.createAgent({
+          telegramId: null,
+          fullName: capitalizeWords(input.fullName),
+          email,
+          phone: phoneCheck.normalized || input.phone,
+          role: input.role,
+          specialization: input.specialization || null,
+          city: capitalizeWords(input.city),
+          status: "pending",
+          referralCode,
+          referredBy: referredByAgentId,
+          excludedClinics: excludedClinicsJson,
+        });
+
+        // 9. Credit referral bonus to inviting agent
+        if (referredByAgentId) {
+          await db.addBonusPoints(referredByAgentId, 100000); // 1,000₽
+
+          // Notify inviter via Telegram if they have telegramId
+          try {
+            const inviter = await db.getAgentById(referredByAgentId);
+            if (inviter?.telegramId) {
+              const { notifyAgent } = await import("./telegram-bot-webhook");
+              await notifyAgent(
+                inviter.telegramId,
+                `🎉 <b>Новый реферал!</b>\n\n` +
+                `Агент <b>${capitalizeWords(input.fullName)}</b> зарегистрировался по вашей ссылке.\n\n` +
+                `💰 Вам начислен бонус: <b>1 000 ₽</b>\n` +
+                `📊 Бонус будет доступен после 10 оплаченных направлений.`
+              );
+            }
+          } catch (err) {
+            console.error("[Register] Failed to notify referrer:", err);
+          }
+        }
+
+        // 10. Notify admin about new registration
+        try {
+          const { notifyAgent } = await import("./telegram-bot-webhook");
+          // Find admin by owner email
+          const admin = await db.getUserByEmail("said.i.murtazin@gmail.com");
+          if (admin?.telegramId) {
+            await notifyAgent(
+              admin.telegramId,
+              `📋 <b>Новая заявка на регистрацию (веб)</b>\n\n` +
+              `👤 ${capitalizeWords(input.fullName)}\n` +
+              `📧 ${email}\n` +
+              `📱 ${phoneCheck.normalized || input.phone}\n` +
+              `🏷 ${input.role}${input.specialization ? ` — ${input.specialization}` : ''}\n` +
+              `🏙 ${capitalizeWords(input.city)}`
+            );
+          }
+        } catch (err) {
+          console.error("[Register] Failed to notify admin:", err);
+        }
+
+        // 11. Auto-login: create session and set cookie
+        const token = await new SignJWT({
+          userId: agentId,
+          agentId,
+          role: "agent",
+          telegramId: null,
+        })
+          .setProtectedHeader({ alg: "HS256" })
+          .setIssuedAt()
+          .setExpirationTime("30d")
+          .sign(secret);
+
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(AGENT_COOKIE_NAME, token, {
+          ...cookieOptions,
+          maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        });
+
+        // Create session record
+        const deviceInfo = ctx.req.headers["user-agent"] || null;
+        const ipAddress = (ctx.req.headers["x-forwarded-for"] as string)?.split(",")[0] ||
+                          (ctx.req.headers["x-real-ip"] as string) ||
+                          ctx.req.socket.remoteAddress || null;
+
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 30);
+
+        await db.createSession({
+          agentId,
+          sessionToken: token,
+          deviceInfo,
+          ipAddress,
+          loginMethod: "web_registration",
+          lastActivityAt: new Date(),
+          expiresAt,
+          isRevoked: "no",
+        });
+
+        return { success: true, agentId };
       }),
 
   }),

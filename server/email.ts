@@ -146,8 +146,18 @@ export async function sendReferralNotification(params: {
 
 /**
  * Send OTP code via email
+ * @param purpose - 'registration' for new signup, 'login' for existing user login
  */
-export async function sendOTPEmail(to: string, code: string): Promise<boolean> {
+export async function sendOTPEmail(to: string, code: string, purpose: 'registration' | 'login' = 'registration'): Promise<boolean> {
+  const isLogin = purpose === 'login';
+  const subject = isLogin ? 'Код для входа в DocDocPartner' : 'Подтверждение регистрации в DocDocPartner';
+  const headerText = isLogin ? 'Вход в личный кабинет' : 'Подтверждение регистрации';
+  const titleText = isLogin ? 'Вход в DocDocPartner' : 'Добро пожаловать в DocDocPartner!';
+  const descText = isLogin ? 'Для входа в личный кабинет введите код:' : 'Для завершения регистрации введите код подтверждения:';
+  const ignoreText = isLogin
+    ? 'Если вы не запрашивали вход, просто проигнорируйте это письмо.'
+    : 'Если вы не регистрировались в DocDocPartner, просто проигнорируйте это письмо.';
+
   const html = `
     <!DOCTYPE html>
     <html>
@@ -166,14 +176,14 @@ export async function sendOTPEmail(to: string, code: string): Promise<boolean> {
       <div class="container">
         <div class="header">
           <h1>🏥 DocDocPartner</h1>
-          <p>Подтверждение регистрации</p>
+          <p>${headerText}</p>
         </div>
         <div class="content">
-          <h2>Добро пожаловать в DocDocPartner!</h2>
-          <p>Для завершения регистрации введите код подтверждения:</p>
+          <h2>${titleText}</h2>
+          <p>${descText}</p>
           <div class="otp-code">${code}</div>
           <p><strong>Код действителен 10 минут.</strong></p>
-          <p>Если вы не регистрировались в DocDocPartner, просто проигнорируйте это письмо.</p>
+          <p>${ignoreText}</p>
         </div>
         <div class="footer">
           <p>© 2026 DocDocPartner. Все права защищены.</p>
@@ -185,7 +195,7 @@ export async function sendOTPEmail(to: string, code: string): Promise<boolean> {
 
   return sendEmail({
     to: to,
-    subject: 'Подтверждение регистрации в DocDocPartner',
+    subject,
     html,
   });
 }
