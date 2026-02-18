@@ -130,22 +130,22 @@ export default function Home() {
               База знаний
             </Link>
           </nav>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {isAuthenticated ? (
               <Link href="/dashboard">
-                <Button variant="outline" className="hidden sm:inline-flex">Личный кабинет</Button>
+                <Button variant="outline" className="h-9 sm:h-11 px-3 sm:px-4 text-sm">Кабинет</Button>
               </Link>
             ) : (
-              <Button variant="outline" onClick={() => window.location.href = '/login'} className="hidden sm:inline-flex">Войти</Button>
+              <Button variant="outline" onClick={() => window.location.href = '/login'} className="h-9 sm:h-11 px-3 sm:px-4 text-sm">Войти</Button>
             )}
             <Button
-              className="btn-premium text-[oklch(0.15_0.05_75)] font-semibold h-11 px-6"
+              className="btn-premium text-[oklch(0.15_0.05_75)] font-semibold h-9 sm:h-11 px-3 sm:px-6 text-sm"
               onClick={() => window.open('https://t.me/docpartnerbot', '_blank')}
             >
-              <MessageSquare className="w-4 h-4 mr-2" />
+              <MessageSquare className="w-4 h-4 mr-1 sm:mr-2" />
               <span className="hidden sm:inline">Начать в Telegram</span>
               <span className="sm:hidden">Telegram</span>
-              <ArrowRight className="w-4 h-4 ml-2" />
+              <ArrowRight className="w-4 h-4 ml-1 sm:ml-2" />
             </Button>
           </div>
         </div>
@@ -194,7 +194,7 @@ export default function Home() {
               <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full glass-card animate-pulse-glow">
                 <Sparkles className="w-4 h-4 text-[oklch(0.70_0.15_75)]" />
                 <span className="text-sm font-semibold bg-gradient-to-r from-[oklch(0.35_0.08_250)] to-[oklch(0.55_0.12_250)] bg-clip-text text-transparent">
-                  Легальная партнерская программа
+                  Медицинская партнерская программа
                 </span>
               </div>
             </motion.div>
@@ -208,7 +208,7 @@ export default function Home() {
             >
               Рекомендуйте пациентов.{" "}
               <span className="gradient-gold-text">
-                Зарабатывайте легально.
+                Зарабатывайте официально.
               </span>
             </motion.h1>
 
@@ -616,7 +616,7 @@ export default function Home() {
         <div className="container relative z-10">
           <AnimatedSection className="max-w-4xl mx-auto text-center space-y-8">
             <motion.h2 variants={fadeUp} className="text-4xl sm:text-5xl md:text-6xl font-bold leading-tight">
-              Готовы начать зарабатывать легально?
+              Готовы начать зарабатывать официально?
             </motion.h2>
             <motion.p variants={fadeUp} custom={1} className="text-lg md:text-xl text-white/80">
               Присоединяйтесь к DocDocPartner и получайте до 10% от каждой рекомендации
@@ -650,7 +650,7 @@ export default function Home() {
                 <span className="font-bold text-xl">DocDocPartner</span>
               </div>
               <p className="text-sm text-muted-foreground">
-                Легальная партнерская программа для врачей и медицинских специалистов
+                Медицинская партнерская программа для врачей и медицинских специалистов
               </p>
             </div>
             <div>

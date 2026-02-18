@@ -1,8 +1,18 @@
 import nodemailer from 'nodemailer';
 import dns from 'dns';
+import net from 'net';
 
 // Force IPv4 for DNS resolution — Railway's IPv6 can't reach smtp.mail.ru
 dns.setDefaultResultOrder('ipv4first');
+
+/** Custom DNS lookup that forces IPv4 (family=4) — fixes ENETUNREACH on Railway IPv6 */
+function ipv4Lookup(hostname: string, options: any, callback: any) {
+  if (typeof options === 'function') {
+    callback = options;
+    options = {};
+  }
+  return dns.lookup(hostname, { ...options, family: 4 }, callback);
+}
 
 interface SendEmailParams {
   to: string;
@@ -36,15 +46,13 @@ function getNoReplyTransporter() {
 
     noReplyTransporter = nodemailer.createTransport({
       host: 'smtp.mail.ru',
-      port: 587,
-      secure: false,
+      port: 465,
+      secure: true,
       auth: {
         user: smtpUser,
         pass: smtpPass,
       },
-      tls: {
-        rejectUnauthorized: false,
-      },
+      dnsLookup: ipv4Lookup as any,
       connectionTimeout: 15000,
       greetingTimeout: 15000,
       socketTimeout: 15000,
@@ -78,15 +86,13 @@ function getInfoTransporter() {
 
     infoTransporter = nodemailer.createTransport({
       host: 'smtp.mail.ru',
-      port: 587,
-      secure: false,
+      port: 465,
+      secure: true,
       auth: {
         user: smtpUser,
         pass: smtpPass,
       },
-      tls: {
-        rejectUnauthorized: false,
-      },
+      dnsLookup: ipv4Lookup as any,
       connectionTimeout: 15000,
       greetingTimeout: 15000,
       socketTimeout: 15000,
