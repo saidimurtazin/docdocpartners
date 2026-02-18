@@ -41,6 +41,8 @@ export const ENV = {
   /** SMTP credentials for noreply@ transactional emails (OTP, agent notifications) */
   smtpNoReplyUser: process.env.SMTP_NOREPLY_USER ?? "",
   smtpNoReplyPass: process.env.SMTP_NOREPLY_PASS ?? "",
+  /** Resend API key for transactional emails (replaces SMTP on Railway) */
+  resendApiKey: process.env.RESEND_API_KEY ?? "",
   /** Jump.Finance API integration */
   jumpFinanceApiKey: process.env.JUMP_FINANCE_API_KEY ?? "",
   jumpFinanceAgentId: process.env.JUMP_FINANCE_AGENT_ID ?? "",

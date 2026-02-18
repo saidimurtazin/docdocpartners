@@ -1,13 +1,4 @@
-import nodemailer from 'nodemailer';
-import dns from 'dns';
-
-// Force IPv4 globally — Railway resolves to IPv6 first but can't reach smtp.mail.ru via IPv6
-dns.setDefaultResultOrder('ipv4first');
-
-// Mail.ru SMTP IPv4 address — bypass DNS resolution entirely to avoid IPv6 on Railway
-// Resolved from: smtp.mail.ru → 217.69.139.160
-const SMTP_HOST_IPV4 = '217.69.139.160';
-const SMTP_HOSTNAME = 'smtp.mail.ru'; // for TLS SNI verification
+import { Resend } from 'resend';
 
 interface SendEmailParams {
   to: string;
@@ -15,169 +6,90 @@ interface SendEmailParams {
   html: string;
 }
 
-// --- Two SMTP transporters ---
-// 1) noReply: noreply@doc-partner.ru — OTP codes + agent notifications
-// 2) info:    info@doc-partner.ru     — clinic notifications + referral emails
+// Resend API client — initialized lazily
+let resendClient: Resend | null = null;
 
-let noReplyTransporter: nodemailer.Transporter | null = null;
-let infoTransporter: nodemailer.Transporter | null = null;
-
-/**
- * Transporter for noreply@doc-partner.ru (OTP, agent notifications)
- * Uses SMTP_NOREPLY_USER / SMTP_NOREPLY_PASS
- * Falls back to SMTP_USER / SMTP_PASS if noreply credentials are not set
- */
-function getNoReplyTransporter() {
-  if (!noReplyTransporter) {
-    const smtpUser = process.env.SMTP_NOREPLY_USER || process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_NOREPLY_PASS || process.env.SMTP_PASS;
-
-    console.log(`[Email] NoReply transporter init: user=${smtpUser || 'NOT SET'}, pass=${smtpPass ? '***SET***' : 'NOT SET'}`);
-
-    if (!smtpUser || !smtpPass) {
-      console.error('[Email] SMTP NoReply credentials not configured. Set SMTP_NOREPLY_USER/SMTP_NOREPLY_PASS or SMTP_USER/SMTP_PASS.');
+function getResend(): Resend | null {
+  if (!resendClient) {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      console.error('[Email] RESEND_API_KEY not configured');
       return null;
     }
-
-    // Try port 587 (STARTTLS) first, fallback info logged
-    // Railway blocks outbound port 465 — use 587 with STARTTLS instead
-    noReplyTransporter = nodemailer.createTransport({
-      host: SMTP_HOST_IPV4,
-      port: 587,
-      secure: false, // STARTTLS — upgrades to TLS after connection
-      auth: {
-        user: smtpUser,
-        pass: smtpPass,
-      },
-      tls: {
-        servername: SMTP_HOSTNAME,
-        rejectUnauthorized: true,
-      },
-      connectionTimeout: 15000,
-      greetingTimeout: 15000,
-      socketTimeout: 15000,
-    });
-
-    // Verify SMTP connection on first creation
-    noReplyTransporter.verify().then(() => {
-      console.log('[Email] NoReply SMTP connection verified ✓ (port 587)');
-    }).catch((err: any) => {
-      console.error('[Email] NoReply SMTP verification FAILED:', err.code, err.responseCode, err.message);
-    });
+    resendClient = new Resend(apiKey);
+    console.log('[Email] Resend client initialized ✓');
   }
-  return noReplyTransporter;
+  return resendClient;
 }
 
-/**
- * Transporter for info@doc-partner.ru (clinic notifications)
- * Uses SMTP_USER / SMTP_PASS
- */
-function getInfoTransporter() {
-  if (!infoTransporter) {
-    const smtpUser = process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_PASS;
-
-    console.log(`[Email] Info transporter init: user=${smtpUser || 'NOT SET'}, pass=${smtpPass ? '***SET***' : 'NOT SET'}`);
-
-    if (!smtpUser || !smtpPass) {
-      console.error('[Email] SMTP Info credentials not configured. Set SMTP_USER and SMTP_PASS environment variables.');
-      return null;
-    }
-
-    infoTransporter = nodemailer.createTransport({
-      host: SMTP_HOST_IPV4,
-      port: 587,
-      secure: false,
-      auth: {
-        user: smtpUser,
-        pass: smtpPass,
-      },
-      tls: {
-        servername: SMTP_HOSTNAME,
-        rejectUnauthorized: true,
-      },
-      connectionTimeout: 15000,
-      greetingTimeout: 15000,
-      socketTimeout: 15000,
-    });
-
-    // Verify SMTP connection on first creation
-    infoTransporter.verify().then(() => {
-      console.log('[Email] Info SMTP connection verified ✓ (port 587)');
-    }).catch((err: any) => {
-      console.error('[Email] Info SMTP verification FAILED:', err.code, err.responseCode, err.message);
-    });
-  }
-  return infoTransporter;
-}
+// Email addresses
+const NOREPLY_FROM = 'DocDocPartner <noreply@doc-partner.ru>';
+const INFO_FROM = 'DocDocPartner <info@doc-partner.ru>';
 
 /**
  * Send email via noreply@doc-partner.ru (OTP codes, agent notifications)
+ * Uses Resend API (Railway blocks SMTP ports)
  */
 export async function sendEmail({ to, subject, html }: SendEmailParams): Promise<boolean> {
   try {
-    const mailer = getNoReplyTransporter();
-
-    if (!mailer) {
-      console.error('[Email] NoReply transporter not initialized. Please configure SMTP credentials.');
+    const resend = getResend();
+    if (!resend) {
+      console.error('[Email] Resend not initialized. Set RESEND_API_KEY.');
       return false;
     }
 
-    const fromUser = process.env.SMTP_NOREPLY_USER || process.env.SMTP_USER;
-    console.log(`[Email] Sending via noreply to: ${to}, from: ${fromUser}, subject: ${subject}`);
+    console.log(`[Email] Sending via Resend (noreply) to: ${to}, subject: ${subject}`);
 
-    await mailer.sendMail({
-      from: `"DocDocPartner" <${fromUser}>`,
-      to,
+    const { data, error } = await resend.emails.send({
+      from: NOREPLY_FROM,
+      to: [to],
       subject,
       html,
     });
 
-    console.log(`[Email] ✓ Sent successfully to ${to} (via noreply)`);
+    if (error) {
+      console.error('[Email] Resend send error:', error);
+      return false;
+    }
+
+    console.log(`[Email] ✓ Sent successfully to ${to} (via noreply), id: ${data?.id}`);
     return true;
   } catch (error: any) {
-    console.error('[Email] SMTP send error:', {
-      code: error.code,
-      responseCode: error.responseCode,
-      response: error.response,
-      command: error.command,
-      message: error.message,
-    });
+    console.error('[Email] Resend exception:', error.message);
     return false;
   }
 }
 
 /**
  * Send email via info@doc-partner.ru (clinic notifications, referrals)
+ * Uses Resend API
  */
 export async function sendInfoEmail({ to, subject, html }: SendEmailParams): Promise<boolean> {
   try {
-    const mailer = getInfoTransporter();
-
-    if (!mailer) {
-      console.error('[Email] Info transporter not initialized. Please configure SMTP_USER/SMTP_PASS.');
+    const resend = getResend();
+    if (!resend) {
+      console.error('[Email] Resend not initialized. Set RESEND_API_KEY.');
       return false;
     }
 
-    console.log(`[Email] Sending via info to: ${to}, from: ${process.env.SMTP_USER}, subject: ${subject}`);
+    console.log(`[Email] Sending via Resend (info) to: ${to}, subject: ${subject}`);
 
-    await mailer.sendMail({
-      from: `"DocDocPartner" <${process.env.SMTP_USER}>`,
-      to,
+    const { data, error } = await resend.emails.send({
+      from: INFO_FROM,
+      to: [to],
       subject,
       html,
     });
 
-    console.log(`[Email] ✓ Sent successfully to ${to} (via info)`);
+    if (error) {
+      console.error('[Email] Resend info send error:', error);
+      return false;
+    }
+
+    console.log(`[Email] ✓ Sent successfully to ${to} (via info), id: ${data?.id}`);
     return true;
   } catch (error: any) {
-    console.error('[Email] SMTP info send error:', {
-      code: error.code,
-      responseCode: error.responseCode,
-      response: error.response,
-      command: error.command,
-      message: error.message,
-    });
+    console.error('[Email] Resend info exception:', error.message);
     return false;
   }
 }
