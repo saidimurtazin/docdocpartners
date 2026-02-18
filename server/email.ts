@@ -23,8 +23,10 @@ function getNoReplyTransporter() {
     const smtpUser = process.env.SMTP_NOREPLY_USER || process.env.SMTP_USER;
     const smtpPass = process.env.SMTP_NOREPLY_PASS || process.env.SMTP_PASS;
 
+    console.log(`[Email] NoReply transporter init: user=${smtpUser || 'NOT SET'}, pass=${smtpPass ? '***SET***' : 'NOT SET'}`);
+
     if (!smtpUser || !smtpPass) {
-      console.error('SMTP NoReply credentials not configured. Set SMTP_NOREPLY_USER/SMTP_NOREPLY_PASS or SMTP_USER/SMTP_PASS.');
+      console.error('[Email] SMTP NoReply credentials not configured. Set SMTP_NOREPLY_USER/SMTP_NOREPLY_PASS or SMTP_USER/SMTP_PASS.');
       return null;
     }
 
@@ -36,6 +38,13 @@ function getNoReplyTransporter() {
         user: smtpUser,
         pass: smtpPass,
       },
+    });
+
+    // Verify SMTP connection on first creation
+    noReplyTransporter.verify().then(() => {
+      console.log('[Email] NoReply SMTP connection verified ✓');
+    }).catch((err: any) => {
+      console.error('[Email] NoReply SMTP verification FAILED:', err.code, err.responseCode, err.message);
     });
   }
   return noReplyTransporter;
@@ -50,8 +59,10 @@ function getInfoTransporter() {
     const smtpUser = process.env.SMTP_USER;
     const smtpPass = process.env.SMTP_PASS;
 
+    console.log(`[Email] Info transporter init: user=${smtpUser || 'NOT SET'}, pass=${smtpPass ? '***SET***' : 'NOT SET'}`);
+
     if (!smtpUser || !smtpPass) {
-      console.error('SMTP Info credentials not configured. Set SMTP_USER and SMTP_PASS environment variables.');
+      console.error('[Email] SMTP Info credentials not configured. Set SMTP_USER and SMTP_PASS environment variables.');
       return null;
     }
 
@@ -63,6 +74,13 @@ function getInfoTransporter() {
         user: smtpUser,
         pass: smtpPass,
       },
+    });
+
+    // Verify SMTP connection on first creation
+    infoTransporter.verify().then(() => {
+      console.log('[Email] Info SMTP connection verified ✓');
+    }).catch((err: any) => {
+      console.error('[Email] Info SMTP verification FAILED:', err.code, err.responseCode, err.message);
     });
   }
   return infoTransporter;
@@ -76,11 +94,13 @@ export async function sendEmail({ to, subject, html }: SendEmailParams): Promise
     const mailer = getNoReplyTransporter();
 
     if (!mailer) {
-      console.error('NoReply email transporter not initialized. Please configure SMTP credentials.');
+      console.error('[Email] NoReply transporter not initialized. Please configure SMTP credentials.');
       return false;
     }
 
     const fromUser = process.env.SMTP_NOREPLY_USER || process.env.SMTP_USER;
+    console.log(`[Email] Sending via noreply to: ${to}, from: ${fromUser}, subject: ${subject}`);
+
     await mailer.sendMail({
       from: `"DocDocPartner" <${fromUser}>`,
       to,
@@ -88,10 +108,16 @@ export async function sendEmail({ to, subject, html }: SendEmailParams): Promise
       html,
     });
 
-    console.log(`Email sent successfully to ${to} (via noreply)`);
+    console.log(`[Email] ✓ Sent successfully to ${to} (via noreply)`);
     return true;
-  } catch (error) {
-    console.error('Error sending email:', error);
+  } catch (error: any) {
+    console.error('[Email] SMTP send error:', {
+      code: error.code,
+      responseCode: error.responseCode,
+      response: error.response,
+      command: error.command,
+      message: error.message,
+    });
     return false;
   }
 }
@@ -104,9 +130,11 @@ export async function sendInfoEmail({ to, subject, html }: SendEmailParams): Pro
     const mailer = getInfoTransporter();
 
     if (!mailer) {
-      console.error('Info email transporter not initialized. Please configure SMTP_USER/SMTP_PASS.');
+      console.error('[Email] Info transporter not initialized. Please configure SMTP_USER/SMTP_PASS.');
       return false;
     }
+
+    console.log(`[Email] Sending via info to: ${to}, from: ${process.env.SMTP_USER}, subject: ${subject}`);
 
     await mailer.sendMail({
       from: `"DocDocPartner" <${process.env.SMTP_USER}>`,
@@ -115,10 +143,16 @@ export async function sendInfoEmail({ to, subject, html }: SendEmailParams): Pro
       html,
     });
 
-    console.log(`Email sent successfully to ${to} (via info)`);
+    console.log(`[Email] ✓ Sent successfully to ${to} (via info)`);
     return true;
-  } catch (error) {
-    console.error('Error sending info email:', error);
+  } catch (error: any) {
+    console.error('[Email] SMTP info send error:', {
+      code: error.code,
+      responseCode: error.responseCode,
+      response: error.response,
+      command: error.command,
+      message: error.message,
+    });
     return false;
   }
 }
