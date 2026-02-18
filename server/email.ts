@@ -36,11 +36,14 @@ function getNoReplyTransporter() {
 
     noReplyTransporter = nodemailer.createTransport({
       host: 'smtp.mail.ru',
-      port: 465,
-      secure: true,
+      port: 587,
+      secure: false,
       auth: {
         user: smtpUser,
         pass: smtpPass,
+      },
+      tls: {
+        rejectUnauthorized: false,
       },
       connectionTimeout: 15000,
       greetingTimeout: 15000,
@@ -75,11 +78,14 @@ function getInfoTransporter() {
 
     infoTransporter = nodemailer.createTransport({
       host: 'smtp.mail.ru',
-      port: 465,
-      secure: true,
+      port: 587,
+      secure: false,
       auth: {
         user: smtpUser,
         pass: smtpPass,
+      },
+      tls: {
+        rejectUnauthorized: false,
       },
       connectionTimeout: 15000,
       greetingTimeout: 15000,
