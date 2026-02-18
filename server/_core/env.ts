@@ -38,6 +38,9 @@ export const ENV = {
   companyBankAccount: process.env.COMPANY_BANK_ACCOUNT ?? "",
   companyBankBik: process.env.COMPANY_BANK_BIK ?? "",
   companyDirector: process.env.COMPANY_DIRECTOR ?? "",
+  /** SMTP credentials for noreply@ transactional emails (OTP, agent notifications) */
+  smtpNoReplyUser: process.env.SMTP_NOREPLY_USER ?? "",
+  smtpNoReplyPass: process.env.SMTP_NOREPLY_PASS ?? "",
   /** Jump.Finance API integration */
   jumpFinanceApiKey: process.env.JUMP_FINANCE_API_KEY ?? "",
   jumpFinanceAgentId: process.env.JUMP_FINANCE_AGENT_ID ?? "",

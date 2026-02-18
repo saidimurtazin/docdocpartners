@@ -6,20 +6,29 @@ interface SendEmailParams {
   html: string;
 }
 
-// Create transporter (will be initialized when SMTP credentials are provided)
-let transporter: nodemailer.Transporter | null = null;
+// --- Two SMTP transporters ---
+// 1) noReply: noreply@doc-partner.ru — OTP codes + agent notifications
+// 2) info:    info@doc-partner.ru     — clinic notifications + referral emails
 
-function getTransporter() {
-  if (!transporter) {
-    const smtpUser = process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_PASS;
+let noReplyTransporter: nodemailer.Transporter | null = null;
+let infoTransporter: nodemailer.Transporter | null = null;
+
+/**
+ * Transporter for noreply@doc-partner.ru (OTP, agent notifications)
+ * Uses SMTP_NOREPLY_USER / SMTP_NOREPLY_PASS
+ * Falls back to SMTP_USER / SMTP_PASS if noreply credentials are not set
+ */
+function getNoReplyTransporter() {
+  if (!noReplyTransporter) {
+    const smtpUser = process.env.SMTP_NOREPLY_USER || process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_NOREPLY_PASS || process.env.SMTP_PASS;
 
     if (!smtpUser || !smtpPass) {
-      console.error('SMTP credentials not configured. Set SMTP_USER and SMTP_PASS environment variables.');
+      console.error('SMTP NoReply credentials not configured. Set SMTP_NOREPLY_USER/SMTP_NOREPLY_PASS or SMTP_USER/SMTP_PASS.');
       return null;
     }
 
-    transporter = nodemailer.createTransport({
+    noReplyTransporter = nodemailer.createTransport({
       host: 'smtp.mail.ru',
       port: 465,
       secure: true,
@@ -29,18 +38,73 @@ function getTransporter() {
       },
     });
   }
-  return transporter;
+  return noReplyTransporter;
 }
 
 /**
- * Send email using Gmail SMTP via nodemailer
+ * Transporter for info@doc-partner.ru (clinic notifications)
+ * Uses SMTP_USER / SMTP_PASS
+ */
+function getInfoTransporter() {
+  if (!infoTransporter) {
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
+
+    if (!smtpUser || !smtpPass) {
+      console.error('SMTP Info credentials not configured. Set SMTP_USER and SMTP_PASS environment variables.');
+      return null;
+    }
+
+    infoTransporter = nodemailer.createTransport({
+      host: 'smtp.mail.ru',
+      port: 465,
+      secure: true,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
+    });
+  }
+  return infoTransporter;
+}
+
+/**
+ * Send email via noreply@doc-partner.ru (OTP codes, agent notifications)
  */
 export async function sendEmail({ to, subject, html }: SendEmailParams): Promise<boolean> {
   try {
-    const mailer = getTransporter();
-    
+    const mailer = getNoReplyTransporter();
+
     if (!mailer) {
-      console.error('Email transporter not initialized. Please configure SMTP credentials.');
+      console.error('NoReply email transporter not initialized. Please configure SMTP credentials.');
+      return false;
+    }
+
+    const fromUser = process.env.SMTP_NOREPLY_USER || process.env.SMTP_USER;
+    await mailer.sendMail({
+      from: `"DocDocPartner" <${fromUser}>`,
+      to,
+      subject,
+      html,
+    });
+
+    console.log(`Email sent successfully to ${to} (via noreply)`);
+    return true;
+  } catch (error) {
+    console.error('Error sending email:', error);
+    return false;
+  }
+}
+
+/**
+ * Send email via info@doc-partner.ru (clinic notifications, referrals)
+ */
+export async function sendInfoEmail({ to, subject, html }: SendEmailParams): Promise<boolean> {
+  try {
+    const mailer = getInfoTransporter();
+
+    if (!mailer) {
+      console.error('Info email transporter not initialized. Please configure SMTP_USER/SMTP_PASS.');
       return false;
     }
 
@@ -51,10 +115,10 @@ export async function sendEmail({ to, subject, html }: SendEmailParams): Promise
       html,
     });
 
-    console.log(`Email sent successfully to ${to}`);
+    console.log(`Email sent successfully to ${to} (via info)`);
     return true;
   } catch (error) {
-    console.error('Error sending email:', error);
+    console.error('Error sending info email:', error);
     return false;
   }
 }
@@ -137,7 +201,7 @@ export async function sendReferralNotification(params: {
     </html>
   `;
   
-  return sendEmail({
+  return sendInfoEmail({
     to: params.to,
     subject: `🏥 Новая рекомендация пациента #${params.referralId} от ${params.agentName}`,
     html,
@@ -304,7 +368,7 @@ export async function sendReferralNotificationToClinic(referral: {
     </html>
   `;
 
-  return sendEmail({
+  return sendInfoEmail({
     to: 'said.murtazin@mail.ru',
     subject: `Новая рекомендация пациента: ${referral.patientName}`,
     html,
