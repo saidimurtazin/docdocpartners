@@ -162,7 +162,10 @@ export const appRouter = router({
 
     // Email + OTP Login
     requestOtp: publicProcedure
-      .input(z.object({ email: z.string().email() }))
+      .input(z.object({
+        email: z.string().email(),
+        channel: z.enum(["email", "telegram"]).optional().default("email"),
+      }))
       .mutation(async ({ input }) => {
         // PRIORITY 1: Check if user is admin
         const adminUser = await db.getUserByEmail(input.email);
@@ -231,13 +234,56 @@ export const appRouter = router({
           });
         }
 
-        // Send OTP via email (primary channel) using shared OTP module
+        // Channel: "telegram" — send OTP only via Telegram
+        if (input.channel === "telegram") {
+          if (!agent.telegramId) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: "Telegram не привязан к вашему аккаунту. Используйте вход через Email.",
+            });
+          }
+
+          // Generate & save OTP to DB
+          const { generateOTP } = await import("./email");
+          const code = generateOTP();
+          const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+          const dbInstance = await db.getDb();
+          if (!dbInstance) {
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database connection error" });
+          }
+          const { otpCodes: otpCodesTable } = await import("../drizzle/schema");
+          await dbInstance.insert(otpCodesTable).values({
+            email: input.email,
+            code,
+            expiresAt,
+            used: "no",
+          });
+
+          // Send via Telegram
+          try {
+            const { notifyAgent } = await import("./telegram-bot-webhook");
+            await notifyAgent(
+              agent.telegramId,
+              `🔐 <b>Код для входа в личный кабинет:</b>\n\n<code>${code}</code>\n\nКод действителен 10 минут.\n\n⚠️ Никому не сообщайте этот код!`
+            );
+          } catch (err) {
+            console.error("[RequestOTP] Failed to send Telegram OTP:", err);
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Не удалось отправить код в Telegram. Попробуйте позже.",
+            });
+          }
+
+          return { success: true };
+        }
+
+        // Channel: "email" — send OTP via email (+ Telegram as secondary)
         const { createAndSendOTP } = await import("./otp");
         const sent = await createAndSendOTP(input.email, 'login');
         if (!sent) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message: "Не удалось отправить код. Попробуйте позже.",
+            message: "Не удалось отправить код на email. Попробуйте позже.",
           });
         }
 

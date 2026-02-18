@@ -3,12 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Shield, Users, ArrowLeft, Loader2 } from "lucide-react";
+import { Shield, Users, ArrowLeft, Loader2, Mail, Send } from "lucide-react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
-type LoginMode = "select" | "admin" | "agent";
+type LoginMode = "select" | "admin" | "agent-channel" | "agent-email" | "agent-telegram";
 
 export default function Login() {
   const [mode, setMode] = useState<LoginMode>("select");
@@ -19,17 +19,23 @@ export default function Login() {
   const requestOtp = trpc.auth.requestOtp.useMutation();
   const verifyOtp = trpc.auth.verifyOtp.useMutation();
 
-  const handleRequestOtp = async () => {
+  const handleRequestOtp = async (channel: "email" | "telegram" = "email") => {
     try {
-      await requestOtp.mutateAsync({ email });
+      await requestOtp.mutateAsync({ email, channel });
       setOtpSent(true);
       toast.success("Код отправлен", {
-        description: "Проверьте вашу почту для получения кода",
+        description: channel === "telegram"
+          ? "Проверьте Telegram для получения кода"
+          : "Проверьте вашу почту для получения кода",
       });
     } catch (error: any) {
       if (error.message?.includes("not found") || error.message?.includes("не найден")) {
         toast.error("Пользователь не найден", {
           description: "Зарегистрируйтесь на сайте или через Telegram-бот",
+        });
+      } else if (error.message?.includes("Telegram не привязан")) {
+        toast.error("Telegram не привязан", {
+          description: "К вашему аккаунту не привязан Telegram. Используйте вход через Email.",
         });
       } else {
         toast.error("Ошибка", {
@@ -58,12 +64,21 @@ export default function Login() {
     setOtpSent(false);
   };
 
-  // OTP form — shared between admin and agent
-  const renderOtpForm = (title: string, description: string) => (
+  const goToChannelSelect = () => {
+    setMode("agent-channel");
+    setEmail("");
+    setOtpCode("");
+    setOtpSent(false);
+  };
+
+  const currentChannel = mode === "agent-telegram" ? "telegram" : "email";
+
+  // OTP form — shared between admin, agent-email, agent-telegram
+  const renderOtpForm = (title: string, description: string, channel: "email" | "telegram") => (
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={resetForm}>
+          <Button variant="ghost" size="icon" onClick={mode === "admin" ? resetForm : goToChannelSelect}>
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
@@ -83,12 +98,12 @@ export default function Login() {
                 placeholder="your@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && email) handleRequestOtp(); }}
+                onKeyDown={(e) => { if (e.key === "Enter" && email) handleRequestOtp(channel); }}
                 autoFocus
               />
             </div>
             <Button
-              onClick={handleRequestOtp}
+              onClick={() => handleRequestOtp(channel)}
               disabled={!email || requestOtp.isPending}
               className="w-full"
             >
@@ -99,7 +114,9 @@ export default function Login() {
               )}
             </Button>
             <p className="text-xs text-muted-foreground text-center">
-              Код придёт на ваш email
+              {channel === "telegram"
+                ? "Код придёт в Telegram"
+                : "Код придёт на ваш email"}
             </p>
           </>
         ) : (
@@ -183,7 +200,7 @@ export default function Login() {
               </Button>
 
               <Button
-                onClick={() => setMode("agent")}
+                onClick={() => setMode("agent-channel")}
                 variant="outline"
                 className="w-full h-auto py-6 flex-col gap-3"
               >
@@ -220,8 +237,50 @@ export default function Login() {
           </Card>
         )}
 
-        {mode === "admin" && renderOtpForm("Вход администратора", "Введите email для получения кода")}
-        {mode === "agent" && renderOtpForm("Вход агента", "Введите email, указанный при регистрации")}
+        {mode === "agent-channel" && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon" onClick={resetForm}>
+                  <ArrowLeft className="w-4 h-4" />
+                </Button>
+                <div>
+                  <CardTitle>Вход агента</CardTitle>
+                  <CardDescription>Выберите способ получения кода</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Button
+                onClick={() => setMode("agent-telegram")}
+                variant="outline"
+                className="w-full h-auto py-5 flex-row gap-4 justify-start"
+              >
+                <Send className="w-6 h-6 text-[#229ED9] shrink-0" />
+                <div className="text-left">
+                  <div className="font-semibold">Через Telegram</div>
+                  <div className="text-xs text-muted-foreground">Код придёт в Telegram</div>
+                </div>
+              </Button>
+
+              <Button
+                onClick={() => setMode("agent-email")}
+                variant="outline"
+                className="w-full h-auto py-5 flex-row gap-4 justify-start"
+              >
+                <Mail className="w-6 h-6 text-primary shrink-0" />
+                <div className="text-left">
+                  <div className="font-semibold">Через Email</div>
+                  <div className="text-xs text-muted-foreground">Код придёт на почту</div>
+                </div>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {mode === "admin" && renderOtpForm("Вход администратора", "Введите email для получения кода", "email")}
+        {mode === "agent-email" && renderOtpForm("Вход агента", "Введите email, указанный при регистрации", "email")}
+        {mode === "agent-telegram" && renderOtpForm("Вход агента", "Введите email, код придёт в Telegram", "telegram")}
       </div>
     </div>
   );
