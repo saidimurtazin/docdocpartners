@@ -338,7 +338,7 @@ export default function AdminPayments() {
                     <TableHead>Тип</TableHead>
                     <TableHead>Сумма</TableHead>
                     <TableHead>Статус</TableHead>
-                    <TableHead>Jump</TableHead>
+                    <TableHead>Способ</TableHead>
                     <TableHead>Запрошено</TableHead>
                     <TableHead>Выплачено</TableHead>
                     <TableHead>Действия</TableHead>
@@ -393,7 +393,7 @@ export default function AdminPayments() {
                       <TableCell>
                         {payment.payoutVia === "jump" ? (
                           <div className="flex flex-col gap-1">
-                            <Badge variant="outline" className="text-amber-600 border-amber-300 w-fit">
+                            <Badge variant="outline" className="text-purple-700 border-purple-300 bg-purple-50 w-fit">
                               <Zap className="w-3 h-3 mr-1" />Jump
                             </Badge>
                             {payment.jumpStatus && (
@@ -402,8 +402,12 @@ export default function AdminPayments() {
                               </span>
                             )}
                           </div>
+                        ) : payment.status !== "pending" && payment.status !== "processing" ? (
+                          <Badge variant="outline" className="text-gray-600 border-gray-300 bg-gray-50 w-fit">
+                            Ручной
+                          </Badge>
                         ) : (
-                          <span className="text-xs text-muted-foreground">Ручной</span>
+                          <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -418,38 +422,37 @@ export default function AdminPayments() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-2">
-                          {/* Jump: Pay via Jump.Finance */}
-                          {payment.status === "pending" && payment.payoutVia !== "jump" && (
-                            <Button
-                              size="sm"
-                              variant="default"
-                              onClick={() => {
-                                if (confirm("Выплатить через Jump.Finance?")) {
-                                  payViaJump.mutate({ paymentId: payment.id });
-                                }
-                              }}
-                              disabled={payViaJump.isPending}
-                              className="bg-amber-500 hover:bg-amber-600"
-                            >
-                              <Zap className="w-3 h-3 mr-1" />
-                              Jump-выплата
-                            </Button>
+                          {/* Pending: Jump (primary) + Manual act (secondary) */}
+                          {payment.status === "pending" && !payment.jumpPaymentId && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() => {
+                                  if (confirm("Отправить в Jump.Finance?")) {
+                                    payViaJump.mutate({ paymentId: payment.id });
+                                  }
+                                }}
+                                disabled={payViaJump.isPending}
+                                className="bg-purple-600 hover:bg-purple-700"
+                              >
+                                <Zap className="w-3 h-3 mr-1" />
+                                {payViaJump.isPending ? "Отправка..." : "Отправить в Jump"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => generateAct.mutate({ paymentId: payment.id })}
+                                disabled={generateAct.isPending}
+                                className="text-xs"
+                              >
+                                <FileText className="w-3 h-3 mr-1" />
+                                Ручной акт
+                              </Button>
+                            </>
                           )}
 
-                          {/* Step 1: Generate act (manual flow) */}
-                          {payment.status === "pending" && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => generateAct.mutate({ paymentId: payment.id })}
-                              disabled={generateAct.isPending}
-                            >
-                              <FileText className="w-3 h-3 mr-1" />
-                              Сформировать акт
-                            </Button>
-                          )}
-
-                          {/* Step 2: Send for signing */}
+                          {/* Manual flow: act_generated → send for signing */}
                           {payment.status === "act_generated" && (
                             <ActionsForActGenerated
                               paymentId={payment.id}
@@ -458,59 +461,68 @@ export default function AdminPayments() {
                             />
                           )}
 
-                          {/* Step 3: Waiting for signature */}
+                          {/* Manual flow: waiting for signature */}
                           {payment.status === "sent_for_signing" && (
                             <span className="text-xs text-amber-600">Ожидание подписи...</span>
                           )}
 
-                          {/* Step 4: Ready for payment */}
+                          {/* Manual flow: ready for payment */}
                           {payment.status === "ready_for_payment" && (
-                            <>
-                              <Button
-                                size="sm"
-                                onClick={() => handleStatusChange(payment.id, "completed")}
-                                disabled={updateStatus.isPending}
-                              >
-                                <CheckCircle2 className="w-3 h-3 mr-1" />
-                                Выплатить
-                              </Button>
-                            </>
-                          )}
-
-                          {/* Jump: retry failed payment */}
-                          {payment.status === "failed" && payment.payoutVia === "jump" && payment.jumpPaymentId && (
                             <Button
                               size="sm"
-                              variant="outline"
-                              onClick={() => retryJumpPayment.mutate({ paymentId: payment.id })}
-                              disabled={retryJumpPayment.isPending}
+                              onClick={() => handleStatusChange(payment.id, "completed")}
+                              disabled={updateStatus.isPending}
                             >
-                              <RotateCw className="w-3 h-3 mr-1" />
-                              Повторить Jump
+                              <CheckCircle2 className="w-3 h-3 mr-1" />
+                              Выплатить
                             </Button>
                           )}
 
-                          {/* Jump: processing status indicator */}
+                          {/* Jump: processing indicator */}
                           {payment.payoutVia === "jump" && payment.status === "processing" && (
-                            <span className="text-xs text-blue-600">
-                              <Zap className="w-3 h-3 inline mr-1" />
-                              Обрабатывается Jump
+                            <span className="text-xs text-purple-600 flex items-center gap-1">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              Обрабатывается
                             </span>
                           )}
 
-                          {/* Legacy: manual processing for older payments */}
-                          {editingId === payment.id && (
+                          {/* Failed: retry (Jump) or resend to Jump */}
+                          {payment.status === "failed" && (
                             <>
-                              <Button size="sm" onClick={() => handleStatusChange(payment.id, "completed")} disabled={updateStatus.isPending}>
-                                Выплачено
-                              </Button>
-                              <Button size="sm" variant="destructive" onClick={() => handleStatusChange(payment.id, "failed")} disabled={updateStatus.isPending}>
-                                Ошибка
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={() => { setEditingId(null); setTransactionId(""); }}>
-                                Отмена
+                              {payment.payoutVia === "jump" && payment.jumpPaymentId && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => retryJumpPayment.mutate({ paymentId: payment.id })}
+                                  disabled={retryJumpPayment.isPending}
+                                >
+                                  <RotateCw className="w-3 h-3 mr-1" />
+                                  Повторить
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  if (confirm("Сформировать ручной акт?")) {
+                                    generateAct.mutate({ paymentId: payment.id });
+                                  }
+                                }}
+                                disabled={generateAct.isPending}
+                                className="text-xs"
+                              >
+                                <FileText className="w-3 h-3 mr-1" />
+                                Ручной акт
                               </Button>
                             </>
+                          )}
+
+                          {/* Completed: show date only */}
+                          {payment.status === "completed" && (
+                            <span className="text-xs text-green-600">
+                              <CheckCircle2 className="w-3 h-3 inline mr-1" />
+                              Выплачено
+                            </span>
                           )}
                         </div>
                       </TableCell>

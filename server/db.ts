@@ -670,10 +670,10 @@ export async function createPaymentRequest(agentId: number, data: {
   taxAmount: number;
   socialContributions: number;
   isSelfEmployedSnapshot: "yes" | "no";
-}) {
+}): Promise<number> {
   const db = await getDb();
-  if (!db) return;
-  await db.insert(payments).values({
+  if (!db) throw new Error("Database not available");
+  const [result] = await db.insert(payments).values({
     agentId,
     amount: data.amount,
     grossAmount: data.grossAmount,
@@ -684,6 +684,7 @@ export async function createPaymentRequest(agentId: number, data: {
     status: "pending",
     createdAt: new Date(),
   });
+  return result.insertId;
 }
 
 export async function getAgentStatistics(agentId: number) {

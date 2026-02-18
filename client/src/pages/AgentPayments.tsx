@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Wallet, Send, CheckCircle2, Clock, XCircle, AlertCircle, FileText, FileSignature, Banknote, Download, Zap, Gift, Users, Copy, Lock, Unlock, Link2, TrendingUp, Building2, User, Calculator, Info } from "lucide-react";
+import { Wallet, Send, CheckCircle2, Clock, XCircle, FileText, FileSignature, Banknote, Download, Zap, Gift, Users, Copy, Lock, Unlock, Link2, TrendingUp, Building2, User, Calculator, Info } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import DashboardLayoutWrapper from "@/components/DashboardLayoutWrapper";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
@@ -85,13 +85,17 @@ export default function AgentPayments() {
     }
 
     try {
-      await requestPayment.mutateAsync({
+      const result = await requestPayment.mutateAsync({
         amount: amountNum * 100,
         isSelfEmployed,
       });
       await refetch();
       setAmount("");
-      alert("✅ Заявка на выплату успешно создана!");
+      if (result.jumpSubmitted) {
+        alert("✅ Заявка на выплату создана и отправлена на обработку! Вы получите уведомление в Telegram когда деньги поступят.");
+      } else {
+        alert("✅ Заявка на выплату успешно создана! Она будет обработана в ближайшее время.");
+      }
     } catch (error) {
       alert("❌ Ошибка создания заявки. Попробуйте еще раз.");
     }
@@ -119,7 +123,7 @@ export default function AgentPayments() {
     sent_for_signing: <FileSignature className="w-5 h-5 text-amber-500" />,
     signed: <CheckCircle2 className="w-5 h-5 text-green-500" />,
     ready_for_payment: <Banknote className="w-5 h-5 text-green-600" />,
-    processing: <AlertCircle className="w-5 h-5 text-blue-500" />,
+    processing: <Zap className="w-5 h-5 text-purple-500 animate-pulse" />,
     completed: <CheckCircle2 className="w-5 h-5 text-green-500" />,
     failed: <XCircle className="w-5 h-5 text-red-500" />,
   };
@@ -130,9 +134,9 @@ export default function AgentPayments() {
     sent_for_signing: "Ожидает подписания",
     signed: "Акт подписан",
     ready_for_payment: "Готово к оплате",
-    processing: "В обработке",
+    processing: "Обрабатывается",
     completed: "Выплачено",
-    failed: "Ошибка",
+    failed: "Ошибка выплаты",
   };
 
   const jumpStatusLabels: Record<number, string> = {
@@ -159,7 +163,7 @@ export default function AgentPayments() {
     sent_for_signing: "bg-amber-100 text-amber-800 border-amber-200",
     signed: "bg-green-100 text-green-800 border-green-200",
     ready_for_payment: "bg-emerald-100 text-emerald-800 border-emerald-200",
-    processing: "bg-blue-100 text-blue-800 border-blue-200",
+    processing: "bg-purple-100 text-purple-800 border-purple-200",
     completed: "bg-green-100 text-green-800 border-green-200",
     failed: "bg-red-100 text-red-800 border-red-200",
   };
@@ -552,8 +556,8 @@ export default function AgentPayments() {
                             </div>
                             {payment.payoutVia === "jump" && (
                               <div className="flex items-center gap-1 mt-1">
-                                <Zap className="w-3 h-3 text-amber-500" />
-                                <span className="text-xs text-muted-foreground">Jump.Finance</span>
+                                <Zap className="w-3 h-3 text-purple-500" />
+                                <span className="text-xs text-purple-600">Jump.Finance</span>
                               </div>
                             )}
                           </div>
@@ -582,6 +586,12 @@ export default function AgentPayments() {
                           {payment.payoutVia === "jump" && payment.jumpStatus === 8 && (
                             <span className="text-xs text-amber-600">
                               Подпишите документы в Jump.Finance
+                            </span>
+                          )}
+                          {/* Failed payment — contact support */}
+                          {payment.status === "failed" && (
+                            <span className="text-xs text-red-500">
+                              Обратитесь в поддержку
                             </span>
                           )}
                           {payment.processedAt && (
