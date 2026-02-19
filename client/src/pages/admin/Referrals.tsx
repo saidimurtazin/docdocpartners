@@ -215,6 +215,7 @@ export default function AdminReferrals() {
                     <TableHead>Телефон</TableHead>
                     <TableHead>Связь DocDoc</TableHead>
                     <TableHead>Клиника</TableHead>
+                    <TableHead>Примечание врача</TableHead>
                     <TableHead>Статус</TableHead>
                     <TableHead>Сумма лечения</TableHead>
                     <TableHead>Комиссия</TableHead>
@@ -238,6 +239,13 @@ export default function AdminReferrals() {
                         ) : "—"}
                       </TableCell>
                       <TableCell>{referral.clinic || "—"}</TableCell>
+                      <TableCell>
+                        {referral.notes ? (
+                          <span className="text-sm text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-200 inline-block max-w-[200px] truncate" title={referral.notes}>
+                            {referral.notes}
+                          </span>
+                        ) : "—"}
+                      </TableCell>
                       <TableCell>{getStatusBadge(referral.status)}</TableCell>
                       <TableCell>
                         {editingId === referral.id ? (
