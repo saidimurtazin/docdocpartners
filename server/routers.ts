@@ -250,8 +250,18 @@ export const appRouter = router({
           // All staff: send OTP via email
           try {
             const { sendOTPEmail } = await import("./email");
-            await sendOTPEmail(input.email, code, 'login');
+            const emailSent = await sendOTPEmail(input.email, code, 'login');
+            if (!emailSent) {
+              console.error("[RequestOTP] sendOTPEmail returned false for staff:", input.email);
+              if (staffUser.role !== "admin") {
+                throw new TRPCError({
+                  code: "INTERNAL_SERVER_ERROR",
+                  message: "Не удалось отправить код на email. Проверьте адрес и попробуйте позже.",
+                });
+              }
+            }
           } catch (err) {
+            if (err instanceof TRPCError) throw err;
             console.error("[RequestOTP] Failed to send email OTP to staff:", err);
             // Non-blocking for admin (they have Telegram), but important for support/accountant
             if (staffUser.role !== "admin") {
