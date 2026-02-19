@@ -121,7 +121,7 @@ export default function AgentCabinet() {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <span className="text-primary-foreground font-bold text-lg">M</span>
             </div>
-            <span className="font-bold text-xl">DocDocPartner</span>
+            <span className="font-bold text-xl">DocPartner</span>
           </div>
           <Button variant="outline" size="sm" onClick={handleLogout}>
             <LogOut className="w-4 h-4 mr-2" />

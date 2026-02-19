@@ -112,7 +112,7 @@ export default function Home() {
           <div className="flex items-center gap-3">
             <img
               src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663256942923/xohsFKyBQyuhihyR.png"
-              alt="DocDocPartner Logo"
+              alt="DocPartner Logo"
               className="w-10 h-10 rounded-lg"
             />
             <div className="flex flex-col leading-tight">
@@ -121,14 +121,11 @@ export default function Home() {
             </div>
           </div>
           <nav className="hidden md:flex items-center gap-8">
-            <a href="#why-join" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">Зачем регистрироваться</a>
-            <a href="#about" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">O программе</a>
+            <a href="#why-join" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">О программе</a>
+            <a href="#how-it-works" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">Как работает</a>
             <Link href="/clinics" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">
               Клиники
             </Link>
-            <a href="#how-it-works" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">Как работает</a>
-            {/* Map link hidden while map section is hidden */}
-            {/* <a href="#map" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">Карта</a> */}
             <a href="#benefits" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">Преимущества</a>
             <Link href="/knowledge-base" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">
               База знаний
@@ -223,7 +220,7 @@ export default function Home() {
               transition={{ duration: 0.6, delay: 0.3 }}
               className="text-center text-lg sm:text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto leading-relaxed"
             >
-              Присоединяйтесь к партнерской программе DocDocPartner и получайте{" "}
+              Присоединяйтесь к партнерской программе DocPartner и получайте{" "}
               <strong className="text-foreground font-semibold">до 10% вознаграждения</strong>{" "}
               за каждого направленного пациента в проверенные клиники России.
             </motion.p>
@@ -334,7 +331,7 @@ export default function Home() {
               Зачем <span className="gradient-gold-text">регистрироваться</span>?
             </motion.h2>
             <motion.p variants={fadeUp} custom={1} className="text-lg md:text-xl text-muted-foreground leading-relaxed">
-              Три причины, почему врачи выбирают DocDocPartner для рекомендаций пациентов
+              Три причины, почему врачи выбирают DocPartner для рекомендаций пациентов
             </motion.p>
           </AnimatedSection>
 
@@ -400,10 +397,10 @@ export default function Home() {
         <div className="container">
           <AnimatedSection className="max-w-3xl mx-auto text-center space-y-6 mb-20">
             <motion.h2 variants={fadeUp} className="text-4xl sm:text-5xl md:text-6xl font-bold">
-              Что такое <span className="gradient-text">DocDocPartner</span>?
+              Что такое <span className="gradient-text">DocPartner</span>?
             </motion.h2>
             <motion.p variants={fadeUp} custom={1} className="text-lg md:text-xl text-muted-foreground leading-relaxed">
-              DocDocPartner — это <strong className="text-foreground">B2B-платформа агентских рекомендаций</strong> в сфере здравоохранения. Мы связываем врачей-агентов с проверенными клиниками для направления пациентов на платное лечение.
+              DocPartner — это <strong className="text-foreground">B2B-платформа агентских рекомендаций</strong> в сфере здравоохранения. Мы связываем врачей-агентов с проверенными клиниками для направления пациентов на платное лечение.
             </motion.p>
           </AnimatedSection>
 
@@ -564,7 +561,7 @@ export default function Home() {
         <div className="container">
           <AnimatedSection className="max-w-3xl mx-auto text-center space-y-6 mb-20">
             <motion.h2 variants={fadeUp} className="text-4xl sm:text-5xl md:text-6xl font-bold">
-              Почему выбирают <span className="gradient-text">DocDocPartner</span>?
+              Почему выбирают <span className="gradient-text">DocPartner</span>?
             </motion.h2>
           </AnimatedSection>
 
@@ -692,7 +689,7 @@ export default function Home() {
               Готовы начать зарабатывать официально?
             </motion.h2>
             <motion.p variants={fadeUp} custom={1} className="text-lg md:text-xl text-white/80">
-              Присоединяйтесь к DocDocPartner и получайте до 10% от каждой рекомендации
+              Присоединяйтесь к DocPartner и получайте до 10% от каждой рекомендации
             </motion.p>
             <motion.div variants={fadeUp} custom={2} className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
               <Button
@@ -717,10 +714,10 @@ export default function Home() {
               <div className="flex items-center gap-3">
                 <img
                   src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663256942923/xohsFKyBQyuhihyR.png"
-                  alt="DocDocPartner Logo"
+                  alt="DocPartner Logo"
                   className="w-10 h-10 rounded-lg"
                 />
-                <span className="font-bold text-xl">DocDocPartner</span>
+                <span className="font-bold text-xl">DocPartner</span>
               </div>
               <p className="text-sm text-muted-foreground">
                 Медицинская партнерская программа для врачей и медицинских специалистов
@@ -729,7 +726,7 @@ export default function Home() {
             <div>
               <h4 className="font-semibold mb-4">Программа</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><a href="#about" className="hover:text-foreground transition-colors">О нас</a></li>
+                <li><a href="#why-join" className="hover:text-foreground transition-colors">О программе</a></li>
                 <li><a href="#how-it-works" className="hover:text-foreground transition-colors">Как работает</a></li>
                 <li><Link href="/clinics" className="hover:text-foreground transition-colors">Клиники</Link></li>
                 <li><a href="#benefits" className="hover:text-foreground transition-colors">Преимущества</a></li>
@@ -747,14 +744,13 @@ export default function Home() {
             <div>
               <h4 className="font-semibold mb-4">Контакты</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li>Email: info@docdocpartner.ru</li>
+                <li>Email: info@doc-partner.ru</li>
                 <li>Telegram: @docpartnerbot</li>
-                <li>Поддержка: support@docdocpartner.ru</li>
               </ul>
             </div>
           </div>
           <div className="pt-8 border-t border-border/40 text-center text-sm text-muted-foreground">
-            <p>&copy; 2025 DocDocPartner. Все права защищены.</p>
+            <p>&copy; 2025 DocPartner. Все права защищены.</p>
           </div>
         </div>
       </footer>

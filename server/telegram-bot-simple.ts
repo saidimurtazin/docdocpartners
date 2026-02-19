@@ -1,5 +1,5 @@
 /**
- * DocDocPartner Telegram Bot
+ * DocPartner Telegram Bot
  * Registration bot for agent onboarding with Cyrillic validation
  */
 
@@ -107,7 +107,7 @@ bot.command('start', async (ctx) => {
   sessions.set(telegramId, { registrationStep: 'fullName', tempData: {} });
   
   await ctx.reply(
-    `👋 Добро пожаловать в DocDocPartner!\n\n` +
+    `👋 Добро пожаловать в DocPartner!\n\n` +
     `Мы рады приветствовать вас в нашей партнерской программе.\n\n` +
     `📝 Для начала работы необходимо пройти регистрацию.\n\n` +
     `Введите ваше ФИО (полностью):`

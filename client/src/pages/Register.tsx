@@ -171,7 +171,7 @@ export default function Register() {
             <div className="inline-flex items-center gap-3 mb-3 cursor-pointer hover:opacity-80 transition-opacity">
               <img
                 src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663256942923/xohsFKyBQyuhihyR.png"
-                alt="DocDocPartner Logo"
+                alt="DocPartner Logo"
                 className="w-10 h-10 rounded-lg"
               />
               <div className="flex flex-col leading-tight text-left">

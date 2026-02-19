@@ -58,7 +58,7 @@ export default function AdminLogin() {
             <Shield className="w-12 h-12 text-primary" />
             <div className="flex flex-col leading-tight text-left">
               <span className="font-bold text-2xl">Админ-панель</span>
-              <span className="text-sm text-muted-foreground">DocDocPartner</span>
+              <span className="text-sm text-muted-foreground">DocPartner</span>
             </div>
           </div>
           <p className="text-muted-foreground">Вход для администраторов</p>
@@ -159,7 +159,7 @@ export default function AdminLogin() {
         </Card>
 
         <p className="text-xs text-center text-muted-foreground mt-4">
-          DocDocPartner Admin
+          DocPartner Admin
         </p>
       </div>
     </div>

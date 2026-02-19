@@ -1,5 +1,5 @@
 /**
- * Shared validation functions for DocDocPartner
+ * Shared validation functions for DocPartner
  * Used by both Telegram bot and web registration
  */
 

@@ -44,7 +44,7 @@ export async function checkSelfEmploymentStatus(inn: string): Promise<SelfEmploy
 export const SELF_EMPLOYMENT_GUIDE = `
 ## Как стать самозанятым
 
-### Преимущества для агентов DocDocPartner:
+### Преимущества для агентов DocPartner:
 - ✅ Вы получаете **полную сумму вознаграждения** (7% или 10%)
 - ✅ Налог всего **6%** (платите сами через приложение "Мой налог")
 - ✅ Не нужно платить соц. отчисления (~30%)
@@ -65,7 +65,7 @@ export const SELF_EMPLOYMENT_GUIDE = `
 - Если у вас уже есть ИНН - введите его
 - Если нет - система автоматически создаст
 
-**Шаг 4:** Добавьте ИНН в профиль DocDocPartner
+**Шаг 4:** Добавьте ИНН в профиль DocPartner
 - Откройте бот @docpartnerbot
 - Перейдите в "Профиль" → "Реквизиты"
 - Укажите ваш ИНН
@@ -76,5 +76,5 @@ export const SELF_EMPLOYMENT_GUIDE = `
 - Отчетность **не требуется** - все делает приложение
 
 ### Нужна помощь?
-Напишите в поддержку: @docdocpartner_support
+Напишите в поддержку: @docpartnerbot
 `;

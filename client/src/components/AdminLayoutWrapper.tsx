@@ -49,7 +49,7 @@ export default function AdminLayoutWrapper({ children }: AdminLayoutWrapperProps
             <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
               <img
                 src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663256942923/xohsFKyBQyuhihyR.png"
-                alt="DocDocPartner Logo"
+                alt="DocPartner Logo"
                 className="w-10 h-10 rounded-lg"
               />
               <div className="flex flex-col leading-tight">
@@ -126,7 +126,7 @@ export default function AdminLayoutWrapper({ children }: AdminLayoutWrapperProps
           <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
             <Menu className="w-5 h-5" />
           </Button>
-          <span className="font-semibold text-sm">DocDocPartner Admin</span>
+          <span className="font-semibold text-sm">DocPartner Admin</span>
         </div>
 
         <main className="flex-1 overflow-auto">

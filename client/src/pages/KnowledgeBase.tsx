@@ -29,7 +29,7 @@ export default function KnowledgeBase() {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <span className="text-primary-foreground font-bold text-lg">M</span>
             </div>
-            <span className="font-bold text-xl">DocDocPartner</span>
+            <span className="font-bold text-xl">DocPartner</span>
           </div>
           <nav className="hidden md:flex items-center gap-6">
             <a href="/" className="text-sm font-medium hover:text-primary transition-colors">Главная</a>
@@ -44,7 +44,7 @@ export default function KnowledgeBase() {
         <div className="container">
           <div className="max-w-3xl mx-auto text-center space-y-4">
             <Badge className="mb-4">База знаний</Badge>
-            <h1 className="text-4xl md:text-5xl font-bold">Всё о программе DocDocPartner</h1>
+            <h1 className="text-4xl md:text-5xl font-bold">Всё о программе DocPartner</h1>
             <p className="text-xl text-muted-foreground">
               Полная информация о том, как работает партнерская программа, гарантии выплат и процесс сотрудничества
             </p>
@@ -70,7 +70,7 @@ export default function KnowledgeBase() {
               <CardContent className="space-y-6">
                 <div className="prose prose-sm max-w-none">
                   <p className="text-muted-foreground leading-relaxed">
-                    DocDocPartner гарантирует выплату вознаграждения за каждого успешно направленного пациента. 
+                    DocPartner гарантирует выплату вознаграждения за каждого успешно направленного пациента. 
                     Выплата производится после подтверждения клиникой факта оказания услуг и получения оплаты от пациента.
                   </p>
                 </div>
@@ -444,7 +444,7 @@ export default function KnowledgeBase() {
                     </li>
                     <li className="flex gap-3">
                       <span className="flex-shrink-0 font-semibold text-primary">4.</span>
-                      <span>Добавьте ИНН в профиль DocDocPartner через бот @docpartnerbot</span>
+                      <span>Добавьте ИНН в профиль DocPartner через бот @docpartnerbot</span>
                     </li>
                   </ol>
                 </div>
@@ -483,7 +483,7 @@ export default function KnowledgeBase() {
                 Открыть бот
               </a>
               <a 
-                href="mailto:info@docdocpartner.ru"
+                href="mailto:info@doc-partner.ru"
                 className="inline-flex items-center justify-center px-6 py-3 rounded-lg border border-border font-medium hover:bg-muted transition-colors"
               >
                 Написать на email

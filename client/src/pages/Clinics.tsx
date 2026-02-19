@@ -96,7 +96,7 @@ export default function Clinics() {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <span className="text-primary-foreground font-bold text-lg">M</span>
             </div>
-            <span className="font-bold text-xl">DocDocPartner</span>
+            <span className="font-bold text-xl">DocPartner</span>
           </a>
           <nav className="hidden md:flex items-center gap-6">
             <a href="/#about" className="text-sm font-medium hover:text-primary transition-colors">О программе</a>
@@ -113,7 +113,7 @@ export default function Clinics() {
           <div className="max-w-3xl mx-auto text-center space-y-6">
             <h1 className="text-4xl md:text-5xl font-bold">Клиники-партнеры</h1>
             <p className="text-xl text-muted-foreground">
-              Проверенные медицинские учреждения, участвующие в программе DocDocPartner. Все клиники имеют необходимые лицензии и сертификаты качества.
+              Проверенные медицинские учреждения, участвующие в программе DocPartner. Все клиники имеют необходимые лицензии и сертификаты качества.
             </p>
           </div>
         </div>
@@ -170,7 +170,7 @@ export default function Clinics() {
           <div className="max-w-3xl mx-auto text-center space-y-6">
             <h2 className="text-3xl md:text-4xl font-bold">Готовы начать сотрудничество?</h2>
             <p className="text-xl text-muted-foreground">
-              Присоединяйтесь к программе DocDocPartner и начните рекомендовать пациентов в проверенные клиники
+              Присоединяйтесь к программе DocPartner и начните рекомендовать пациентов в проверенные клиники
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
               <a 
@@ -201,7 +201,7 @@ export default function Clinics() {
                 <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
                   <span className="text-primary-foreground font-bold text-lg">M</span>
                 </div>
-                <span className="font-bold text-xl">DocDocPartner</span>
+                <span className="font-bold text-xl">DocPartner</span>
               </div>
               <p className="text-sm text-muted-foreground">
                 Платформа агентских рекомендаций в сфере здравоохранения
@@ -219,13 +219,13 @@ export default function Clinics() {
             <div>
               <h4 className="font-semibold mb-4">Контакты</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li>info@docdocpartner.ru</li>
+                <li>info@doc-partner.ru</li>
                 <li>Москва, Россия</li>
               </ul>
             </div>
           </div>
           <div className="border-t mt-8 pt-8 text-center text-sm text-muted-foreground">
-            © 2025 DocDocPartner. Все права защищены.
+            © 2025 DocPartner. Все права защищены.
           </div>
         </div>
       </footer>

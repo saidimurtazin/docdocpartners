@@ -23,8 +23,8 @@ function getResend(): Resend | null {
 }
 
 // Email addresses
-const NOREPLY_FROM = 'DocDocPartner <noreply@doc-partner.ru>';
-const INFO_FROM = 'DocDocPartner <info@doc-partner.ru>';
+const NOREPLY_FROM = 'DocPartner <noreply@doc-partner.ru>';
+const INFO_FROM = 'DocPartner <info@doc-partner.ru>';
 
 /**
  * Send email via noreply@doc-partner.ru (OTP codes, agent notifications)
@@ -135,7 +135,7 @@ export async function sendReferralNotification(params: {
       <div class="container">
         <div class="header">
           <h1>🏥 Новая рекомендация пациента</h1>
-          <p>DocDocPartner</p>
+          <p>DocPartner</p>
         </div>
         <div class="content">
           <div class="card">
@@ -165,8 +165,8 @@ export async function sendReferralNotification(params: {
           </div>
           
           <div class="footer">
-            <p>Это автоматическое уведомление от системы DocDocPartner</p>
-            <p>По вопросам обращайтесь: support@docdocpartner.ru</p>
+            <p>Это автоматическое уведомление от системы DocPartner</p>
+            <p>По вопросам обращайтесь: info@doc-partner.ru</p>
           </div>
         </div>
       </div>
@@ -187,13 +187,13 @@ export async function sendReferralNotification(params: {
  */
 export async function sendOTPEmail(to: string, code: string, purpose: 'registration' | 'login' = 'registration'): Promise<boolean> {
   const isLogin = purpose === 'login';
-  const subject = isLogin ? 'Код для входа в DocDocPartner' : 'Подтверждение регистрации в DocDocPartner';
+  const subject = isLogin ? 'Код для входа в DocPartner' : 'Подтверждение регистрации в DocPartner';
   const headerText = isLogin ? 'Вход в личный кабинет' : 'Подтверждение регистрации';
-  const titleText = isLogin ? 'Вход в DocDocPartner' : 'Добро пожаловать в DocDocPartner!';
+  const titleText = isLogin ? 'Вход в DocPartner' : 'Добро пожаловать в DocPartner!';
   const descText = isLogin ? 'Для входа в личный кабинет введите код:' : 'Для завершения регистрации введите код подтверждения:';
   const ignoreText = isLogin
     ? 'Если вы не запрашивали вход, просто проигнорируйте это письмо.'
-    : 'Если вы не регистрировались в DocDocPartner, просто проигнорируйте это письмо.';
+    : 'Если вы не регистрировались в DocPartner, просто проигнорируйте это письмо.';
 
   const html = `
     <!DOCTYPE html>
@@ -212,7 +212,7 @@ export async function sendOTPEmail(to: string, code: string, purpose: 'registrat
     <body>
       <div class="container">
         <div class="header">
-          <h1>🏥 DocDocPartner</h1>
+          <h1>🏥 DocPartner</h1>
           <p>${headerText}</p>
         </div>
         <div class="content">
@@ -223,7 +223,7 @@ export async function sendOTPEmail(to: string, code: string, purpose: 'registrat
           <p>${ignoreText}</p>
         </div>
         <div class="footer">
-          <p>© 2026 DocDocPartner. Все права защищены.</p>
+          <p>© 2026 DocPartner. Все права защищены.</p>
         </div>
       </div>
     </body>
@@ -273,7 +273,7 @@ export async function sendReferralNotificationToClinic(referral: {
       <div class="container">
         <div class="header">
           <h1>📋 Новая рекомендация пациента</h1>
-          <p>DocDocPartner</p>
+          <p>DocPartner</p>
         </div>
         <div class="content">
           <p><span class="badge">НОВАЯ ЗАЯВКА</span></p>
@@ -333,7 +333,7 @@ export async function sendReferralNotificationToClinic(referral: {
           </p>
         </div>
         <div class="footer">
-          <p>© 2026 DocDocPartner. Все права защищены.</p>
+          <p>© 2026 DocPartner. Все права защищены.</p>
           <p>Это автоматическое уведомление. Пожалуйста, не отвечайте на это письмо.</p>
         </div>
       </div>
@@ -360,17 +360,17 @@ export async function sendAgentStatusUpdate(params: {
   const statusMessages = {
     active: {
       title: '✅ Ваша заявка одобрена!',
-      message: 'Поздравляем! Вы успешно зарегистрированы в программе DocDocPartner. Теперь вы можете начать отправлять рекомендации пациентов и зарабатывать.',
+      message: 'Поздравляем! Вы успешно зарегистрированы в программе DocPartner. Теперь вы можете начать отправлять рекомендации пациентов и зарабатывать.',
       color: '#10b981',
     },
     rejected: {
       title: '❌ Ваша заявка отклонена',
-      message: 'К сожалению, ваша заявка на участие в программе DocDocPartner была отклонена.',
+      message: 'К сожалению, ваша заявка на участие в программе DocPartner была отклонена.',
       color: '#ef4444',
     },
     blocked: {
       title: '🚫 Ваш аккаунт заблокирован',
-      message: 'Ваш аккаунт в программе DocDocPartner был заблокирован.',
+      message: 'Ваш аккаунт в программе DocPartner был заблокирован.',
       color: '#dc2626',
     },
   };
@@ -394,7 +394,7 @@ export async function sendAgentStatusUpdate(params: {
       <div class="container">
         <div class="header">
           <h1>${statusInfo.title}</h1>
-          <p>DocDocPartner</p>
+          <p>DocPartner</p>
         </div>
         <div class="content">
           <p>Здравствуйте, ${params.agentName}!</p>
@@ -403,7 +403,7 @@ export async function sendAgentStatusUpdate(params: {
           ${params.status === 'active' ? '<p>Вернитесь в Telegram-бот, чтобы начать работу.</p>' : ''}
         </div>
         <div class="footer">
-          <p>© 2026 DocDocPartner. Все права защищены.</p>
+          <p>© 2026 DocPartner. Все права защищены.</p>
         </div>
       </div>
     </body>
@@ -472,7 +472,7 @@ export async function sendReferralStatusUpdate(params: {
       <div class="container">
         <div class="header">
           <h1>${statusInfo.title}</h1>
-          <p>DocDocPartner</p>
+          <p>DocPartner</p>
         </div>
         <div class="content">
           <p>Здравствуйте, ${params.agentName}!</p>
@@ -485,7 +485,7 @@ export async function sendReferralStatusUpdate(params: {
           </div>
         </div>
         <div class="footer">
-          <p>© 2026 DocDocPartner. Все права защищены.</p>
+          <p>© 2026 DocPartner. Все права защищены.</p>
         </div>
       </div>
     </body>
@@ -548,7 +548,7 @@ export async function sendPaymentStatusUpdate(params: {
       <div class="container">
         <div class="header">
           <h1>${statusInfo.title}</h1>
-          <p>DocDocPartner</p>
+          <p>DocPartner</p>
         </div>
         <div class="content">
           <p>Здравствуйте, ${params.agentName}!</p>
@@ -560,7 +560,7 @@ export async function sendPaymentStatusUpdate(params: {
           </div>
         </div>
         <div class="footer">
-          <p>© 2026 DocDocPartner. Все права защищены.</p>
+          <p>© 2026 DocPartner. Все права защищены.</p>
         </div>
       </div>
     </body>

@@ -32,7 +32,7 @@ export default function DashboardSidebar() {
         <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
           <Menu className="w-5 h-5" />
         </Button>
-        <span className="font-semibold text-sm">DocDocPartner</span>
+        <span className="font-semibold text-sm">DocPartner</span>
       </div>
 
       {/* Sidebar */}
@@ -48,7 +48,7 @@ export default function DashboardSidebar() {
             <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
               <img
                 src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663256942923/xohsFKyBQyuhihyR.png"
-                alt="DocDocPartner Logo"
+                alt="DocPartner Logo"
                 className="w-10 h-10 rounded-lg"
               />
               <div className="flex flex-col leading-tight">

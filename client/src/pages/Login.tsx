@@ -168,7 +168,7 @@ export default function Login() {
             <div className="inline-flex items-center gap-3 mb-4 cursor-pointer hover:opacity-80 transition-opacity">
               <img
                 src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663256942923/xohsFKyBQyuhihyR.png"
-                alt="DocDocPartner Logo"
+                alt="DocPartner Logo"
                 className="w-12 h-12 rounded-lg"
               />
               <div className="flex flex-col leading-tight text-left">

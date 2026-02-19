@@ -1,6 +1,6 @@
 {
-  "name": "DocDocPartner",
-  "short_name": "DocDocPartner",
+  "name": "DocPartner",
+  "short_name": "DocPartner",
   "description": "Медицинская партнерская программа для врачей",
   "start_url": "/dashboard",
   "display": "standalone",

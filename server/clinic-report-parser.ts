@@ -15,7 +15,7 @@ export interface ParsedPatientReport {
   confidence: number; // 0-100
 }
 
-const SYSTEM_PROMPT = `Ты — AI-ассистент для обработки email-отчётов от клиник-партнёров DocDocPartner.
+const SYSTEM_PROMPT = `Ты — AI-ассистент для обработки email-отчётов от клиник-партнёров DocPartner.
 
 Твоя задача: извлечь из текста письма информацию о пациентах и их визитах.
 

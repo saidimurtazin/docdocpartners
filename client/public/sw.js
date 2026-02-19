@@ -1,7 +1,7 @@
-// DocDocPartner Service Worker v2
+// DocPartner Service Worker v2
 // Lightweight — only cache static assets, don't interfere with navigation/API
 
-const CACHE_NAME = 'docdocpartner-v2';
+const CACHE_NAME = 'docpartner-v2';
 
 // Install — skip waiting immediately, no precaching
 self.addEventListener('install', () => {

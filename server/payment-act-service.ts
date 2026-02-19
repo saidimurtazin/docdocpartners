@@ -183,7 +183,7 @@ export async function sendActSigningOtp(actId: number): Promise<{ sentVia: "tele
       const amount = (act.totalAmount / 100).toLocaleString("ru-RU");
       await sendEmail({
         to: agent.email,
-        subject: `Код подписания акта ${act.actNumber} — DocDocPartner`,
+        subject: `Код подписания акта ${act.actNumber} — DocPartner`,
         html: `
           <h2>Акт на оплату ${act.actNumber}</h2>
           <p>Сумма: <strong>${amount} ₽</strong></p>
