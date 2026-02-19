@@ -34,7 +34,6 @@ import { useRef, lazy, Suspense } from "react";
 import { motion, useInView, useScroll, useTransform } from "framer-motion";
 import AnimatedCounter from "@/components/AnimatedCounter";
 import ParticleBackground from "@/components/ParticleBackground";
-import { ReferralFlowAnimation } from "@/components/ReferralFlowAnimation";
 import { trpc } from "@/lib/trpc";
 
 const ClinicMap = lazy(() => import("@/components/ClinicMap"));
@@ -177,7 +176,6 @@ export default function Home() {
       {/* ============== HERO SECTION ============== */}
       <section className="relative overflow-hidden mesh-bg py-12 md:py-20">
         <ParticleBackground particleCount={40} color="rgba(26, 47, 90, 0.15)" />
-        <ReferralFlowAnimation />
 
         {/* Animated gradient orbs */}
         <div className="absolute top-20 left-10 w-72 h-72 bg-[oklch(0.55_0.12_250)] rounded-full mix-blend-multiply filter blur-[120px] opacity-20 animate-float" />
