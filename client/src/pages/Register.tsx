@@ -119,7 +119,7 @@ export default function Register() {
   const canGoNext = (): boolean => {
     switch (step) {
       case 1: return !!registrationToken;
-      case 2: return fullName.trim().length >= 3 && /^[А-Яа-яЁё\s-]+$/.test(fullName.trim());
+      case 2: return fullName.trim().split(/\s+/).length === 3 && /^[А-Яа-яЁё\s-]+$/.test(fullName.trim());
       case 3: return phone.replace(/[\s\-()]/g, '').length >= 11;
       case 4: return !!role && (role !== "Врач" || !!specialization && (specialization !== "Другая" || customSpecialization.trim().length >= 2));
       case 5: return city.trim().length >= 2 && /^[А-Яа-яЁё\s-]+$/.test(city.trim());
@@ -309,7 +309,7 @@ export default function Register() {
                   onKeyDown={(e) => { if (e.key === "Enter" && canGoNext()) goNext(); }}
                   autoFocus
                 />
-                <p className="text-xs text-muted-foreground">Только русские буквы, 2-4 слова</p>
+                <p className="text-xs text-muted-foreground">Фамилия Имя Отчество (ровно 3 слова, русские буквы)</p>
               </div>
             )}
 

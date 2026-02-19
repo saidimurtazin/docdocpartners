@@ -14,6 +14,8 @@ import AdminDoctors from "./pages/admin/Doctors";
 import AdminClinics from "./pages/admin/Clinics";
 import AdminClinicReports from "./pages/admin/ClinicReports";
 import AdminSettings from "./pages/admin/Settings";
+import AdminStaff from "./pages/admin/Staff";
+import AdminTasks from "./pages/admin/Tasks";
 import AgentClinics from "./pages/AgentClinics";
 import AdminLogin from "./pages/AdminLogin";
 import AgentCabinet from "./pages/AgentCabinet";
@@ -41,6 +43,8 @@ function Router() {
       <Route path={"/admin/clinics"} component={AdminClinics} />
       <Route path={"/admin/clinic-reports"} component={AdminClinicReports} />
       <Route path={"/admin/settings"} component={AdminSettings} />
+      <Route path={"/admin/staff"} component={AdminStaff} />
+      <Route path={"/admin/tasks"} component={AdminTasks} />
 
       {/* Agent panel routes */}
       <Route path={"/"} component={Home} />

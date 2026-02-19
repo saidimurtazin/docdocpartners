@@ -19,14 +19,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, ArrowLeft, Download, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, ArrowLeft, Download, Search } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { useState, useMemo } from "react";
 import AdminLayoutWrapper from "@/components/AdminLayoutWrapper";
 
-const PAGE_SIZE = 20;
+const LOAD_MORE_STEP = 6;
 
 export default function AdminReferrals() {
   const { user, loading: authLoading } = useAuth();
@@ -36,7 +36,7 @@ export default function AdminReferrals() {
   const [commissionAmount, setCommissionAmount] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [page, setPage] = useState(1);
+  const [visibleCount, setVisibleCount] = useState(LOAD_MORE_STEP);
 
   const { data: referrals, isLoading, refetch } = trpc.admin.referrals.list.useQuery();
   const { data: clinicsList } = trpc.admin.clinics.list.useQuery();
@@ -60,11 +60,10 @@ export default function AdminReferrals() {
     });
   }, [referrals, search, statusFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const visible = filtered.slice(0, visibleCount);
 
-  const handleSearchChange = (v: string) => { setSearch(v); setPage(1); };
-  const handleFilterChange = (v: string) => { setStatusFilter(v); setPage(1); };
+  const handleSearchChange = (v: string) => { setSearch(v); setVisibleCount(LOAD_MORE_STEP); };
+  const handleFilterChange = (v: string) => { setStatusFilter(v); setVisibleCount(LOAD_MORE_STEP); };
 
   const handleExport = async () => {
     try {
@@ -93,7 +92,7 @@ export default function AdminReferrals() {
     );
   }
 
-  if (!user || user.role !== "admin") {
+  if (!user || !["admin", "support", "accountant"].includes(user.role)) {
     setLocation("/");
     return null;
   }
@@ -224,7 +223,7 @@ export default function AdminReferrals() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginated.map((referral) => (
+                  {visible.map((referral) => (
                     <TableRow key={referral.id}>
                       <TableCell>{referral.id}</TableCell>
                       <TableCell className="font-mono text-sm">{referral.agentId}</TableCell>
@@ -308,21 +307,15 @@ export default function AdminReferrals() {
               </Table>
             </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4 pt-4 border-t">
+            {/* Show more */}
+            {visibleCount < filtered.length && (
+              <div className="flex flex-col items-center gap-2 mt-4 pt-4 border-t">
                 <p className="text-sm text-muted-foreground">
-                  Показано {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} из {filtered.length}
+                  Показано {visibleCount} из {filtered.length}
                 </p>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-                  <span className="text-sm px-2">Стр. {page} / {totalPages}</span>
-                  <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </div>
+                <Button variant="outline" onClick={() => setVisibleCount(v => v + LOAD_MORE_STEP)}>
+                  Показать ещё ({Math.min(LOAD_MORE_STEP, filtered.length - visibleCount)})
+                </Button>
               </div>
             )}
           </CardContent>

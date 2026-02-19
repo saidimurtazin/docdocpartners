@@ -25,12 +25,13 @@ export async function createContext(
     if (session?.agentId) {
       agentId = session.agentId;
     }
-    // If session has admin role, load user from database
-    if (session?.role === "admin" && session.userId) {
+    // If session has staff role (admin/support/accountant), load user from database
+    const staffRoles = ["admin", "support", "accountant"];
+    if (session?.role && staffRoles.includes(session.role) && session.userId) {
       const { getUserById } = await import("../db");
-      const adminUser = await getUserById(session.userId);
-      if (adminUser) {
-        user = adminUser;
+      const staffUser = await getUserById(session.userId);
+      if (staffUser) {
+        user = staffUser;
       }
     }
   } catch (error) {

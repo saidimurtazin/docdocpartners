@@ -1,6 +1,6 @@
 import { eq, desc, and, like, sql, isNotNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, agents, referrals, payments, doctors, sessions, otpCodes, clinics, clinicReports, paymentActs, appSettings, type InsertSession, type InsertClinicReport, type InsertPaymentAct } from "../drizzle/schema";
+import { InsertUser, users, agents, referrals, payments, doctors, sessions, otpCodes, clinics, clinicReports, paymentActs, appSettings, tasks, type InsertSession, type InsertClinicReport, type InsertPaymentAct, type InsertTask } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -1333,4 +1333,152 @@ export async function hardDeleteAgent(agentId: number) {
   await db.delete(agents).where(eq(agents.id, agentId));
 
   return { deleted: true, agentName: agent.fullName, agentId: agent.id };
+}
+
+// ==================== STAFF MANAGEMENT ====================
+
+export async function getAllStaffUsers() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(users)
+    .where(sql`${users.role} IN ('admin', 'support', 'accountant')`)
+    .orderBy(desc(users.createdAt));
+}
+
+export async function createStaffUser(data: {
+  name: string;
+  email: string;
+  phone?: string;
+  role: "admin" | "support" | "accountant";
+}) {
+  const db = await getDb();
+  if (!db) return 0;
+  const openId = `staff_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const [result] = await db.insert(users).values({
+    openId,
+    name: data.name,
+    email: data.email,
+    phone: data.phone || null,
+    role: data.role,
+    loginMethod: "email_otp",
+  });
+  return result.insertId;
+}
+
+export async function updateStaffUser(id: number, data: {
+  name?: string;
+  email?: string;
+  phone?: string;
+  role?: "admin" | "support" | "accountant";
+}) {
+  const db = await getDb();
+  if (!db) return;
+  const updateData: Record<string, unknown> = {};
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.email !== undefined) updateData.email = data.email;
+  if (data.phone !== undefined) updateData.phone = data.phone;
+  if (data.role !== undefined) updateData.role = data.role;
+  await db.update(users).set(updateData).where(eq(users.id, id));
+}
+
+export async function deleteStaffUser(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(users).where(eq(users.id, id));
+}
+
+// ==================== TASKS ====================
+
+export async function createTask(data: {
+  type: string;
+  title: string;
+  referralId?: number;
+  agentId?: number;
+  assignedTo?: number;
+  priority?: "low" | "normal" | "high" | "urgent";
+  notes?: string;
+}) {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.insert(tasks).values(data as any);
+  return result.insertId;
+}
+
+export async function getTasksList(filters?: {
+  status?: string;
+  assignedTo?: number;
+}) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const conditions: any[] = [];
+  if (filters?.status) {
+    conditions.push(eq(tasks.status, filters.status as any));
+  }
+  if (filters?.assignedTo) {
+    conditions.push(eq(tasks.assignedTo, filters.assignedTo));
+  }
+
+  if (conditions.length > 0) {
+    return db.select().from(tasks).where(and(...conditions)).orderBy(desc(tasks.createdAt));
+  }
+  return db.select().from(tasks).orderBy(desc(tasks.createdAt));
+}
+
+export async function getTaskById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const [task] = await db.select().from(tasks).where(eq(tasks.id, id)).limit(1);
+  return task || null;
+}
+
+export async function updateTaskStatus(
+  id: number,
+  status: "pending" | "in_progress" | "completed" | "cancelled",
+  completedBy?: number
+) {
+  const db = await getDb();
+  if (!db) return;
+  const updateData: Record<string, unknown> = { status };
+  if (status === "completed") {
+    updateData.completedAt = new Date();
+    if (completedBy) updateData.completedBy = completedBy;
+  }
+  await db.update(tasks).set(updateData as any).where(eq(tasks.id, id));
+}
+
+export async function assignTask(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(tasks).set({ assignedTo: userId } as any).where(eq(tasks.id, id));
+}
+
+export async function getTaskStats() {
+  const db = await getDb();
+  if (!db) return { pending: 0, inProgress: 0, completed: 0, cancelled: 0 };
+
+  const [pending] = await db.select({ count: sql<number>`count(*)` }).from(tasks).where(eq(tasks.status, "pending"));
+  const [inProgress] = await db.select({ count: sql<number>`count(*)` }).from(tasks).where(eq(tasks.status, "in_progress"));
+  const [completed] = await db.select({ count: sql<number>`count(*)` }).from(tasks).where(eq(tasks.status, "completed"));
+  const [cancelled] = await db.select({ count: sql<number>`count(*)` }).from(tasks).where(eq(tasks.status, "cancelled"));
+
+  return {
+    pending: pending.count,
+    inProgress: inProgress.count,
+    completed: completed.count,
+    cancelled: cancelled.count,
+  };
+}
+
+export async function hasPendingTaskForReferral(referralId: number, type: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const [result] = await db.select({ count: sql<number>`count(*)` })
+    .from(tasks)
+    .where(and(
+      eq(tasks.referralId, referralId),
+      eq(tasks.type, type),
+      eq(tasks.status, "pending")
+    ));
+  return result.count > 0;
 }

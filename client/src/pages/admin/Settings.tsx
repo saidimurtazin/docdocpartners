@@ -70,7 +70,7 @@ export default function AdminSettings() {
     }
   };
 
-  if (!user || user.role !== "admin") return null;
+  if (!user || !["admin", "support", "accountant"].includes(user.role)) return null;
 
   return (
     <AdminLayoutWrapper>

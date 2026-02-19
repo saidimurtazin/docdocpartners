@@ -7,6 +7,8 @@ import { Shield, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
+const STAFF_ROLES = ["admin", "support", "accountant"];
+
 export default function AdminLogin() {
   const [email, setEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
@@ -20,7 +22,7 @@ export default function AdminLogin() {
       await requestOtp.mutateAsync({ email });
       setOtpSent(true);
       toast.success("Код отправлен", {
-        description: "Проверьте Telegram для получения кода",
+        description: "Проверьте вашу почту для получения кода",
       });
     } catch (error: any) {
       toast.error("Ошибка", {
@@ -33,10 +35,10 @@ export default function AdminLogin() {
     try {
       const result = await verifyOtp.mutateAsync({ email, code: otpCode });
 
-      // Only allow admin role
-      if (result?.role !== "admin") {
+      // Only allow staff roles
+      if (!result?.role || !STAFF_ROLES.includes(result.role)) {
         toast.error("Доступ запрещен", {
-          description: "Только администраторы могут войти в админ-панель",
+          description: "Только сотрудники могут войти в панель управления",
         });
         return;
       }
@@ -57,31 +59,31 @@ export default function AdminLogin() {
           <div className="inline-flex items-center gap-3 mb-4">
             <Shield className="w-12 h-12 text-primary" />
             <div className="flex flex-col leading-tight text-left">
-              <span className="font-bold text-2xl">Админ-панель</span>
+              <span className="font-bold text-2xl">Панель управления</span>
               <span className="text-sm text-muted-foreground">DocPartner</span>
             </div>
           </div>
-          <p className="text-muted-foreground">Вход для администраторов</p>
+          <p className="text-muted-foreground">Вход для сотрудников</p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Вход в админ-панель</CardTitle>
+            <CardTitle>Вход в панель</CardTitle>
             <CardDescription>
               {!otpSent
-                ? "Введите email для получения кода"
-                : "Введите код из Telegram"}
+                ? "Введите рабочий email для получения кода"
+                : "Введите код из письма"}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {!otpSent ? (
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="admin-email">Email администратора</Label>
+                  <Label htmlFor="admin-email">Email сотрудника</Label>
                   <Input
                     id="admin-email"
                     type="email"
-                    placeholder="admin@example.com"
+                    placeholder="email@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     autoFocus
@@ -107,13 +109,13 @@ export default function AdminLogin() {
                   )}
                 </Button>
                 <p className="text-xs text-muted-foreground text-center">
-                  Код придёт в ваш зарегистрированный Telegram-аккаунт
+                  Код придёт на вашу рабочую почту
                 </p>
               </>
             ) : (
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="admin-otp">Код из Telegram</Label>
+                  <Label htmlFor="admin-otp">Код из письма</Label>
                   <Input
                     id="admin-otp"
                     type="text"
@@ -159,7 +161,7 @@ export default function AdminLogin() {
         </Card>
 
         <p className="text-xs text-center text-muted-foreground mt-4">
-          DocPartner Admin
+          DocPartner
         </p>
       </div>
     </div>

@@ -16,7 +16,8 @@ export const users = mysqlTable("users", {
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  role: mysqlEnum("role", ["user", "admin", "support", "accountant"]).default("user").notNull(),
+  phone: varchar("phone", { length: 50 }),
   /** Telegram ID for OTP delivery (optional, for admins who want to use Email/OTP login) */
   telegramId: varchar("telegramId", { length: 64 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -318,3 +319,26 @@ export const appSettings = mysqlTable("app_settings", {
 
 export type AppSetting = typeof appSettings.$inferSelect;
 export type InsertAppSetting = typeof appSettings.$inferInsert;
+
+/**
+ * Tasks — задачи для сотрудников (поддержка, бухгалтерия)
+ */
+export const tasks = mysqlTable("tasks", {
+  id: int("id").autoincrement().primaryKey(),
+  type: varchar("type", { length: 50 }).notNull(), // contact_patient, schedule_appointment, confirm_visit, manual
+  title: varchar("title", { length: 500 }).notNull(),
+  referralId: int("referralId"),
+  agentId: int("agentId"),
+  assignedTo: int("assignedTo"), // → users.id
+  status: mysqlEnum("status", ["pending", "in_progress", "completed", "cancelled"]).default("pending").notNull(),
+  priority: mysqlEnum("priority", ["low", "normal", "high", "urgent"]).default("normal").notNull(),
+  dueDate: timestamp("dueDate"),
+  completedAt: timestamp("completedAt"),
+  completedBy: int("completedBy"), // → users.id
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Task = typeof tasks.$inferSelect;
+export type InsertTask = typeof tasks.$inferInsert;

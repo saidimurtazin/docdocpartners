@@ -20,21 +20,21 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, ArrowLeft, Download, Search, ChevronLeft, ChevronRight, X, CreditCard, Smartphone, Building2, Shield, Trash2 } from "lucide-react";
+import { Loader2, ArrowLeft, Download, Search, X, CreditCard, Smartphone, Building2, Shield, Trash2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { useState, useMemo } from "react";
 import AdminLayoutWrapper from "@/components/AdminLayoutWrapper";
 
-const PAGE_SIZE = 20;
+const LOAD_MORE_STEP = 6;
 
 export default function AdminAgents() {
   const { user, loading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [page, setPage] = useState(1);
+  const [visibleCount, setVisibleCount] = useState(LOAD_MORE_STEP);
 
   const { data: agents, isLoading, refetch } = trpc.admin.agents.list.useQuery();
   const { data: clinicsList } = trpc.admin.clinics.list.useQuery();
@@ -89,13 +89,11 @@ export default function AdminAgents() {
     });
   }, [agents, search, statusFilter]);
 
-  // Pagination
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const visible = filtered.slice(0, visibleCount);
 
-  // Reset page when filters change
-  const handleSearchChange = (v: string) => { setSearch(v); setPage(1); };
-  const handleStatusChange = (v: string) => { setStatusFilter(v); setPage(1); };
+  // Reset visible count when filters change
+  const handleSearchChange = (v: string) => { setSearch(v); setVisibleCount(LOAD_MORE_STEP); };
+  const handleStatusChange = (v: string) => { setStatusFilter(v); setVisibleCount(LOAD_MORE_STEP); };
 
   const handleExport = async () => {
     try {
@@ -125,7 +123,7 @@ export default function AdminAgents() {
     );
   }
 
-  if (!user || user.role !== "admin") {
+  if (!user || !["admin", "support", "accountant"].includes(user.role)) {
     setLocation("/");
     return null;
   }
@@ -205,7 +203,7 @@ export default function AdminAgents() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginated.map((agent) => (
+                  {visible.map((agent) => (
                     <TableRow key={agent.id}>
                       <TableCell>{agent.id}</TableCell>
                       <TableCell className="font-medium">{agent.fullName}</TableCell>
@@ -358,21 +356,15 @@ export default function AdminAgents() {
               </Table>
             </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4 pt-4 border-t">
+            {/* Show more */}
+            {visibleCount < filtered.length && (
+              <div className="flex flex-col items-center gap-2 mt-4 pt-4 border-t">
                 <p className="text-sm text-muted-foreground">
-                  Показано {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} из {filtered.length}
+                  Показано {visibleCount} из {filtered.length}
                 </p>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-                  <span className="text-sm px-2">Стр. {page} / {totalPages}</span>
-                  <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </div>
+                <Button variant="outline" onClick={() => setVisibleCount(v => v + LOAD_MORE_STEP)}>
+                  Показать ещё ({Math.min(LOAD_MORE_STEP, filtered.length - visibleCount)})
+                </Button>
               </div>
             )}
           </CardContent>

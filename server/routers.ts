@@ -83,6 +83,46 @@ async function recalculateMonthlyCommissions(agentId: number, treatmentMonth: st
   }
 }
 
+/** Staff roles that can access admin panel */
+const STAFF_ROLES = ["admin", "support", "accountant"] as const;
+type StaffRole = typeof STAFF_ROLES[number];
+
+/** Check if user has one of the required roles. Throws FORBIDDEN if not. */
+function checkRole(ctx: { user: any }, ...roles: StaffRole[]) {
+  if (!ctx.user || !roles.includes(ctx.user.role)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Недостаточно прав" });
+  }
+}
+
+/**
+ * Auto-create a task when referral status changes.
+ * Skips if a pending task of the same type already exists for this referral.
+ */
+async function autoCreateTaskForReferral(
+  referralId: number,
+  newStatus: string,
+  referral: { patientFullName: string; agentId: number }
+) {
+  const taskMap: Record<string, { type: string; title: string }> = {
+    new: { type: "contact_patient", title: `Связаться с пациентом ${referral.patientFullName}` },
+    contacted: { type: "schedule_appointment", title: `Записать пациента ${referral.patientFullName} на приём` },
+    scheduled: { type: "confirm_visit", title: `Подтвердить визит пациента ${referral.patientFullName}` },
+  };
+  const taskDef = taskMap[newStatus];
+  if (!taskDef) return;
+
+  const exists = await db.hasPendingTaskForReferral(referralId, taskDef.type);
+  if (exists) return;
+
+  await db.createTask({
+    type: taskDef.type,
+    title: taskDef.title,
+    referralId,
+    agentId: referral.agentId,
+    priority: "normal",
+  });
+}
+
 function getJwtSecret(): Uint8Array {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
@@ -103,17 +143,18 @@ export const appRouter = router({
       if (opts.ctx.session) {
         const { session } = opts.ctx;
 
-        // Handle admin session
-        if (session.role === "admin" && session.userId) {
-          const adminUser = await db.getUserById(session.userId);
-          if (adminUser) {
+        // Handle staff session (admin/support/accountant)
+        const staffRoles = ["admin", "support", "accountant"];
+        if (staffRoles.includes(session.role) && session.userId) {
+          const staffUser = await db.getUserById(session.userId);
+          if (staffUser) {
             return {
-              openId: adminUser.openId,
+              openId: staffUser.openId,
               appId: process.env.VITE_APP_ID || '',
-              name: adminUser.name,
-              email: adminUser.email,
-              role: "admin",
-              userId: adminUser.id,
+              name: staffUser.name,
+              email: staffUser.email,
+              role: staffUser.role,
+              userId: staffUser.id,
             };
           }
         }
@@ -167,23 +208,14 @@ export const appRouter = router({
         channel: z.enum(["email", "telegram"]).optional().default("email"),
       }))
       .mutation(async ({ input }) => {
-        // PRIORITY 1: Check if user is admin
-        const adminUser = await db.getUserByEmail(input.email);
+        // PRIORITY 1: Check if user is staff (admin/support/accountant)
+        const staffUser = await db.getUserByEmail(input.email);
 
-        if (adminUser && adminUser.role === "admin") {
-          // Admin found - check if they have Telegram configured
-          if (!adminUser.telegramId) {
-            throw new TRPCError({
-              code: "PRECONDITION_FAILED",
-              message: "Telegram не настроен для администратора. Обратитесь в поддержку.",
-            });
-          }
-
-          // Generate OTP for admin
+        if (staffUser && STAFF_ROLES.includes(staffUser.role as StaffRole)) {
+          // Generate OTP for staff
           const code = Math.floor(100000 + Math.random() * 900000).toString();
           const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-          // OTP code logged only in dev
-          if (process.env.NODE_ENV !== "production") console.log('[RequestOTP] Admin code generated for', input.email);
+          if (process.env.NODE_ENV !== "production") console.log('[RequestOTP] Staff code generated for', input.email);
 
           // Save OTP to database
           const dbInstance = await db.getDb();
@@ -202,16 +234,32 @@ export const appRouter = router({
             used: "no",
           });
 
-          // Send OTP to admin via Telegram (non-blocking — login proceeds even if Telegram fails)
+          // Admin: send via Telegram if configured
+          if (staffUser.role === "admin" && staffUser.telegramId) {
+            try {
+              const { notifyAgent } = await import("./telegram-bot-webhook");
+              await notifyAgent(
+                staffUser.telegramId,
+                `🔐 <b>Код для входа в панель:</b>\n\n<code>${code}</code>\n\nКод действителен 5 минут.\n\n⚠️ Никому не сообщайте этот код!`
+              );
+            } catch (err) {
+              console.error("[RequestOTP] Failed to send Telegram to admin:", err);
+            }
+          }
+
+          // All staff: send OTP via email
           try {
-            const { notifyAgent } = await import("./telegram-bot-webhook");
-            await notifyAgent(
-              adminUser.telegramId,
-              `🔐 <b>Код для входа в админ-панель:</b>\n\n<code>${code}</code>\n\nКод действителен 5 минут.\n\n⚠️ Никому не сообщайте этот код!`
-            );
+            const { sendOTPEmail } = await import("./email");
+            await sendOTPEmail(input.email, code, 'login');
           } catch (err) {
-            console.error("[RequestOTP] Failed to send Telegram notification to admin:", err);
-            // Don't throw — OTP saved to DB, admin can still check logs in dev
+            console.error("[RequestOTP] Failed to send email OTP to staff:", err);
+            // Non-blocking for admin (they have Telegram), but important for support/accountant
+            if (staffUser.role !== "admin") {
+              throw new TRPCError({
+                code: "INTERNAL_SERVER_ERROR",
+                message: "Не удалось отправить код на email. Попробуйте позже.",
+              });
+            }
           }
 
           return { success: true };
@@ -364,26 +412,25 @@ export const appRouter = router({
           .set({ used: "yes" })
           .where(eq(otpCodesTable.id, otpRecord.id));
 
-        // Check if user is admin first
-        const [adminUser] = await dbInstance
+        // Check if user is staff (admin/support/accountant)
+        const [staffUser] = await dbInstance
           .select()
           .from(usersTable)
           .where(
             and(
               eq(usersTable.email, input.email),
-              eq(usersTable.role, "admin")
+              sql`${usersTable.role} IN ('admin', 'support', 'accountant')`
             )
           )
           .limit(1);
 
-        if (adminUser) {
-
-          // Create admin session token
+        if (staffUser) {
+          // Create staff session token with actual role
           const secret = getJwtSecret();
           const token = await new SignJWT({
-            userId: adminUser.id,
-            role: "admin",
-            email: adminUser.email,
+            userId: staffUser.id,
+            role: staffUser.role,
+            email: staffUser.email,
           })
             .setProtectedHeader({ alg: "HS256" })
             .setIssuedAt()
@@ -397,14 +444,13 @@ export const appRouter = router({
             maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
           });
 
-
           return {
             success: true,
-            role: "admin",
+            role: staffUser.role,
             user: {
-              id: adminUser.id,
-              name: adminUser.name,
-              email: adminUser.email,
+              id: staffUser.id,
+              name: staffUser.name,
+              email: staffUser.email,
             }
           };
         }
@@ -598,6 +644,15 @@ export const appRouter = router({
           });
         }
 
+        // 4b. Check phone not already taken
+        const existingByPhone = await db.getAgentByPhone(phoneCheck.normalized || input.phone);
+        if (existingByPhone) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Этот номер телефона уже зарегистрирован. Войдите в личный кабинет или используйте другой номер.",
+          });
+        }
+
         // 5. Generate referral code
         const crypto = await import("crypto");
         const referralCode = crypto.randomBytes(6).toString("hex");
@@ -774,24 +829,22 @@ DocPartner — B2B-платформа агентских рекомендаци�
 
   // Admin panel router (admin only)
   admin: router({
-    // Check if user is admin
+    // Check if user is staff (admin/support/accountant)
     checkAdmin: protectedProcedure.query(({ ctx }) => {
-      if (ctx.user.role !== "admin") {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
-      }
-      return { isAdmin: true };
+      checkRole(ctx, "admin", "support", "accountant");
+      return { isAdmin: true, role: ctx.user.role };
     }),
 
     // AGENTS
     agents: router({
       list: protectedProcedure.query(async ({ ctx }) => {
-        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        checkRole(ctx, "admin", "support");
         return db.getAllAgents();
       }),
       getById: protectedProcedure
         .input(z.object({ id: z.number() }))
         .query(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "support");
           return db.getAgentById(input.id);
         }),
       updateStatus: protectedProcedure
@@ -800,7 +853,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           status: z.enum(["pending", "active", "rejected", "blocked"])
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "support");
           await db.updateAgentStatus(input.id, input.status);
           return { success: true };
         }),
@@ -810,7 +863,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           clinicIds: z.array(z.number()),
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "support");
           await db.updateAgentExcludedClinics(input.agentId, input.clinicIds);
           return { success: true };
         }),
@@ -820,7 +873,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           clinicId: z.number(),
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "support");
           await db.removeAgentExcludedClinic(input.agentId, input.clinicId);
           return { success: true };
         }),
@@ -829,7 +882,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
       verifyViaJump: protectedProcedure
         .input(z.object({ agentId: z.number() }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "support");
           const { jumpFinance, parseAgentName, getLegalFormId } = await import("./jump-finance");
 
           if (!jumpFinance.isConfigured) {
@@ -870,7 +923,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           isSelfEmployed: z.enum(["yes", "no", "unknown"]),
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "support");
           await db.updateAgentRequisites(input.agentId, { isSelfEmployed: input.isSelfEmployed });
           return { success: true };
         }),
@@ -879,7 +932,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
       hardDelete: protectedProcedure
         .input(z.object({ agentId: z.number() }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin");
           const result = await db.hardDeleteAgent(input.agentId);
           if (!result.deleted) {
             throw new TRPCError({ code: "NOT_FOUND", message: result.reason });
@@ -893,13 +946,13 @@ DocPartner — B2B-платформа агентских рекомендаци�
     // REFERRALS
     referrals: router({
       list: protectedProcedure.query(async ({ ctx }) => {
-        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        checkRole(ctx, "admin", "support");
         return db.getAllReferrals();
       }),
       getById: protectedProcedure
         .input(z.object({ id: z.number() }))
         .query(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "support");
           return db.getReferralById(input.id);
         }),
       updateStatus: protectedProcedure
@@ -908,7 +961,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           status: z.enum(["new", "in_progress", "contacted", "scheduled", "visited", "paid", "duplicate", "no_answer", "cancelled"])
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "support");
 
           // Get referral before update for notification
           const referral = await db.getReferralById(input.id);
@@ -936,6 +989,13 @@ DocPartner — B2B-платформа агентских рекомендаци�
             } catch (err) {
               console.error("[Admin] Failed to send referral status notification:", err);
             }
+
+            // Auto-create tasks based on new status
+            try {
+              await autoCreateTaskForReferral(input.id, input.status, referral);
+            } catch (err) {
+              console.error("[Admin] Failed to auto-create task:", err);
+            }
           }
 
           return { success: true };
@@ -947,7 +1007,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           commissionAmount: z.number().min(0)
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "support");
           await db.updateReferralAmounts(input.id, input.treatmentAmount, input.commissionAmount);
           return { success: true };
         }),
@@ -956,7 +1016,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
     // PAYMENTS
     payments: router({
       list: protectedProcedure.query(async ({ ctx }) => {
-        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        checkRole(ctx, "admin", "accountant");
         return db.getAllPayments();
       }),
       updateStatus: protectedProcedure
@@ -966,7 +1026,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           transactionId: z.string().optional()
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "accountant");
           await db.updatePaymentStatus(input.id, input.status, input.transactionId);
 
           // Send Telegram notification to agent about payment status change
@@ -994,34 +1054,34 @@ DocPartner — B2B-платформа агентских рекомендаци�
       generateAct: protectedProcedure
         .input(z.object({ paymentId: z.number() }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "accountant");
           const { generateAct } = await import("./payment-act-service");
           return generateAct(input.paymentId);
         }),
       sendForSigning: protectedProcedure
         .input(z.object({ actId: z.number() }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "accountant");
           const { sendActSigningOtp } = await import("./payment-act-service");
           return sendActSigningOtp(input.actId);
         }),
       regenerateAct: protectedProcedure
         .input(z.object({ paymentId: z.number() }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "accountant");
           const { regenerateAct } = await import("./payment-act-service");
           return regenerateAct(input.paymentId);
         }),
       getAct: protectedProcedure
         .input(z.object({ paymentId: z.number() }))
         .query(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "accountant");
           return db.getPaymentActByPaymentId(input.paymentId);
         }),
       batchMarkCompleted: protectedProcedure
         .input(z.object({ paymentIds: z.array(z.number()) }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "accountant");
           for (const id of input.paymentIds) {
             await db.updatePaymentStatus(id, "completed");
           }
@@ -1032,7 +1092,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
       payViaJump: protectedProcedure
         .input(z.object({ paymentId: z.number() }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "accountant");
           const { processJumpPayment } = await import("./jump-payout");
 
           const result = await processJumpPayment(input.paymentId);
@@ -1047,7 +1107,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
       retryJumpPayment: protectedProcedure
         .input(z.object({ paymentId: z.number() }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "accountant");
           const { jumpFinance, JUMP_STATUS } = await import("./jump-finance");
 
           const payment = await db.getPaymentById(input.paymentId);
@@ -1072,13 +1132,13 @@ DocPartner — B2B-платформа агентских рекомендаци�
     // DOCTORS
     doctors: router({
       list: protectedProcedure.query(async ({ ctx }) => {
-        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        checkRole(ctx, "admin", "accountant");
         return db.getAllDoctors();
       }),
       getById: protectedProcedure
         .input(z.object({ id: z.number() }))
         .query(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "accountant");
           return db.getDoctorById(input.id);
         }),
       create: protectedProcedure
@@ -1096,7 +1156,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           bio: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "accountant");
           const id = await db.createDoctor(input);
           return { id, success: true };
         }),
@@ -1116,7 +1176,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           bio: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "accountant");
           const { id, ...data } = input;
           await db.updateDoctor(id, data);
           return { success: true };
@@ -1124,7 +1184,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
       delete: protectedProcedure
         .input(z.object({ id: z.number() }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "accountant");
           await db.deleteDoctor(input.id);
           return { success: true };
         }),
@@ -1135,7 +1195,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           name: z.string().optional(),
         }))
         .query(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "accountant");
           return db.searchDoctors(input);
         }),
     }),
@@ -1143,13 +1203,13 @@ DocPartner — B2B-платформа агентских рекомендаци�
     // CLINICS
     clinics: router({
       list: protectedProcedure.query(async ({ ctx }) => {
-        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        checkRole(ctx, "admin");
         return db.getAllClinicsAdmin();
       }),
       getById: protectedProcedure
         .input(z.object({ id: z.number() }))
         .query(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin");
           return db.getClinicById(input.id);
         }),
       create: protectedProcedure
@@ -1173,7 +1233,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           reportEmails: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin");
           const id = await db.createClinic(input);
           return { id, success: true };
         }),
@@ -1200,7 +1260,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           isActive: z.enum(["yes", "no"]).optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin");
           const { id, ...data } = input;
           await db.updateClinic(id, data);
           return { success: true };
@@ -1208,7 +1268,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
       delete: protectedProcedure
         .input(z.object({ id: z.number() }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin");
           await db.deleteClinic(input.id);
           return { success: true };
         }),
@@ -1216,7 +1276,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
 
     // STATISTICS
     statistics: protectedProcedure.query(async ({ ctx }) => {
-      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      checkRole(ctx, "admin");
       return db.getStatistics();
     }),
 
@@ -1225,13 +1285,13 @@ DocPartner — B2B-платформа агентских рекомендаци�
       get: protectedProcedure
         .input(z.object({ key: z.string() }))
         .query(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin");
           return db.getAppSetting(input.key);
         }),
       set: protectedProcedure
         .input(z.object({ key: z.string(), value: z.string() }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin");
           await db.setAppSetting(input.key, input.value);
           return { success: true };
         }),
@@ -1239,7 +1299,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
       // Commission tiers management
       getCommissionTiers: protectedProcedure
         .query(async ({ ctx }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin");
           const raw = await db.getAppSetting("agentCommissionTiers");
           if (!raw) return [];
           try { return JSON.parse(raw) as { minMonthlyRevenue: number; commissionRate: number }[]; }
@@ -1254,7 +1314,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           })),
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin");
           // Сортировать по порогу и проверить на дубликаты
           const sorted = [...input.tiers].sort((a, b) => a.minMonthlyRevenue - b.minMonthlyRevenue);
           const thresholds = sorted.map(t => t.minMonthlyRevenue);
@@ -1276,7 +1336,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           endDate: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "support", "accountant");
           const { exportReferralsToExcel } = await import("./export");
           const buffer = await exportReferralsToExcel(input);
           return { data: buffer.toString('base64') };
@@ -1289,7 +1349,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           endDate: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "support", "accountant");
           const { exportPaymentsToExcel } = await import("./export");
           const buffer = await exportPaymentsToExcel(input);
           return { data: buffer.toString('base64') };
@@ -1300,7 +1360,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           city: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "support", "accountant");
           const { exportAgentsToExcel } = await import("./export");
           const buffer = await exportAgentsToExcel(input);
           return { data: buffer.toString('base64') };
@@ -1312,7 +1372,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           status: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "support", "accountant");
           const { exportPaymentRegistryToExcel } = await import("./export");
           const buffer = await exportPaymentRegistryToExcel(input);
           return { data: buffer.toString('base64') };
@@ -1323,7 +1383,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           periodEnd: z.string(),
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "support", "accountant");
           const { exportSignedActsRegistryToExcel } = await import("./export");
           const buffer = await exportSignedActsRegistryToExcel(input);
           return { data: buffer.toString('base64') };
@@ -1340,19 +1400,19 @@ DocPartner — B2B-платформа агентских рекомендаци�
           pageSize: z.number().default(20),
         }).optional())
         .query(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "support");
           return db.getAllClinicReports(input || undefined);
         }),
 
       getById: protectedProcedure
         .input(z.object({ id: z.number() }))
         .query(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "support");
           return db.getClinicReportById(input.id);
         }),
 
       stats: protectedProcedure.query(async ({ ctx }) => {
-        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        checkRole(ctx, "admin", "support");
         return db.getClinicReportsStats();
       }),
 
@@ -1364,7 +1424,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           notes: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "support");
 
           const report = await db.getClinicReportById(input.id);
           if (!report) throw new TRPCError({ code: "NOT_FOUND" });
@@ -1426,7 +1486,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           notes: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "support");
           await db.updateClinicReportStatus(input.id, "rejected", ctx.user.id, input.notes);
           return { success: true };
         }),
@@ -1442,7 +1502,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           referralId: z.number().nullable().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "support");
           const { id, ...data } = input;
           await db.updateClinicReport(id, data);
           return { success: true };
@@ -1454,13 +1514,13 @@ DocPartner — B2B-платформа агентских рекомендаци�
           referralId: z.number(),
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "support");
           await db.linkClinicReportToReferral(input.id, input.referralId);
           return { success: true };
         }),
 
       triggerPoll: protectedProcedure.mutation(async ({ ctx }) => {
-        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        checkRole(ctx, "admin", "support");
         const { processNewClinicEmails } = await import("./clinic-report-processor");
         return processNewClinicEmails();
       }),
@@ -1470,13 +1530,115 @@ DocPartner — B2B-платформа агентских рекомендаци�
           search: z.string().optional(),
         }))
         .query(async ({ ctx, input }) => {
-          if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+          checkRole(ctx, "admin", "support");
           const allRefs = await db.getAllReferrals();
           if (!input?.search) return allRefs.slice(0, 20);
           const term = input.search.toLowerCase();
           return allRefs
             .filter(r => r.patientFullName.toLowerCase().includes(term) || (r.clinic && r.clinic.toLowerCase().includes(term)))
             .slice(0, 20);
+        }),
+    }),
+
+    // STAFF MANAGEMENT (admin only)
+    staff: router({
+      list: protectedProcedure.query(async ({ ctx }) => {
+        checkRole(ctx, "admin");
+        return db.getAllStaffUsers();
+      }),
+      create: protectedProcedure
+        .input(z.object({
+          name: z.string().min(2),
+          email: z.string().email(),
+          phone: z.string().optional(),
+          role: z.enum(["admin", "support", "accountant"]),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          checkRole(ctx, "admin");
+          // Check email not taken
+          const existing = await db.getUserByEmail(input.email);
+          if (existing) {
+            throw new TRPCError({ code: "CONFLICT", message: "Пользователь с таким email уже существует" });
+          }
+          const id = await db.createStaffUser(input);
+          return { success: true, id };
+        }),
+      update: protectedProcedure
+        .input(z.object({
+          id: z.number(),
+          name: z.string().min(2).optional(),
+          email: z.string().email().optional(),
+          phone: z.string().optional(),
+          role: z.enum(["admin", "support", "accountant"]).optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          checkRole(ctx, "admin");
+          const { id, ...data } = input;
+          await db.updateStaffUser(id, data);
+          return { success: true };
+        }),
+      delete: protectedProcedure
+        .input(z.object({ id: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          checkRole(ctx, "admin");
+          // Can't delete yourself
+          if (ctx.user.id === input.id) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "Нельзя удалить свой аккаунт" });
+          }
+          await db.deleteStaffUser(input.id);
+          return { success: true };
+        }),
+    }),
+
+    // TASKS (admin + support)
+    tasks: router({
+      list: protectedProcedure
+        .input(z.object({
+          status: z.string().optional(),
+          assignedTo: z.number().optional(),
+        }).optional())
+        .query(async ({ ctx, input }) => {
+          checkRole(ctx, "admin", "support");
+          return db.getTasksList(input || undefined);
+        }),
+      stats: protectedProcedure.query(async ({ ctx }) => {
+        checkRole(ctx, "admin", "support");
+        return db.getTaskStats();
+      }),
+      create: protectedProcedure
+        .input(z.object({
+          type: z.string().default("manual"),
+          title: z.string().min(2),
+          referralId: z.number().optional(),
+          agentId: z.number().optional(),
+          assignedTo: z.number().optional(),
+          priority: z.enum(["low", "normal", "high", "urgent"]).default("normal"),
+          notes: z.string().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          checkRole(ctx, "admin", "support");
+          const id = await db.createTask(input);
+          return { success: true, id };
+        }),
+      updateStatus: protectedProcedure
+        .input(z.object({
+          id: z.number(),
+          status: z.enum(["pending", "in_progress", "completed", "cancelled"]),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          checkRole(ctx, "admin", "support");
+          await db.updateTaskStatus(input.id, input.status, ctx.user.id);
+          return { success: true };
+        }),
+      assign: protectedProcedure
+        .input(z.object({
+          id: z.number(),
+          userId: z.number(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          checkRole(ctx, "admin", "support");
+          await db.assignTask(input.id, input.userId);
+          return { success: true };
         }),
     }),
   }),
@@ -1823,10 +1985,10 @@ DocPartner — B2B-платформа агентских рекомендаци�
         if (!agent) throw new TRPCError({ code: "NOT_FOUND", message: "Агент не найден" });
         if (agent.status !== "active") throw new TRPCError({ code: "FORBIDDEN", message: "Аккаунт не активен" });
 
-        // Validate name has at least 2 words
+        // Validate name has exactly 3 words (Фамилия Имя Отчество)
         const nameWords = input.patientFullName.trim().split(/\s+/);
-        if (nameWords.length < 2) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Укажите фамилию и имя (минимум 2 слова)" });
+        if (nameWords.length !== 3) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Укажите ФИО пациента (Фамилия Имя Отчество — 3 слова)" });
         }
 
         const referralId = await db.createReferral({
@@ -1857,6 +2019,16 @@ DocPartner — B2B-платформа агентских рекомендаци�
           });
         } catch (emailError) {
           console.error("[Dashboard] Email notification failed:", emailError);
+        }
+
+        // Auto-create task for new referral
+        try {
+          await autoCreateTaskForReferral(referralId, "new", {
+            patientFullName: input.patientFullName.trim(),
+            agentId: ctx.agentId,
+          });
+        } catch (err) {
+          console.error("[Dashboard] Failed to auto-create task:", err);
         }
 
         return { success: true, referralId };

@@ -176,7 +176,7 @@ export default function AdminPayments() {
     );
   }
 
-  if (!user || user.role !== "admin") {
+  if (!user || !["admin", "support", "accountant"].includes(user.role)) {
     setLocation("/");
     return null;
   }

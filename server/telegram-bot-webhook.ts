@@ -1020,6 +1020,19 @@ bot.on(message('text'), async (ctx) => {
       return;
     }
 
+    // Проверка уникальности email
+    const { getAgentByEmail } = await import('./db');
+    const existingByEmail = await getAgentByEmail(text.toLowerCase());
+    if (existingByEmail) {
+      await ctx.reply(
+        '❌ <b>Этот email уже зарегистрирован.</b>\n\n' +
+        'Если у вас уже есть аккаунт, используйте функцию привязки: /link\n' +
+        'Или введите другой email:',
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
     if (!session.tempData) session.tempData = {};
     session.tempData.email = text.toLowerCase();
     session.registrationStep = 'phone';
@@ -1050,6 +1063,22 @@ bot.on(message('text'), async (ctx) => {
     }
 
     if (!session.tempData) { await ctx.reply('❌ Сессия истекла. Начните заново: /start'); return; }
+
+    // Проверка уникальности телефона
+    const { getAgentByPhone } = await import('./db');
+    const existingByPhone = await getAgentByPhone(validation.normalized!);
+    if (existingByPhone) {
+      await ctx.reply(
+        '❌ <b>Этот номер телефона уже зарегистрирован.</b>\n\n' +
+        'Если у вас уже есть аккаунт, используйте функцию привязки: /link\n' +
+        'Или введите другой номер:',
+        { parse_mode: 'HTML', ...Markup.keyboard([
+          Markup.button.contactRequest('📱 Поделиться номером телефона')
+        ]).oneTime().resize() }
+      );
+      return;
+    }
+
     session.tempData.phone = validation.normalized!;
     session.registrationStep = 'role';
 
@@ -1575,6 +1604,20 @@ bot.on(message('contact'), async (ctx) => {
     }
 
     if (!session.tempData) { await ctx.reply('❌ Сессия истекла. Начните заново: /start'); return; }
+
+    // Проверка уникальности телефона
+    const { getAgentByPhone: getByPhone } = await import('./db');
+    const existingPhone = await getByPhone(validation.normalized!);
+    if (existingPhone) {
+      await ctx.reply(
+        '❌ <b>Этот номер телефона уже зарегистрирован.</b>\n\n' +
+        'Если у вас уже есть аккаунт, используйте функцию привязки: /link\n' +
+        'Или введите другой номер вручную:',
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
     session.tempData.phone = validation.normalized!;
     session.registrationStep = 'role';
 

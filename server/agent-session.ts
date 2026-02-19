@@ -19,7 +19,7 @@ export interface AgentSession {
 }
 
 export interface SessionInfo {
-  role: "admin" | "agent";
+  role: "admin" | "support" | "accountant" | "agent";
   userId?: number;
   agentId?: number;
   email?: string;

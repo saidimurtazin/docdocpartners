@@ -148,7 +148,7 @@ export default function AdminDashboard() {
     );
   }
 
-  if (!user || user.role !== "admin") {
+  if (!user || !["admin", "support", "accountant"].includes(user.role)) {
     return null;
   }
 

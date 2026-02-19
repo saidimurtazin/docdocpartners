@@ -4,7 +4,7 @@
  */
 
 /**
- * Валидация ФИО - только кириллица, 2-4 слова, минимум 2 буквы в каждом слове
+ * Валидация ФИО - только кириллица, ровно 3 слова (Фамилия Имя Отчество), минимум 2 буквы в каждом слове
  */
 export function validateFullName(text: string): { valid: boolean; error?: string } {
   const trimmed = text.trim();
@@ -18,13 +18,10 @@ export function validateFullName(text: string): { valid: boolean; error?: string
     return { valid: false, error: 'Используйте только русские буквы (кириллицу)' };
   }
 
-  // Проверка количества слов (2-4 слова)
+  // Проверка количества слов (ровно 3 слова: Фамилия Имя Отчество)
   const words = trimmed.split(/\s+/).filter(w => w.length > 0);
-  if (words.length < 2) {
-    return { valid: false, error: 'Введите минимум Фамилию и Имя' };
-  }
-  if (words.length > 4) {
-    return { valid: false, error: 'Слишком много слов. Формат: Фамилия Имя Отчество' };
+  if (words.length !== 3) {
+    return { valid: false, error: 'Введите Фамилию, Имя и Отчество (ровно 3 слова)' };
   }
 
   // Проверка длины каждого слова (минимум 2 буквы)

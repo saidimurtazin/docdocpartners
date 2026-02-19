@@ -99,8 +99,8 @@ export default function AgentReferrals() {
       return;
     }
     const nameWords = formData.patientFullName.trim().split(/\s+/);
-    if (nameWords.length < 2) {
-      setFormError("Укажите фамилию и имя (минимум 2 слова)");
+    if (nameWords.length !== 3) {
+      setFormError("Укажите Фамилию, Имя и Отчество пациента (ровно 3 слова)");
       return;
     }
     if (!formData.patientBirthdate.trim()) {

@@ -1,30 +1,43 @@
 import { Link, useLocation } from "wouter";
 import {
   Home, Users, FileText, Wallet, Building2, LogOut, Menu, X,
-  BarChart3, Mail, Settings
+  BarChart3, Mail, Settings, ClipboardList, UserCog
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useMemo } from "react";
 
 interface AdminLayoutWrapperProps {
   children: ReactNode;
 }
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: "Администратор",
+  support: "Поддержка",
+  accountant: "Бухгалтер",
+};
 
 export default function AdminLayoutWrapper({ children }: AdminLayoutWrapperProps) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const menuItems = [
-    { path: "/admin", label: "Дашборд", icon: BarChart3 },
-    { path: "/admin/agents", label: "Агенты", icon: Users },
-    { path: "/admin/referrals", label: "Рекомендации", icon: FileText },
-    { path: "/admin/payments", label: "Выплаты", icon: Wallet },
-    { path: "/admin/clinics", label: "Клиники", icon: Building2 },
-    { path: "/admin/clinic-reports", label: "Отчёты клиник", icon: Mail },
-    { path: "/admin/settings", label: "Настройки", icon: Settings },
+  const allMenuItems = [
+    { path: "/admin", label: "Дашборд", icon: BarChart3, roles: ["admin", "support", "accountant"] },
+    { path: "/admin/agents", label: "Агенты", icon: Users, roles: ["admin", "support"] },
+    { path: "/admin/referrals", label: "Рекомендации", icon: FileText, roles: ["admin", "support"] },
+    { path: "/admin/payments", label: "Выплаты", icon: Wallet, roles: ["admin", "accountant"] },
+    { path: "/admin/clinics", label: "Клиники", icon: Building2, roles: ["admin"] },
+    { path: "/admin/clinic-reports", label: "Отчёты клиник", icon: Mail, roles: ["admin", "support"] },
+    { path: "/admin/tasks", label: "Задачи", icon: ClipboardList, roles: ["admin", "support"] },
+    { path: "/admin/staff", label: "Сотрудники", icon: UserCog, roles: ["admin"] },
+    { path: "/admin/settings", label: "Настройки", icon: Settings, roles: ["admin"] },
   ];
+
+  const menuItems = useMemo(() => {
+    const role = user?.role || "admin";
+    return allMenuItems.filter(item => item.roles.includes(role));
+  }, [user?.role]);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -69,7 +82,9 @@ export default function AdminLayoutWrapper({ children }: AdminLayoutWrapperProps
 
         {/* User Info */}
         <div className="p-4 border-b border-border">
-          <div className="text-xs text-muted-foreground uppercase tracking-wider">Администратор</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wider">
+            {ROLE_LABELS[user?.role || "admin"] || "Сотрудник"}
+          </div>
           <div className="font-semibold mt-1 text-sm">{user?.name || "Загрузка..."}</div>
         </div>
 
