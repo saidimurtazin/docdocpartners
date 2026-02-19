@@ -26,6 +26,7 @@ import AgentPayments from "./pages/AgentPayments";
 import AgentReferrals from "./pages/AgentReferrals";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import Documents from "./pages/Documents";
 
 function Router() {
   return (
@@ -54,6 +55,7 @@ function Router() {
       <Route path={"/agent/sessions"} component={AgentSessions} />
       <Route path={"/knowledge-base"} component={KnowledgeBase} />
       <Route path={"/clinics"} component={Clinics} />
+      <Route path={"/documents"} component={Documents} />
 
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />

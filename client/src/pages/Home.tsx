@@ -736,9 +736,7 @@ export default function Home() {
               <h4 className="font-semibold mb-4">Ресурсы</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li><Link href="/knowledge-base" className="hover:text-foreground transition-colors">База знаний</Link></li>
-                <li><a href="#" className="hover:text-foreground transition-colors">Документы</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors">FAQ</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors">Поддержка</a></li>
+                <li><Link href="/documents" className="hover:text-foreground transition-colors">Документы</Link></li>
               </ul>
             </div>
             <div>
@@ -750,7 +748,7 @@ export default function Home() {
             </div>
           </div>
           <div className="pt-8 border-t border-border/40 text-center text-sm text-muted-foreground">
-            <p>&copy; 2025 DocPartner. Все права защищены.</p>
+            <p>&copy; 2026 DocPartner. Все права защищены.</p>
           </div>
         </div>
       </footer>
