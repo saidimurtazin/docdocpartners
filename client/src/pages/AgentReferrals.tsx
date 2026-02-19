@@ -33,6 +33,7 @@ export default function AgentReferrals() {
     patientPhone: "",
     patientEmail: "",
     clinic: "",
+    notes: "",
   });
   const [formError, setFormError] = useState("");
 
@@ -84,6 +85,7 @@ export default function AgentReferrals() {
       patientPhone: "",
       patientEmail: "",
       clinic: "",
+      notes: "",
     });
     setFormError("");
   };
@@ -118,6 +120,7 @@ export default function AgentReferrals() {
         patientPhone: formData.patientPhone.trim() || undefined,
         patientEmail: formData.patientEmail.trim() || undefined,
         clinic: formData.clinic || undefined,
+        notes: formData.notes.trim() || undefined,
       });
       alert("Рекомендация успешно создана!");
       resetForm();
@@ -234,6 +237,21 @@ export default function AgentReferrals() {
                           </option>
                         ))}
                       </select>
+                    </div>
+                    <div>
+                      <Label htmlFor="notes">Примечание</Label>
+                      <textarea
+                        id="notes"
+                        placeholder="Например: запись к конкретному врачу, важная информация о пациенте..."
+                        value={formData.notes}
+                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                        maxLength={500}
+                        rows={3}
+                        className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm resize-none"
+                      />
+                      {formData.notes.length > 0 && (
+                        <p className="text-xs text-muted-foreground mt-1 text-right">{formData.notes.length}/500</p>
+                      )}
                     </div>
 
                     {formError && (

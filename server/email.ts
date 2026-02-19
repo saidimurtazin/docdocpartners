@@ -114,6 +114,7 @@ export async function sendReferralNotification(params: {
   patientPhone?: string;
   patientEmail?: string;
   clinic?: string;
+  notes?: string;
 }): Promise<boolean> {
   const html = `
     <!DOCTYPE html>
@@ -151,6 +152,7 @@ export async function sendReferralNotification(params: {
             ${params.patientPhone ? `<p><span class="label">Телефон:</span><span class="value">${params.patientPhone}</span></p>` : ''}
             ${params.patientEmail ? `<p><span class="label">Email:</span><span class="value">${params.patientEmail}</span></p>` : ''}
             ${params.clinic ? `<p><span class="label">Клиника:</span><span class="value">${params.clinic}</span></p>` : ''}
+            ${params.notes ? `<p><span class="label">📝 Примечание:</span><span class="value">${params.notes}</span></p>` : ''}
           </div>
           
           <div class="card">

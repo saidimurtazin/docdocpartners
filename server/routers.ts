@@ -1816,6 +1816,7 @@ DocDocPartner — B2B-платформа агентских рекомендац
         patientPhone: z.string().optional(),
         patientEmail: z.string().email("Некорректный email").optional().or(z.literal("")),
         clinic: z.string().optional(),
+        notes: z.string().max(500, "Примечание не должно превышать 500 символов").optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const agent = await db.getAgentById(ctx.agentId);
@@ -1836,6 +1837,7 @@ DocDocPartner — B2B-платформа агентских рекомендац
           patientPhone: input.patientPhone || undefined,
           patientEmail: input.patientEmail || undefined,
           clinic: input.clinic || undefined,
+          notes: input.notes?.trim() || undefined,
         });
 
         // Send email notification
@@ -1851,6 +1853,7 @@ DocDocPartner — B2B-платформа агентских рекомендац
             patientPhone: input.patientPhone,
             patientEmail: input.patientEmail,
             clinic: input.clinic,
+            notes: input.notes,
           });
         } catch (emailError) {
           console.error("[Dashboard] Email notification failed:", emailError);

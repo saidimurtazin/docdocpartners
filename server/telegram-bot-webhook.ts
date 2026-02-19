@@ -17,7 +17,7 @@ const bot = new Telegraf(ENV.telegramBotToken);
 
 // Session interface
 interface SessionData {
-  registrationStep?: 'fullName' | 'email' | 'phone' | 'role' | 'specialization' | 'city' | 'excluded_clinics' | 'contract' | 'patient_name' | 'patient_birthdate' | 'patient_phone' | 'patient_contact_consent' | 'patient_consent' | 'payout_inn' | 'payout_self_employed' | 'payout_method' | 'payout_card_number' | 'payout_bank_name' | 'payout_bank_account' | 'payout_bank_bik' | 'link_email' | 'link_otp' | 'link_phone';
+  registrationStep?: 'fullName' | 'email' | 'phone' | 'role' | 'specialization' | 'city' | 'excluded_clinics' | 'contract' | 'patient_name' | 'patient_birthdate' | 'patient_phone' | 'patient_notes' | 'patient_contact_consent' | 'patient_consent' | 'payout_inn' | 'payout_self_employed' | 'payout_method' | 'payout_card_number' | 'payout_bank_name' | 'payout_bank_account' | 'payout_bank_bik' | 'link_email' | 'link_otp' | 'link_phone';
   tempData?: {
     fullName?: string;
     email?: string;
@@ -31,6 +31,7 @@ interface SessionData {
     patientBirthdate?: string;
     patientPhone?: string;
     contactConsent?: boolean;
+    patientNotes?: string;
     referredBy?: string;
     // Account linking
     linkAgentId?: number;
@@ -1221,6 +1222,40 @@ bot.on(message('text'), async (ctx) => {
     const phone = validation.normalized!;
     if (!session.tempData) { await ctx.reply('❌ Сессия истекла. Начните заново: /patient'); return; }
     session.tempData.patientPhone = phone;
+    session.registrationStep = 'patient_notes';
+
+    // Ask for optional notes
+    const notesKeyboard = Markup.inlineKeyboard([
+      [Markup.button.callback('⏭ Пропустить', 'patient_notes_skip')]
+    ]);
+
+    await ctx.reply(
+      '📝 <b>Примечание</b> (необязательно)\n\n' +
+      'Хотите добавить примечание по пациенту?\n\n' +
+      '💡 <i>Например: запись к конкретному врачу, важная информация о пациенте, особые пожелания</i>\n\n' +
+      'Напишите примечание или нажмите «Пропустить»:',
+      { parse_mode: 'HTML', ...notesKeyboard }
+    );
+    return;
+  }
+
+  // ===============================
+  // PATIENT NOTES INPUT STEP
+  // ===============================
+
+  if (session.registrationStep === 'patient_notes') {
+    const notes = text.trim();
+    if (notes.length > 500) {
+      await ctx.reply(
+        '❌ <b>Примечание слишком длинное.</b>\n\n' +
+        `Максимум 500 символов, вы ввели ${notes.length}.\nСократите текст и попробуйте снова:`,
+        { parse_mode: 'HTML' }
+      );
+      return;
+    }
+
+    if (!session.tempData) { await ctx.reply('❌ Сессия истекла. Начните заново: /patient'); return; }
+    session.tempData.patientNotes = notes;
     session.registrationStep = 'patient_contact_consent';
 
     // Ask if patient wants DocDoc to contact them
@@ -1230,6 +1265,7 @@ bot.on(message('text'), async (ctx) => {
     ]);
 
     await ctx.reply(
+      '✅ Примечание сохранено!\n\n' +
       '📞 <b>Согласие на связь</b>\n\n' +
       'Хочет ли пациент, чтобы сервис DocDoc связался с ним, помог <b>бесплатно записаться</b> к врачу и <b>проконсультировал</b>?',
       { parse_mode: 'HTML', ...contactConsentKeyboard }
@@ -1945,6 +1981,31 @@ bot.action('contract_decline', async (ctx) => {
   sessions.delete(userId);
 });
 
+// Handle patient notes skip
+bot.action('patient_notes_skip', async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+  if (isCallbackSpamming(userId)) { await ctx.answerCbQuery(); return; }
+
+  const session = getSession(userId);
+  if (!session.tempData) { await ctx.answerCbQuery(); await ctx.editMessageText('❌ Сессия истекла. Начните заново: /patient'); sessions.delete(userId); return; }
+
+  session.registrationStep = 'patient_contact_consent';
+  await ctx.answerCbQuery();
+
+  // Ask if patient wants DocDoc to contact them
+  const contactConsentKeyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('✅ Да, хочет', 'contact_consent_yes')],
+    [Markup.button.callback('❌ Нет', 'contact_consent_no')]
+  ]);
+
+  await ctx.editMessageText(
+    '📞 <b>Согласие на связь</b>\n\n' +
+    'Хочет ли пациент, чтобы сервис DocDoc связался с ним, помог <b>бесплатно записаться</b> к врачу и <b>проконсультировал</b>?',
+    { parse_mode: 'HTML', ...contactConsentKeyboard }
+  );
+});
+
 // Handle contact consent (wants DocDoc to call)
 bot.action('contact_consent_yes', async (ctx) => {
   const userId = ctx.from?.id;
@@ -1969,6 +2030,7 @@ bot.action('contact_consent_yes', async (ctx) => {
     `👤 <b>ФИО:</b> ${escapeHtml(session.tempData.patientName || '')}\n` +
     `🎂 <b>Дата рождения:</b> ${escapeHtml(session.tempData.patientBirthdate || '')}\n` +
     `📞 <b>Телефон:</b> ${escapeHtml(session.tempData.patientPhone || '')}\n` +
+    (session.tempData.patientNotes ? `📝 <b>Примечание:</b> ${escapeHtml(session.tempData.patientNotes)}\n` : '') +
     `📲 <b>Связь DocDoc:</b> ✅ Да, хочет\n\n` +
     '⚠️ <b>ВАЖНО:</b> Подтвердите, что пациент дал согласие на передачу его персональных данных в клиники-партнеры DocDocPartner.',
     { parse_mode: 'HTML', ...consentKeyboard }
@@ -1998,6 +2060,7 @@ bot.action('contact_consent_no', async (ctx) => {
     `👤 <b>ФИО:</b> ${escapeHtml(session.tempData.patientName || '')}\n` +
     `🎂 <b>Дата рождения:</b> ${escapeHtml(session.tempData.patientBirthdate || '')}\n` +
     `📞 <b>Телефон:</b> ${escapeHtml(session.tempData.patientPhone || '')}\n` +
+    (session.tempData.patientNotes ? `📝 <b>Примечание:</b> ${escapeHtml(session.tempData.patientNotes)}\n` : '') +
     `📲 <b>Связь DocDoc:</b> ❌ Нет\n\n` +
     '⚠️ <b>ВАЖНО:</b> Подтвердите, что пациент дал согласие на передачу его персональных данных в клиники-партнеры DocDocPartner.',
     { parse_mode: 'HTML', ...consentKeyboard }
@@ -2042,6 +2105,7 @@ bot.action('patient_consent_yes', async (ctx) => {
       patientBirthdate: data.patientBirthdate,
       patientPhone: data.patientPhone,
       contactConsent: data.contactConsent ?? null,
+      notes: data.patientNotes || null,
       status: 'new'
     });
 
@@ -2053,6 +2117,7 @@ bot.action('patient_consent_yes', async (ctx) => {
       `👤 <b>ФИО:</b> ${escapeHtml(data.patientName)}\n` +
       `🎂 <b>Дата рождения:</b> ${escapeHtml(data.patientBirthdate)}\n` +
       `📞 <b>Телефон:</b> ${escapeHtml(data.patientPhone)}\n` +
+      (data.patientNotes ? `📝 <b>Примечание:</b> ${escapeHtml(data.patientNotes)}\n` : '') +
       `📲 <b>Связь DocDoc:</b> ${data.contactConsent ? '✅ Да' : '❌ Нет'}\n\n` +
       (data.contactConsent
         ? '✅ Наш сервис бесплатно свяжется с пациентом, поможет записаться и проконсультирует\n'

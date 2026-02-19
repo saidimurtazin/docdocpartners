@@ -26,7 +26,10 @@ import {
   MapPin,
   ChevronRight,
   Star,
-  Zap
+  Zap,
+  LayoutDashboard,
+  ShieldCheck,
+  Smartphone
 } from "lucide-react";
 import { Link } from "wouter";
 import DoctorChatbot from "@/components/DoctorChatbot";
@@ -118,6 +121,7 @@ export default function Home() {
             </div>
           </div>
           <nav className="hidden md:flex items-center gap-8">
+            <a href="#why-join" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">Зачем регистрироваться</a>
             <a href="#about" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">O программе</a>
             <Link href="/clinics" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">
               Клиники
@@ -319,6 +323,75 @@ export default function Home() {
               </div>
             </motion.div>
           </div>
+        </div>
+      </section>
+
+      {/* ============== WHY JOIN — VALUE PROPOSITION ============== */}
+      <section id="why-join" className="py-24 bg-background">
+        <div className="container">
+          <AnimatedSection className="max-w-3xl mx-auto text-center space-y-6 mb-20">
+            <motion.h2 variants={fadeUp} className="text-4xl sm:text-5xl md:text-6xl font-bold">
+              Зачем <span className="gradient-gold-text">регистрироваться</span>?
+            </motion.h2>
+            <motion.p variants={fadeUp} custom={1} className="text-lg md:text-xl text-muted-foreground leading-relaxed">
+              Три причины, почему врачи выбирают DocDocPartner для рекомендаций пациентов
+            </motion.p>
+          </AnimatedSection>
+
+          <AnimatedSection className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+            {[
+              {
+                icon: LayoutDashboard,
+                title: "Единое окно для рекомендаций",
+                desc: "Одна платформа для направления пациентов во все клиники-партнёры. Без звонков, переписок и неформальных договорённостей — всё в одном месте.",
+                highlight: "50+ клиник",
+                gradient: "from-[oklch(0.35_0.08_250)] to-[oklch(0.55_0.12_250)]"
+              },
+              {
+                icon: ShieldCheck,
+                title: "Прозрачные и безопасные выплаты",
+                desc: "Официальный договор, моментальный расчёт комиссии, вывод от 1 000 ₽ на карту МИР. Всё белое и легальное — работайте как самозанятый или ИП.",
+                highlight: "до 10%",
+                gradient: "from-[oklch(0.55_0.12_250)] to-[oklch(0.70_0.15_75)]"
+              },
+              {
+                icon: Smartphone,
+                title: "Удобная механика рекомендаций",
+                desc: "Отправка пациента за 2 минуты через Telegram-бот или личный кабинет. Отслеживание статуса каждой рекомендации в реальном времени.",
+                highlight: "2 минуты",
+                gradient: "from-[oklch(0.70_0.15_75)] to-[oklch(0.75_0.18_65)]"
+              }
+            ].map((item, index) => (
+              <motion.div key={index} variants={fadeUp} custom={index}>
+                <Card className="glass-card border-2 border-white/20 h-full card-glow group hover:shadow-xl transition-shadow duration-300">
+                  <CardContent className="pt-10 pb-8 space-y-5">
+                    <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${item.gradient} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300`}>
+                      <item.icon className="w-8 h-8 text-white" />
+                    </div>
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-bold">
+                      {item.highlight}
+                    </div>
+                    <h3 className="text-2xl font-bold">{item.title}</h3>
+                    <p className="text-muted-foreground leading-relaxed">{item.desc}</p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </AnimatedSection>
+
+          <AnimatedSection className="text-center mt-12">
+            <motion.div variants={fadeUp}>
+              <Button
+                size="lg"
+                className="btn-premium text-[oklch(0.15_0.05_75)] font-semibold text-lg h-14 px-8"
+                onClick={() => window.open('https://t.me/docpartnerbot', '_blank')}
+              >
+                <MessageSquare className="w-5 h-5 mr-2" />
+                Присоединиться бесплатно
+                <ArrowRight className="w-5 h-5 ml-2" />
+              </Button>
+            </motion.div>
+          </AnimatedSection>
         </div>
       </section>
 
