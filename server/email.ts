@@ -249,6 +249,7 @@ export async function sendReferralNotificationToClinic(referral: {
   agentPhone: string;
   clinic: string;
   notes?: string;
+  clinicEmail?: string; // Email клиники для отправки уведомления
 }): Promise<boolean> {
   const html = `
     <!DOCTYPE html>
@@ -341,8 +342,9 @@ export async function sendReferralNotificationToClinic(referral: {
     </html>
   `;
 
+  const recipientEmail = referral.clinicEmail || process.env.CLINIC_NOTIFICATION_EMAIL || 'said.murtazin@mail.ru';
   return sendInfoEmail({
-    to: 'said.murtazin@mail.ru',
+    to: recipientEmail,
     subject: `Новая рекомендация пациента: ${referral.patientName}`,
     html,
   });

@@ -10,6 +10,71 @@ import { SignJWT, jwtVerify } from "jose";
 import { notifyNewDeviceLogin } from "./telegram-notifications";
 import { calculateWithdrawalTax } from "./payout-calculator";
 
+// ==================== RATE LIMITING ====================
+const otpRateLimits = new Map<string, { count: number; resetAt: number }>();
+const otpVerifyAttempts = new Map<string, { count: number; blockedUntil: number }>();
+
+/** Rate limit OTP requests: max 5 per email per 10 minutes */
+function checkOtpRateLimit(email: string): void {
+  const key = email.toLowerCase();
+  const now = Date.now();
+  const entry = otpRateLimits.get(key);
+
+  if (!entry || now > entry.resetAt) {
+    otpRateLimits.set(key, { count: 1, resetAt: now + 10 * 60 * 1000 });
+    return;
+  }
+
+  if (entry.count >= 5) {
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: "Слишком много запросов. Попробуйте через 10 минут.",
+    });
+  }
+
+  entry.count++;
+}
+
+/** Rate limit OTP verification: max 5 attempts per email, block for 15 min after */
+function checkOtpVerifyLimit(email: string): void {
+  const key = email.toLowerCase();
+  const now = Date.now();
+  const entry = otpVerifyAttempts.get(key);
+
+  if (entry && now < entry.blockedUntil) {
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: "Слишком много попыток. Аккаунт временно заблокирован на 15 минут.",
+    });
+  }
+
+  if (!entry || now > entry.blockedUntil) {
+    otpVerifyAttempts.set(key, { count: 1, blockedUntil: 0 });
+    return;
+  }
+
+  entry.count++;
+  if (entry.count >= 5) {
+    entry.blockedUntil = now + 15 * 60 * 1000;
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: "Слишком много неверных попыток. Попробуйте через 15 минут.",
+    });
+  }
+}
+
+/** Clear verify attempts on successful OTP verification */
+function clearOtpVerifyLimit(email: string): void {
+  otpVerifyAttempts.delete(email.toLowerCase());
+}
+
+// Cleanup rate limit maps every 30 minutes
+setInterval(() => {
+  const now = Date.now();
+  otpRateLimits.forEach((v, k) => { if (now > v.resetAt) otpRateLimits.delete(k); });
+  otpVerifyAttempts.forEach((v, k) => { if (now > v.blockedUntil + 60000) otpVerifyAttempts.delete(k); });
+}, 30 * 60 * 1000);
+
 /**
  * Определить эффективную ставку комиссии для агента за конкретный месяц.
  * Читает глобальные тиры из app_settings["agentCommissionTiers"].
@@ -208,6 +273,9 @@ export const appRouter = router({
         channel: z.enum(["email", "telegram"]).optional().default("email"),
       }))
       .mutation(async ({ input }) => {
+        // Rate limit OTP requests
+        checkOtpRateLimit(input.email);
+
         // PRIORITY 1: Check if user is staff (admin/support/accountant)
         const staffUser = await db.getUserByEmail(input.email);
 
@@ -380,6 +448,9 @@ export const appRouter = router({
         code: z.string().regex(/^\d{6}$/, "OTP must be 6 digits")
       }))
       .mutation(async ({ input, ctx }) => {
+        // Rate limit OTP verification attempts
+        checkOtpVerifyLimit(input.email);
+
         if (process.env.NODE_ENV !== "production") console.log("[VerifyOTP] Attempt for:", input.email);
 
         const dbInstance = await db.getDb();
@@ -419,6 +490,9 @@ export const appRouter = router({
           .update(otpCodesTable)
           .set({ used: "yes" })
           .where(eq(otpCodesTable.id, otpRecord.id));
+
+        // Clear rate limit on successful verification
+        clearOtpVerifyLimit(input.email);
 
         // Check if user is staff (admin/support/accountant)
         const [staffUser] = await dbInstance
@@ -726,8 +800,9 @@ export const appRouter = router({
         // 10. Notify admin about new registration
         try {
           const { notifyAgent } = await import("./telegram-bot-webhook");
-          // Find admin by owner email
-          const admin = await db.getUserByEmail("said.i.murtazin@gmail.com");
+          // Find first admin user to notify
+          const adminEmail = process.env.ADMIN_EMAIL || "said.i.murtazin@gmail.com";
+          const admin = await db.getUserByEmail(adminEmail);
           if (admin?.telegramId) {
             await notifyAgent(
               admin.telegramId,
@@ -786,9 +861,9 @@ export const appRouter = router({
 
   }),
 
-  // AI Assistant for DocPartner agents
+  // AI Assistant for DocPartner agents (requires agent login)
   ai: router({
-    ask: publicProcedure
+    ask: agentProcedure
       .input(z.object({ question: z.string() }))
       .mutation(async ({ input }) => {
         const systemPrompt = `Ты — AI-ассистент программы DocPartner с доступом к поиску в интернете. Отвечай на русском языке.
@@ -1539,12 +1614,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
         }))
         .query(async ({ ctx, input }) => {
           checkRole(ctx, "admin", "support");
-          const allRefs = await db.getAllReferrals();
-          if (!input?.search) return allRefs.slice(0, 20);
-          const term = input.search.toLowerCase();
-          return allRefs
-            .filter(r => r.patientFullName.toLowerCase().includes(term) || (r.clinic && r.clinic.toLowerCase().includes(term)))
-            .slice(0, 20);
+          return db.searchReferrals(input?.search, 20);
         }),
     }),
 

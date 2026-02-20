@@ -231,6 +231,19 @@ export async function getAllReferrals() {
   return db.select().from(referrals).orderBy(desc(referrals.createdAt));
 }
 
+export async function searchReferrals(search?: string, limit = 20) {
+  const db = await getDb();
+  if (!db) return [];
+  if (!search || !search.trim()) {
+    return db.select().from(referrals).orderBy(desc(referrals.createdAt)).limit(limit);
+  }
+  const term = `%${search.trim()}%`;
+  return db.select().from(referrals)
+    .where(sql`${referrals.patientFullName} LIKE ${term} OR ${referrals.clinic} LIKE ${term}`)
+    .orderBy(desc(referrals.createdAt))
+    .limit(limit);
+}
+
 export async function getReferralById(id: number) {
   const db = await getDb();
   if (!db) return undefined;

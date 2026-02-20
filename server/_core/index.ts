@@ -48,7 +48,8 @@ async function startServer() {
 
   // Debug endpoint — manually trigger email poll and return detailed results
   app.get("/api/debug-poll", async (req, res) => {
-    if (req.query.key !== "medigate2025") {
+    const debugKey = process.env.DEBUG_API_KEY || "medigate2025";
+    if (req.query.key !== debugKey) {
       res.status(403).json({ error: "forbidden" });
       return;
     }
@@ -321,6 +322,17 @@ async function startServer() {
     }
   });
   console.log("[Cron] Referral bonus unlock check scheduled (every hour)");
+
+  // Cleanup expired OTP codes — every hour
+  cron.schedule("30 * * * *", async () => {
+    try {
+      const { cleanupExpiredOTPs } = await import("../otp");
+      await cleanupExpiredOTPs();
+    } catch (error) {
+      console.error("[Cron] OTP cleanup failed:", error);
+    }
+  });
+  console.log("[Cron] OTP cleanup scheduled (every hour)");
 }
 
 startServer().catch(console.error);

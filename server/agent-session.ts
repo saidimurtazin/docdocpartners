@@ -62,7 +62,7 @@ export function getAgentSessionFromCookie(cookieHeader: string | null): string |
 
   if (!sessionCookie) return null;
 
-  return sessionCookie.split('=')[1];
+  return sessionCookie.substring(sessionCookie.indexOf('=') + 1);
 }
 
 /**
@@ -85,7 +85,7 @@ export async function verifyAgentSessionFromRequest(req: Request): Promise<Sessi
       return null;
     }
 
-    const token = sessionCookie.split('=')[1];
+    const token = sessionCookie.substring(sessionCookie.indexOf('=') + 1);
     if (!token) {
       return null;
     }
