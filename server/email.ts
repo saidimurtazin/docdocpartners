@@ -402,7 +402,7 @@ export async function sendAgentStatusUpdate(params: {
           <p>Здравствуйте, ${params.agentName}!</p>
           <p>${statusInfo.message}</p>
           ${params.reason ? `<p><strong>Причина:</strong> ${params.reason}</p>` : ''}
-          ${params.status === 'active' ? '<p>Вернитесь в Telegram-бот, чтобы начать работу.</p>' : ''}
+          ${params.status === 'active' ? '<p>Вы можете начать работу через <a href="https://doc-partner.ru/dashboard">личный кабинет</a> или Telegram-бот.</p>' : ''}
         </div>
         <div class="footer">
           <p>© 2026 DocPartner. Все права защищены.</p>

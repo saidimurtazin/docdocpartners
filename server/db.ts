@@ -168,17 +168,20 @@ export async function createAgent(data: any) {
 export async function updateAgentStatus(id: number, status: "pending" | "active" | "rejected" | "blocked") {
   const db = await getDb();
   if (!db) return;
-  
+
   // Get agent data before update to check old status and get telegramId
   const [agent] = await db.select().from(agents).where(eq(agents.id, id));
   const oldStatus = agent?.status;
-  
+
   await db.update(agents).set({ status }).where(eq(agents.id, id));
-  
-  // Send Telegram notification if status changed and agent has telegramId
-  if (agent?.telegramId && oldStatus !== status) {
+
+  // Only notify if status actually changed
+  if (!agent || oldStatus === status) return;
+
+  // Send Telegram notification if agent has telegramId
+  if (agent.telegramId) {
     const { notifyAgent } = await import('./telegram-bot-webhook');
-    
+
     let message = '';
     if (status === 'active') {
       message = '🎉 <b>Поздравляем!</b>\n\n' +
@@ -191,10 +194,22 @@ export async function updateAgentStatus(id: number, status: "pending" | "active"
       message = '🚫 <b>Аккаунт заблокирован</b>\n\n' +
         'Ваш аккаунт был заблокирован. Для получения информации свяжитесь с администрацией.';
     }
-    
+
     if (message) {
       await notifyAgent(agent.telegramId, message);
     }
+  }
+
+  // Send email notification (important for web-registered agents without Telegram)
+  if (agent.email && (status === 'active' || status === 'rejected' || status === 'blocked')) {
+    const { sendAgentStatusUpdate } = await import('./email');
+    await sendAgentStatusUpdate({
+      to: agent.email,
+      agentName: agent.fullName || 'Агент',
+      status,
+    }).catch((err) => {
+      console.error('Failed to send status update email:', err);
+    });
   }
 }
 
@@ -207,19 +222,20 @@ export async function updateAgentTelegramData(id: number, data: {
 }) {
   const db = await getDb();
   if (!db) return;
-  
-  // Update only Telegram-related fields
+
+  // Only update Telegram-specific fields, preserve original fullName from registration
   const updateData: any = {
     telegramId: data.telegramId,
   };
-  
-  // Update full name if we have first name
-  if (data.firstName) {
-    updateData.fullName = data.lastName 
+
+  // Only set fullName if agent doesn't already have one (e.g. incomplete registration)
+  const [agent] = await db.select({ fullName: agents.fullName }).from(agents).where(eq(agents.id, id));
+  if (!agent?.fullName && data.firstName) {
+    updateData.fullName = data.lastName
       ? `${data.firstName} ${data.lastName}`
       : data.firstName;
   }
-  
+
   await db.update(agents).set(updateData).where(eq(agents.id, id));
 }
 

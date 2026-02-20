@@ -328,10 +328,10 @@ export default function Home() {
         <div className="container">
           <AnimatedSection className="max-w-3xl mx-auto text-center space-y-6 mb-20">
             <motion.h2 variants={fadeUp} className="text-4xl sm:text-5xl md:text-6xl font-bold">
-              Зачем <span className="gradient-gold-text">регистрироваться</span>?
+              Начните <span className="gradient-gold-text">зарабатывать</span> сегодня
             </motion.h2>
             <motion.p variants={fadeUp} custom={1} className="text-lg md:text-xl text-muted-foreground leading-relaxed">
-              Три причины, почему врачи выбирают DocPartner для рекомендаций пациентов
+              Три причины присоединиться к DocPartner и рекомендовать пациентов легально
             </motion.p>
           </AnimatedSection>
 
@@ -397,7 +397,7 @@ export default function Home() {
         <div className="container">
           <AnimatedSection className="max-w-3xl mx-auto text-center space-y-6 mb-20">
             <motion.h2 variants={fadeUp} className="text-4xl sm:text-5xl md:text-6xl font-bold">
-              Что такое <span className="gradient-text">DocPartner</span>?
+              Платформа <span className="gradient-text">DocPartner</span>
             </motion.h2>
             <motion.p variants={fadeUp} custom={1} className="text-lg md:text-xl text-muted-foreground leading-relaxed">
               DocPartner — это <strong className="text-foreground">B2B-платформа агентских рекомендаций</strong> в сфере здравоохранения. Мы связываем врачей-агентов с проверенными клиниками для направления пациентов на платное лечение.
@@ -520,7 +520,7 @@ export default function Home() {
         <div className="container">
           <AnimatedSection className="max-w-3xl mx-auto text-center space-y-6 mb-20">
             <motion.h2 variants={fadeUp} className="text-4xl sm:text-5xl md:text-6xl font-bold">
-              Как это <span className="gradient-gold-text">работает</span>?
+              Четыре шага к <span className="gradient-gold-text">заработку</span>
             </motion.h2>
             <motion.p variants={fadeUp} custom={1} className="text-lg md:text-xl text-muted-foreground">
               Простой и прозрачный процесс от регистрации до получения вознаграждения
@@ -561,7 +561,7 @@ export default function Home() {
         <div className="container">
           <AnimatedSection className="max-w-3xl mx-auto text-center space-y-6 mb-20">
             <motion.h2 variants={fadeUp} className="text-4xl sm:text-5xl md:text-6xl font-bold">
-              Почему выбирают <span className="gradient-text">DocPartner</span>?
+              Ваши преимущества с <span className="gradient-text">DocPartner</span>
             </motion.h2>
           </AnimatedSection>
 
