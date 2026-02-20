@@ -54,7 +54,7 @@ export default function Documents() {
           <p className="text-center mb-4">г. Москва</p>
           <p>
             Общество с ограниченной ответственностью «МЕДТЕХКОННЕКТ» (ООО «МЕДТЕХКОННЕКТ»),
-            ОГРН 1247700835018, в лице Генерального директора,
+            в лице Генерального директора,
             действующего на основании Устава, именуемое в дальнейшем «Заказчик»,
             адресует настоящую оферту (предложение заключить договор) любому физическому лицу,
             зарегистрировавшемуся на платформе DocPartner (далее — «Исполнитель»).
@@ -150,7 +150,6 @@ export default function Documents() {
           <h4 className="text-foreground font-semibold mt-6">9. Реквизиты Заказчика</h4>
           <p>
             ООО «МЕДТЕХКОННЕКТ»<br />
-            ОГРН: 1247700835018<br />
             Email: info@doc-partner.ru
           </p>
         </Section>
@@ -254,7 +253,6 @@ export default function Documents() {
 
           <p className="mt-6">
             <strong>ООО «МЕДТЕХКОННЕКТ»</strong><br />
-            ОГРН: 1247700835018<br />
             Email: info@doc-partner.ru
           </p>
         </Section>
@@ -373,7 +371,6 @@ export default function Documents() {
           </p>
           <p className="mt-4">
             <strong>ООО «МЕДТЕХКОННЕКТ»</strong><br />
-            ОГРН: 1247700835018<br />
             Email: info@doc-partner.ru
           </p>
         </Section>

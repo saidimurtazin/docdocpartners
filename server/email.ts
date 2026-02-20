@@ -48,14 +48,14 @@ export async function sendEmail({ to, subject, html }: SendEmailParams): Promise
     });
 
     if (error) {
-      console.error('[Email] Resend send error:', error);
+      console.error('[Email] Resend send error:', JSON.stringify(error), 'to:', to, 'subject:', subject);
       return false;
     }
 
     console.log(`[Email] ✓ Sent successfully to ${to} (via noreply), id: ${data?.id}`);
     return true;
   } catch (error: any) {
-    console.error('[Email] Resend exception:', error.message);
+    console.error('[Email] Resend exception:', error.message, 'to:', to);
     return false;
   }
 }

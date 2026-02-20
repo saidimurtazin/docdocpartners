@@ -214,8 +214,8 @@ export const appRouter = router({
         if (staffUser && STAFF_ROLES.includes(staffUser.role as StaffRole)) {
           // Generate OTP for staff
           const code = Math.floor(100000 + Math.random() * 900000).toString();
-          const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-          if (process.env.NODE_ENV !== "production") console.log('[RequestOTP] Staff code generated for', input.email);
+          const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+          console.log("[RequestOTP] Staff OTP request for:", input.email, "role:", staffUser.role, "telegramId:", staffUser.telegramId || "none");
 
           // Save OTP to database
           const dbInstance = await db.getDb();
@@ -234,42 +234,40 @@ export const appRouter = router({
             used: "no",
           });
 
-          // Admin: send via Telegram if configured
-          if (staffUser.role === "admin" && staffUser.telegramId) {
+          let telegramSent = false;
+          let emailSent = false;
+
+          // All staff: send via Telegram if configured
+          if (staffUser.telegramId) {
             try {
               const { notifyAgent } = await import("./telegram-bot-webhook");
               await notifyAgent(
                 staffUser.telegramId,
-                `🔐 <b>Код для входа в панель:</b>\n\n<code>${code}</code>\n\nКод действителен 5 минут.\n\n⚠️ Никому не сообщайте этот код!`
+                `🔐 <b>Код для входа в панель:</b>\n\n<code>${code}</code>\n\nКод действителен 10 минут.\n\n⚠️ Никому не сообщайте этот код!`
               );
+              telegramSent = true;
+              console.log("[RequestOTP] Telegram OTP sent to staff:", input.email);
             } catch (err) {
-              console.error("[RequestOTP] Failed to send Telegram to admin:", err);
+              console.error("[RequestOTP] Failed to send Telegram to staff:", input.email, err);
             }
           }
 
           // All staff: send OTP via email
           try {
             const { sendOTPEmail } = await import("./email");
-            const emailSent = await sendOTPEmail(input.email, code, 'login');
-            if (!emailSent) {
-              console.error("[RequestOTP] sendOTPEmail returned false for staff:", input.email);
-              if (staffUser.role !== "admin") {
-                throw new TRPCError({
-                  code: "INTERNAL_SERVER_ERROR",
-                  message: "Не удалось отправить код на email. Проверьте адрес и попробуйте позже.",
-                });
-              }
-            }
+            console.log("[RequestOTP] Sending OTP email to staff:", input.email, "role:", staffUser.role);
+            emailSent = await sendOTPEmail(input.email, code, 'login');
+            console.log("[RequestOTP] sendOTPEmail result for staff:", emailSent, "email:", input.email);
           } catch (err) {
-            if (err instanceof TRPCError) throw err;
-            console.error("[RequestOTP] Failed to send email OTP to staff:", err);
-            // Non-blocking for admin (they have Telegram), but important for support/accountant
-            if (staffUser.role !== "admin") {
-              throw new TRPCError({
-                code: "INTERNAL_SERVER_ERROR",
-                message: "Не удалось отправить код на email. Попробуйте позже.",
-              });
-            }
+            console.error("[RequestOTP] Failed to send email OTP to staff:", input.email, "role:", staffUser.role, "error:", err);
+          }
+
+          // If neither channel worked, throw error
+          if (!emailSent && !telegramSent) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Не удалось отправить код. Проверьте email и попробуйте позже.",
+            });
           }
 
           return { success: true };

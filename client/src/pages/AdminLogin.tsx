@@ -72,7 +72,7 @@ export default function AdminLogin() {
             <CardDescription>
               {!otpSent
                 ? "Введите рабочий email для получения кода"
-                : "Введите код из письма"}
+                : "Введите код из письма или Telegram"}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -109,7 +109,7 @@ export default function AdminLogin() {
                   )}
                 </Button>
                 <p className="text-xs text-muted-foreground text-center">
-                  Код придёт на вашу рабочую почту
+                  Код придёт на вашу рабочую почту и/или в Telegram
                 </p>
               </>
             ) : (
