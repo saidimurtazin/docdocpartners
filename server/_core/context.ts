@@ -23,7 +23,16 @@ export async function createContext(
 
     // For backward compatibility, set agentId if it's an agent session
     if (session?.agentId) {
-      agentId = session.agentId;
+      // Verify agent is still active in the database
+      const { getAgentById } = await import("../db");
+      const agent = await getAgentById(session.agentId);
+      if (agent && agent.status === "active") {
+        agentId = session.agentId;
+      } else {
+        // Agent is blocked/deleted/pending — invalidate session
+        session = null;
+        agentId = null;
+      }
     }
     // If session has staff role (admin/support/accountant), load user from database
     const staffRoles = ["admin", "support", "accountant"];
@@ -32,6 +41,9 @@ export async function createContext(
       const staffUser = await getUserById(session.userId);
       if (staffUser) {
         user = staffUser;
+      } else {
+        // Staff user no longer exists — invalidate session
+        session = null;
       }
     }
   } catch (error) {

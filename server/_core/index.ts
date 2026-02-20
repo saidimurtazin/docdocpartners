@@ -333,6 +333,18 @@ async function startServer() {
     }
   });
   console.log("[Cron] OTP cleanup scheduled (every hour)");
+
+  // Cleanup expired/revoked sessions — every 6 hours
+  cron.schedule("0 */6 * * *", async () => {
+    try {
+      const { cleanupExpiredSessions } = await import("../db");
+      await cleanupExpiredSessions();
+      console.log("[Cron] Expired sessions cleaned up");
+    } catch (error) {
+      console.error("[Cron] Session cleanup failed:", error);
+    }
+  });
+  console.log("[Cron] Session cleanup scheduled (every 6 hours)");
 }
 
 startServer().catch(console.error);

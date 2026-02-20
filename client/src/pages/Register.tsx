@@ -98,11 +98,7 @@ export default function Register() {
         contractAccepted,
       });
       setRegistered(true);
-      toast.success("Регистрация прошла успешно!");
-      // Redirect to dashboard after 2 seconds
-      setTimeout(() => {
-        window.location.replace("/dashboard");
-      }, 2000);
+      toast.success("Заявка отправлена!");
     } catch (error: any) {
       if (error.message?.includes("истёк")) {
         toast.error("Токен регистрации истёк", { description: "Начните регистрацию заново" });
@@ -150,11 +146,13 @@ export default function Register() {
               <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto" />
               <h2 className="text-2xl font-bold">Заявка отправлена!</h2>
               <p className="text-muted-foreground">
-                Ваш аккаунт будет активирован администратором. Мы уведомим вас по email.
+                Ваш аккаунт будет активирован администратором. Мы уведомим вас по email и/или в Telegram.
               </p>
-              <p className="text-sm text-muted-foreground">
-                Перенаправляем в личный кабинет...
-              </p>
+              <Link href="/login">
+                <Button variant="outline" className="mt-4">
+                  Перейти на страницу входа
+                </Button>
+              </Link>
             </CardContent>
           </Card>
         </div>

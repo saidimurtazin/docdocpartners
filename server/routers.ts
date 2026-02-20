@@ -485,11 +485,25 @@ export const appRouter = router({
           });
         }
 
-        // Mark OTP as used
-        await dbInstance
+        // Atomic: Mark OTP as used only if it's still unused (prevents race condition)
+        const updateResult = await dbInstance
           .update(otpCodesTable)
           .set({ used: "yes" })
-          .where(eq(otpCodesTable.id, otpRecord.id));
+          .where(
+            and(
+              eq(otpCodesTable.id, otpRecord.id),
+              eq(otpCodesTable.used, "no")
+            )
+          );
+
+        // Check if the update actually affected a row (Drizzle MySQL returns [ResultSetHeader])
+        const affectedRows = (updateResult as any)?.[0]?.affectedRows ?? (updateResult as any)?.rowCount ?? 1;
+        if (affectedRows === 0) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Код уже использован. Запросите новый.",
+          });
+        }
 
         // Clear rate limit on successful verification
         clearOtpVerifyLimit(input.email);
@@ -543,6 +557,16 @@ export const appRouter = router({
           throw new TRPCError({
             code: "NOT_FOUND",
             message: "Agent not found",
+          });
+        }
+
+        // Check agent status — only active agents can log in
+        if (agent.status !== "active") {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: agent.status === "pending"
+              ? "Ваш аккаунт ещё не активирован администратором. Ожидайте подтверждения."
+              : "Ваш аккаунт заблокирован. Обратитесь в поддержку.",
           });
         }
 
@@ -818,44 +842,8 @@ export const appRouter = router({
           console.error("[Register] Failed to notify admin:", err);
         }
 
-        // 11. Auto-login: create session and set cookie
-        const token = await new SignJWT({
-          userId: agentId,
-          agentId,
-          role: "agent",
-          telegramId: null,
-        })
-          .setProtectedHeader({ alg: "HS256" })
-          .setIssuedAt()
-          .setExpirationTime("30d")
-          .sign(secret);
-
-        const cookieOptions = getSessionCookieOptions(ctx.req);
-        ctx.res.cookie(AGENT_COOKIE_NAME, token, {
-          ...cookieOptions,
-          maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-        });
-
-        // Create session record
-        const deviceInfo = ctx.req.headers["user-agent"] || null;
-        const ipAddress = (ctx.req.headers["x-forwarded-for"] as string)?.split(",")[0] ||
-                          (ctx.req.headers["x-real-ip"] as string) ||
-                          ctx.req.socket.remoteAddress || null;
-
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 30);
-
-        await db.createSession({
-          agentId,
-          sessionToken: token,
-          deviceInfo,
-          ipAddress,
-          loginMethod: "web_registration",
-          lastActivityAt: new Date(),
-          expiresAt,
-          isRevoked: "no",
-        });
-
+        // No auto-login for pending agents — they must wait for admin activation
+        // and then log in via the normal OTP flow
         return { success: true, agentId };
       }),
 
