@@ -59,8 +59,8 @@ export const agents = mysqlTable("agents", {
   id: int("id").autoincrement().primaryKey(),
   telegramId: varchar("telegramId", { length: 64 }).unique(),
   fullName: varchar("fullName", { length: 255 }).notNull(),
-  email: varchar("email", { length: 320 }),
-  phone: varchar("phone", { length: 50 }),
+  email: varchar("email", { length: 320 }).unique(),
+  phone: varchar("phone", { length: 50 }).unique(),
   role: varchar("role", { length: 100 }), // Врач, Координатор, etc.
   city: varchar("city", { length: 100 }),
   specialization: varchar("specialization", { length: 255 }),

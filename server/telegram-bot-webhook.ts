@@ -351,6 +351,25 @@ bot.action('register_new', async (ctx) => {
   );
 });
 
+// Handle "Restart registration" button (e.g. when phone already exists)
+bot.action('restart_registration', async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+  await ctx.answerCbQuery();
+  if (isCallbackSpamming(userId)) return;
+
+  // Clear old session and start fresh
+  sessions.delete(userId);
+  const session = getSession(userId);
+  session.registrationStep = 'fullName';
+
+  await ctx.reply(
+    '📝 <b>Регистрация заново</b>\n\n' +
+    '<b>Введите ваше полное имя (Фамилия Имя Отчество):</b>',
+    { parse_mode: 'HTML', ...Markup.removeKeyboard() }
+  );
+});
+
 // Handle "Back" button from link choice
 bot.action('link_back', async (ctx) => {
   const userId = ctx.from?.id;
@@ -1026,11 +1045,19 @@ bot.on(message('text'), async (ctx) => {
     const { getAgentByEmail } = await import('./db');
     const existingByEmail = await getAgentByEmail(text.toLowerCase());
     if (existingByEmail) {
+      session.registrationStep = undefined;
       await ctx.reply(
         '❌ <b>Этот email уже зарегистрирован.</b>\n\n' +
-        'Если у вас уже есть аккаунт, используйте функцию привязки: /link\n' +
-        'Или введите другой email:',
-        { parse_mode: 'HTML' }
+        'Вы не можете использовать другой email. Варианты:\n\n' +
+        '🔗 <b>Привязать аккаунт</b> — если вы уже регистрировались на сайте\n' +
+        '🔄 <b>Начать заново</b> — использовать другие данные',
+        {
+          parse_mode: 'HTML',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('🔗 Привязать существующий аккаунт', 'link_existing')],
+            [Markup.button.callback('🔄 Начать заново', 'restart_registration')],
+          ])
+        }
       );
       return;
     }
@@ -1070,13 +1097,20 @@ bot.on(message('text'), async (ctx) => {
     const { getAgentByPhone } = await import('./db');
     const existingByPhone = await getAgentByPhone(validation.normalized!);
     if (existingByPhone) {
+      // Телефон уже в базе — нельзя вводить другой, только привязать существующий аккаунт
+      session.registrationStep = undefined;
       await ctx.reply(
         '❌ <b>Этот номер телефона уже зарегистрирован.</b>\n\n' +
-        'Если у вас уже есть аккаунт, используйте функцию привязки: /link\n' +
-        'Или введите другой номер:',
-        { parse_mode: 'HTML', ...Markup.keyboard([
-          Markup.button.contactRequest('📱 Поделиться номером телефона')
-        ]).oneTime().resize() }
+        'Вы не можете использовать другой номер. Варианты:\n\n' +
+        '🔗 <b>Привязать аккаунт</b> — нажмите кнопку ниже\n' +
+        '📱 <b>Поделитесь контактом</b> — чтобы подтвердить что это ваш номер',
+        {
+          parse_mode: 'HTML',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('🔗 Привязать существующий аккаунт', 'link_existing')],
+            [Markup.button.callback('🔄 Начать заново', 'restart_registration')],
+          ])
+        }
       );
       return;
     }
@@ -1611,11 +1645,20 @@ bot.on(message('contact'), async (ctx) => {
     const { getAgentByPhone: getByPhone } = await import('./db');
     const existingPhone = await getByPhone(validation.normalized!);
     if (existingPhone) {
+      // Телефон уже в базе — нельзя вводить другой, только привязать существующий аккаунт
+      session.registrationStep = undefined;
       await ctx.reply(
         '❌ <b>Этот номер телефона уже зарегистрирован.</b>\n\n' +
-        'Если у вас уже есть аккаунт, используйте функцию привязки: /link\n' +
-        'Или введите другой номер вручную:',
-        { parse_mode: 'HTML' }
+        'Вы не можете использовать другой номер. Варианты:\n\n' +
+        '🔗 <b>Привязать аккаунт</b> — нажмите кнопку ниже\n' +
+        '📱 <b>Поделитесь контактом</b> — чтобы подтвердить что это ваш номер',
+        {
+          parse_mode: 'HTML',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('🔗 Привязать существующий аккаунт', 'link_existing')],
+            [Markup.button.callback('🔄 Начать заново', 'restart_registration')],
+          ])
+        }
       );
       return;
     }

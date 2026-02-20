@@ -788,19 +788,35 @@ export const appRouter = router({
           : null;
 
         // 8. Create agent (telegramId is null for web registration)
-        const agentId = await db.createAgent({
-          telegramId: null,
-          fullName: capitalizeWords(input.fullName),
-          email,
-          phone: phoneCheck.normalized || input.phone,
-          role: input.role,
-          specialization: input.specialization || null,
-          city: capitalizeWords(input.city),
-          status: "pending",
-          referralCode,
-          referredBy: referredByAgentId,
-          excludedClinics: excludedClinicsJson,
-        });
+        let agentId: number;
+        try {
+          agentId = await db.createAgent({
+            telegramId: null,
+            fullName: capitalizeWords(input.fullName),
+            email,
+            phone: phoneCheck.normalized || input.phone,
+            role: input.role,
+            specialization: input.specialization || null,
+            city: capitalizeWords(input.city),
+            status: "pending",
+            referralCode,
+            referredBy: referredByAgentId,
+            excludedClinics: excludedClinicsJson,
+          });
+        } catch (dbError: any) {
+          // Handle MySQL duplicate key errors (from UNIQUE constraints)
+          if (dbError?.code === 'ER_DUP_ENTRY' || dbError?.message?.includes('Duplicate entry')) {
+            const msg = dbError.message || '';
+            if (msg.includes('email')) {
+              throw new TRPCError({ code: "CONFLICT", message: "Этот email уже зарегистрирован." });
+            }
+            if (msg.includes('phone')) {
+              throw new TRPCError({ code: "CONFLICT", message: "Этот номер телефона уже зарегистрирован." });
+            }
+            throw new TRPCError({ code: "CONFLICT", message: "Данные уже используются другим аккаунтом." });
+          }
+          throw dbError;
+        }
 
         // 9. Send registration confirmation email to agent
         try {
