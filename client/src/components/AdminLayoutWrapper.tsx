@@ -23,7 +23,7 @@ export default function AdminLayoutWrapper({ children }: AdminLayoutWrapperProps
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const allMenuItems = [
-    { path: "/admin", label: "Дашборд", icon: BarChart3, roles: ["admin", "support", "accountant"] },
+    { path: "/admin", label: "Дашборд", icon: BarChart3, roles: ["admin"] },
     { path: "/admin/agents", label: "Агенты", icon: Users, roles: ["admin", "support"] },
     { path: "/admin/referrals", label: "Рекомендации", icon: FileText, roles: ["admin", "support"] },
     { path: "/admin/payments", label: "Выплаты", icon: Wallet, roles: ["admin", "accountant"] },

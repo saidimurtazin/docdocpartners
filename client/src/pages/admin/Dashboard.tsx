@@ -134,6 +134,16 @@ export default function AdminDashboard() {
 
   const maxActivity = Math.max(...recentActivity.map(d => d.count), 1);
 
+  // Redirect non-admin roles to their first available page
+  if (user && user.role === "support") {
+    setLocation("/admin/agents");
+    return null;
+  }
+  if (user && user.role === "accountant") {
+    setLocation("/admin/payments");
+    return null;
+  }
+
   // Redirect if not admin
   if (adminError) {
     setLocation("/");
