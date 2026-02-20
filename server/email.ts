@@ -420,6 +420,64 @@ export async function sendAgentStatusUpdate(params: {
 }
 
 /**
+ * Send registration confirmation email to newly registered agent
+ */
+export async function sendRegistrationConfirmation(params: {
+  to: string;
+  agentName: string;
+}): Promise<boolean> {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #3b82f6; color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
+        .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #6b7280; }
+        .btn { display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 6px; margin: 5px; font-weight: bold; }
+        .btn-outline { display: inline-block; padding: 12px 24px; background: white; color: #3b82f6; text-decoration: none; border-radius: 6px; margin: 5px; font-weight: bold; border: 1px solid #3b82f6; }
+        .links { text-align: center; margin-top: 20px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>📋 Заявка принята</h1>
+          <p>DocPartner</p>
+        </div>
+        <div class="content">
+          <p>Здравствуйте, ${params.agentName}!</p>
+          <p>Ваша заявка на регистрацию в программе <b>DocPartner</b> успешно получена и будет рассмотрена администратором.</p>
+          <p>После активации вашего аккаунта вы сможете начать отправлять рекомендации пациентов и зарабатывать. Работать можно двумя способами:</p>
+          <ul>
+            <li><b>Telegram-бот</b> — быстрая отправка рекомендаций прямо из мессенджера</li>
+            <li><b>Личный кабинет</b> — полная статистика, выплаты и управление профилем</li>
+          </ul>
+          <div class="links">
+            <a href="https://t.me/docpartnerbot" class="btn">📱 Telegram-бот</a>
+            <a href="https://doc-partner.ru/login" class="btn-outline">🌐 Личный кабинет</a>
+          </div>
+          <p style="margin-top: 20px; font-size: 14px; color: #6b7280;">Мы уведомим вас по email, когда аккаунт будет активирован.</p>
+        </div>
+        <div class="footer">
+          <p>&copy; 2026 DocPartner. Все права защищены.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return sendEmail({
+    to: params.to,
+    subject: '📋 Заявка на регистрацию принята — DocPartner',
+    html,
+  });
+}
+
+/**
  * Send referral status update notification to agent
  */
 export async function sendReferralStatusUpdate(params: {

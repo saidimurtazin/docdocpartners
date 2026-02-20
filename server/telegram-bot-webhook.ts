@@ -508,6 +508,7 @@ bot.on(message('text'), async (ctx) => {
       const paidOutRub = (paidOutSum / 100).toLocaleString('ru-RU');
       const bonusRub = ((agent.bonusPoints || 0) / 100).toLocaleString('ru-RU');
       const referralLink = `https://t.me/docpartnerbot?start=ref_${agent.id}`;
+      const webReferralLink = `https://doc-partner.ru/register?ref=${agent.id}`;
 
       let message = '📊 <b>Моя статистика</b>\n\n';
       message += `👥 Отправлено пациентов: <b>${agent.totalReferrals || 0}</b>\n`;
@@ -516,7 +517,7 @@ bot.on(message('text'), async (ctx) => {
       if ((agent.bonusPoints || 0) > 0) {
         message += `🎁 Бонусные баллы: <b>${bonusRub} ₽</b>\n`;
       }
-      message += `\n🔗 <b>Ваша реферальная ссылка:</b>\n<code>${referralLink}</code>\n`;
+      message += `\n🔗 <b>Ваша реферальная ссылка:</b>\n📱 Telegram: <code>${referralLink}</code>\n🌐 Веб: <code>${webReferralLink}</code>\n`;
       message += '📢 За каждого приглашённого агента — <b>1 000 ₽</b> бонус\n\n';
       message += '📈 <b>Как заработать больше:</b>\n';
       message += '• Отправляйте пациентов через меню\n';
@@ -806,6 +807,7 @@ bot.on(message('text'), async (ctx) => {
       }
 
       const referralLink = `https://t.me/docpartnerbot?start=ref_${agent.id}`;
+      const webReferralLink = `https://doc-partner.ru/register?ref=${agent.id}`;
       const bonusPoints = agent.bonusPoints || 0;
 
       // Count referred agents from DB
@@ -821,7 +823,7 @@ bot.on(message('text'), async (ctx) => {
 
       let message = '👥 <b>Реферальная программа</b>\n\n';
       message += '🎁 Приглашайте коллег и зарабатывайте!\n\n';
-      message += `🔗 <b>Ваша реферальная ссылка:</b>\n<code>${referralLink}</code>\n\n`;
+      message += `🔗 <b>Ваша реферальная ссылка:</b>\n📱 Telegram: <code>${referralLink}</code>\n🌐 Веб: <code>${webReferralLink}</code>\n\n`;
       message += `📈 <b>Ваша статистика:</b>\n`;
       message += `• Приглашено агентов: ${referredCount}\n`;
       message += `• Бонус за рефералов: ${bonusRub} ₽`;
@@ -2530,6 +2532,7 @@ bot.command('referral_program', async (ctx) => {
     const bonusPoints = agent.bonusPoints || 0;
 
     const referralLink = `https://t.me/docpartnerbot?start=ref_${agent.id}`;
+      const webReferralLink = `https://doc-partner.ru/register?ref=${agent.id}`;
 
     // Get paid referral count for bonus unlock progress
     const { getAgentPaidReferralCount } = await import('./db');
@@ -2539,7 +2542,7 @@ bot.command('referral_program', async (ctx) => {
 
     let message = '🎁 <b>Реферальная программа</b>\n\n';
     message += '📢 Приглашайте коллег и зарабатывайте!\n\n';
-    message += `🔗 <b>Ваша реферальная ссылка:</b>\n<code>${referralLink}</code>\n\n`;
+    message += `🔗 <b>Ваша реферальная ссылка:</b>\n📱 Telegram: <code>${referralLink}</code>\n🌐 Веб: <code>${webReferralLink}</code>\n\n`;
     message += `👥 Приглашено агентов: ${referralCount}\n`;
     message += `💰 Бонус за рефералов: ${bonusRub} ₽`;
     if (bonusPoints > 0 && !bonusUnlocked) {
@@ -2714,6 +2717,7 @@ bot.action('cmd_stats', async (ctx) => {
     const paidOutRub = (paidOutSum / 100).toLocaleString('ru-RU');
     const bonusRub = ((agent.bonusPoints || 0) / 100).toLocaleString('ru-RU');
     const referralLink = `https://t.me/docpartnerbot?start=ref_${agent.id}`;
+      const webReferralLink = `https://doc-partner.ru/register?ref=${agent.id}`;
 
     let message = '📊 <b>Моя статистика</b>\n\n';
     message += `👥 Отправлено пациентов: <b>${agent.totalReferrals || 0}</b>\n`;
@@ -2722,7 +2726,7 @@ bot.action('cmd_stats', async (ctx) => {
     if ((agent.bonusPoints || 0) > 0) {
       message += `🎁 Бонусные баллы: <b>${bonusRub} ₽</b>\n`;
     }
-    message += `\n🔗 <b>Ваша реферальная ссылка:</b>\n<code>${referralLink}</code>\n`;
+    message += `\n🔗 <b>Ваша реферальная ссылка:</b>\n📱 Telegram: <code>${referralLink}</code>\n🌐 Веб: <code>${webReferralLink}</code>\n`;
     message += '📢 За каждого приглашённого агента — <b>1 000 ₽</b> бонус\n\n';
     message += '📈 <b>Как заработать больше:</b>\n';
     message += '• Отправляйте пациентов через /patient\n';
@@ -2775,6 +2779,7 @@ bot.action('cmd_referral_program', async (ctx) => {
     }
 
     const referralLink = `https://t.me/docpartnerbot?start=ref_${agent.id}`;
+      const webReferralLink = `https://doc-partner.ru/register?ref=${agent.id}`;
     const bonusPoints = agent.bonusPoints || 0;
 
     // Count referred agents
@@ -2790,7 +2795,7 @@ bot.action('cmd_referral_program', async (ctx) => {
 
     let message = '👥 <b>Реферальная программа</b>\n\n';
     message += '🎁 Приглашайте коллег и зарабатывайте!\n\n';
-    message += `🔗 <b>Ваша реферальная ссылка:</b>\n<code>${referralLink}</code>\n\n`;
+    message += `🔗 <b>Ваша реферальная ссылка:</b>\n📱 Telegram: <code>${referralLink}</code>\n🌐 Веб: <code>${webReferralLink}</code>\n\n`;
     message += `📈 <b>Ваша статистика:</b>\n`;
     message += `• Приглашено агентов: ${referredCount}\n`;
     message += `• Бонус за рефералов: ${bonusRub} ₽`;
@@ -3546,6 +3551,7 @@ bot.command('stats', async (ctx) => {
     const paidOutRub = (paidOutSum / 100).toLocaleString('ru-RU');
     const bonusRub = ((agent.bonusPoints || 0) / 100).toLocaleString('ru-RU');
     const referralLink = `https://t.me/docpartnerbot?start=ref_${agent.id}`;
+      const webReferralLink = `https://doc-partner.ru/register?ref=${agent.id}`;
 
     let message = '📊 <b>Моя статистика</b>\n\n';
     message += `👥 Отправлено пациентов: <b>${agent.totalReferrals || 0}</b>\n`;
@@ -3554,7 +3560,7 @@ bot.command('stats', async (ctx) => {
     if ((agent.bonusPoints || 0) > 0) {
       message += `🎁 Бонусные баллы: <b>${bonusRub} ₽</b>\n`;
     }
-    message += `\n🔗 <b>Ваша реферальная ссылка:</b>\n<code>${referralLink}</code>\n`;
+    message += `\n🔗 <b>Ваша реферальная ссылка:</b>\n📱 Telegram: <code>${referralLink}</code>\n🌐 Веб: <code>${webReferralLink}</code>\n`;
     message += '📢 За каждого приглашённого агента — <b>1 000 ₽</b> бонус\n\n';
     message += '📈 <b>Как заработать больше:</b>\n';
     message += '• Отправляйте пациентов через /patient\n';

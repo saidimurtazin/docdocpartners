@@ -1,14 +1,38 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, ArrowRight, Loader2, Mail, User, Phone, Briefcase, MapPin, Building2, Link2, FileCheck, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Mail, User, Phone, Briefcase, MapPin, Building2, Link2, FileCheck, CheckCircle2, Pencil } from "lucide-react";
 import { Link, useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+
+const RUSSIAN_CITIES = [
+  // ТОП-10
+  "Москва", "Санкт-Петербург", "Новосибирск", "Екатеринбург", "Казань",
+  "Нижний Новгород", "Челябинск", "Самара", "Омск", "Ростов-на-Дону",
+  // Остальные крупные города
+  "Уфа", "Красноярск", "Воронеж", "Пермь", "Волгоград",
+  "Краснодар", "Саратов", "Тюмень", "Тольятти", "Ижевск",
+  "Барнаул", "Ульяновск", "Иркутск", "Хабаровск", "Ярославль",
+  "Владивосток", "Махачкала", "Томск", "Оренбург", "Кемерово",
+  "Новокузнецк", "Рязань", "Астрахань", "Набережные Челны", "Пенза",
+  "Липецк", "Тула", "Киров", "Чебоксары", "Калининград",
+  "Брянск", "Курск", "Иваново", "Магнитогорск", "Улан-Удэ",
+  "Тверь", "Ставрополь", "Белгород", "Сочи", "Нижний Тагил",
+  "Архангельск", "Владимир", "Калуга", "Смоленск", "Чита",
+  "Саранск", "Волжский", "Курган", "Орёл", "Череповец",
+  "Вологда", "Владикавказ", "Сургут", "Мурманск", "Тамбов",
+  "Петрозаводск", "Кострома", "Нижневартовск", "Новороссийск", "Йошкар-Ола",
+  "Якутск", "Грозный", "Таганрог", "Комсомольск-на-Амуре", "Сыктывкар",
+  "Нальчик", "Шахты", "Дзержинск", "Орск", "Братск",
+  "Ангарск", "Старый Оскол", "Великий Новгород", "Псков", "Бийск",
+  "Прокопьевск", "Рыбинск", "Балаково", "Абакан", "Армавир",
+  "Норильск", "Южно-Сахалинск", "Северодвинск", "Петропавловск-Камчатский",
+];
 
 const TOTAL_STEPS = 8;
 
@@ -49,6 +73,9 @@ export default function Register() {
   const [referralCode, setReferralCode] = useState(refFromUrl || "");
   const [contractAccepted, setContractAccepted] = useState(false);
   const [registered, setRegistered] = useState(false);
+  const [cityDropdownOpen, setCityDropdownOpen] = useState(false);
+  const cityInputRef = useRef<HTMLInputElement>(null);
+  const cityDropdownRef = useRef<HTMLDivElement>(null);
 
   const requestOtp = trpc.auth.requestRegistrationOtp.useMutation();
   const verifyOtp = trpc.auth.verifyRegistrationOtp.useMutation();
@@ -59,6 +86,24 @@ export default function Register() {
   useEffect(() => {
     if (refFromUrl) setReferralCode(refFromUrl);
   }, [refFromUrl]);
+
+  // Close city dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        cityDropdownRef.current && !cityDropdownRef.current.contains(e.target as Node) &&
+        cityInputRef.current && !cityInputRef.current.contains(e.target as Node)
+      ) {
+        setCityDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredCities = city.trim()
+    ? RUSSIAN_CITIES.filter(c => c.toLowerCase().startsWith(city.trim().toLowerCase())).slice(0, 10)
+    : RUSSIAN_CITIES.slice(0, 10); // ТОП-10
 
   const handleRequestOtp = async () => {
     if (!email) return;
@@ -376,19 +421,55 @@ export default function Register() {
               </div>
             )}
 
-            {/* Step 5: City */}
+            {/* Step 5: City with autocomplete */}
             {step === 5 && (
               <div className="space-y-2">
                 <Label htmlFor="city">Город</Label>
-                <Input
-                  id="city"
-                  placeholder="Москва"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && canGoNext()) goNext(); }}
-                  autoFocus
-                />
-                <p className="text-xs text-muted-foreground">Только русские буквы</p>
+                <div className="relative">
+                  <Input
+                    ref={cityInputRef}
+                    id="city"
+                    placeholder="Начните вводить название города"
+                    value={city}
+                    onChange={(e) => { setCity(e.target.value); setCityDropdownOpen(true); }}
+                    onFocus={() => setCityDropdownOpen(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && canGoNext()) { setCityDropdownOpen(false); goNext(); }
+                      if (e.key === "Escape") setCityDropdownOpen(false);
+                    }}
+                    autoFocus
+                    autoComplete="off"
+                  />
+                  {cityDropdownOpen && filteredCities.length > 0 && (
+                    <div
+                      ref={cityDropdownRef}
+                      className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-md max-h-52 overflow-y-auto"
+                    >
+                      {!city.trim() && (
+                        <div className="px-3 py-1.5 text-xs text-muted-foreground font-medium border-b">
+                          Популярные города
+                        </div>
+                      )}
+                      {filteredCities.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-accent cursor-pointer transition-colors"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => { setCity(c); setCityDropdownOpen(false); }}
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {city.trim() && filteredCities.length === 0
+                    ? "Город не найден в списке — можно продолжить с введённым значением"
+                    : "Выберите из списка или введите свой город"
+                  }
+                </p>
               </div>
             )}
 
@@ -450,28 +531,56 @@ export default function Register() {
                 {/* Summary */}
                 <div className="bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
                   <h3 className="font-semibold text-base mb-3">Ваши данные:</h3>
-                  <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
-                    <span className="text-muted-foreground">Email:</span>
-                    <span>{email}</span>
-                    <span className="text-muted-foreground">ФИО:</span>
-                    <span>{fullName}</span>
-                    <span className="text-muted-foreground">Телефон:</span>
-                    <span>{phone}</span>
-                    <span className="text-muted-foreground">Роль:</span>
-                    <span>{role}{specialization ? ` — ${specialization === "Другая" ? customSpecialization : specialization}` : ""}</span>
-                    <span className="text-muted-foreground">Город:</span>
-                    <span>{city}</span>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Email:</span>
+                      <span>{email}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">ФИО:</span>
+                      <div className="flex items-center gap-1.5">
+                        <span>{fullName}</span>
+                        <Pencil className="w-3 h-3 text-muted-foreground/50 hover:text-primary cursor-pointer transition-colors shrink-0" onClick={() => setStep(2)} />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Телефон:</span>
+                      <div className="flex items-center gap-1.5">
+                        <span>{phone}</span>
+                        <Pencil className="w-3 h-3 text-muted-foreground/50 hover:text-primary cursor-pointer transition-colors shrink-0" onClick={() => setStep(3)} />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Роль:</span>
+                      <div className="flex items-center gap-1.5">
+                        <span>{role}{specialization ? ` — ${specialization === "Другая" ? customSpecialization : specialization}` : ""}</span>
+                        <Pencil className="w-3 h-3 text-muted-foreground/50 hover:text-primary cursor-pointer transition-colors shrink-0" onClick={() => setStep(4)} />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Город:</span>
+                      <div className="flex items-center gap-1.5">
+                        <span>{city}</span>
+                        <Pencil className="w-3 h-3 text-muted-foreground/50 hover:text-primary cursor-pointer transition-colors shrink-0" onClick={() => setStep(5)} />
+                      </div>
+                    </div>
                     {excludedClinics.length > 0 && (
-                      <>
+                      <div className="flex items-center justify-between">
                         <span className="text-muted-foreground">Исключено клиник:</span>
-                        <span>{excludedClinics.length}</span>
-                      </>
+                        <div className="flex items-center gap-1.5">
+                          <span>{excludedClinics.length}</span>
+                          <Pencil className="w-3 h-3 text-muted-foreground/50 hover:text-primary cursor-pointer transition-colors shrink-0" onClick={() => setStep(6)} />
+                        </div>
+                      </div>
                     )}
                     {referralCode && (
-                      <>
+                      <div className="flex items-center justify-between">
                         <span className="text-muted-foreground">Реферал:</span>
-                        <span>{referralCode}</span>
-                      </>
+                        <div className="flex items-center gap-1.5">
+                          <span>{referralCode}</span>
+                          <Pencil className="w-3 h-3 text-muted-foreground/50 hover:text-primary cursor-pointer transition-colors shrink-0" onClick={() => setStep(7)} />
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -493,7 +602,7 @@ export default function Register() {
                     />
                     <span className="text-sm">
                       Я принимаю условия{" "}
-                      <a href="/contract" target="_blank" className="text-primary hover:underline">
+                      <a href="/documents" target="_blank" className="text-primary hover:underline">
                         договора-оферты
                       </a>{" "}
                       и даю согласие на обработку персональных данных

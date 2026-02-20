@@ -766,12 +766,15 @@ export const appRouter = router({
         // 6. Resolve referredBy
         let referredByAgentId: number | null = null;
         if (input.referralCode && input.referralCode.trim()) {
-          const referrer = await db.getAgentByReferralCode(input.referralCode.trim());
+          const code = input.referralCode.trim();
+          // First: try as hex referral code from database
+          const referrer = await db.getAgentByReferralCode(code);
           if (referrer) {
             referredByAgentId = referrer.id;
           } else {
-            // Try as agent ID (for backward compat with Telegram ref_ID links)
-            const parsedId = parseInt(input.referralCode.trim(), 10);
+            // Second: try as agent ID — supports "4", "ref_4", "ref4" formats
+            const cleanedId = code.replace(/^ref[_-]?/i, '');
+            const parsedId = parseInt(cleanedId, 10);
             if (!isNaN(parsedId) && parsedId > 0) {
               const agentById = await db.getAgentById(parsedId);
               if (agentById) referredByAgentId = agentById.id;
@@ -799,7 +802,18 @@ export const appRouter = router({
           excludedClinics: excludedClinicsJson,
         });
 
-        // 9. Credit referral bonus to inviting agent
+        // 9. Send registration confirmation email to agent
+        try {
+          const { sendRegistrationConfirmation } = await import("./email");
+          await sendRegistrationConfirmation({
+            to: email,
+            agentName: capitalizeWords(input.fullName),
+          });
+        } catch (err) {
+          console.error("[Register] Failed to send confirmation email:", err);
+        }
+
+        // 10. Credit referral bonus to inviting agent
         if (referredByAgentId) {
           await db.addBonusPoints(referredByAgentId, 100000); // 1,000₽
 
