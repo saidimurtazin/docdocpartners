@@ -328,16 +328,16 @@ export async function notifyNewDeviceLogin(
 }
 
 /**
- * Send a photo with caption to a Telegram user
+ * Send a photo by URL or file_id with caption to a Telegram user
  */
-async function sendTelegramPhoto(
+async function sendTelegramPhotoByUrl(
   telegramId: string,
-  photoUrl: string,
+  photo: string,
   caption: string,
   parseMode: "HTML" | "Markdown" = "HTML"
-): Promise<boolean> {
+): Promise<{ ok: boolean; fileId?: string }> {
   if (!telegramId || !/^\d+$/.test(telegramId)) {
-    return false;
+    return { ok: false };
   }
   try {
     const response = await fetch(`${TELEGRAM_API_URL}/sendPhoto`, {
@@ -345,7 +345,7 @@ async function sendTelegramPhoto(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: telegramId,
-        photo: photoUrl,
+        photo,
         caption,
         parse_mode: parseMode,
       }),
@@ -353,36 +353,110 @@ async function sendTelegramPhoto(
     const data = await response.json();
     if (!data.ok) {
       console.error(`Failed to send Telegram photo to ${telegramId}:`, data);
-      return false;
+      return { ok: false };
     }
-    return true;
+    // Extract file_id for reuse
+    const photos = data.result?.photo;
+    const fileId = photos?.[photos.length - 1]?.file_id;
+    return { ok: true, fileId };
   } catch (error) {
     console.error(`Error sending Telegram photo to ${telegramId}:`, error);
-    return false;
+    return { ok: false };
   }
 }
 
 /**
- * Broadcast a message (with optional image) to all agents with telegramId
+ * Send a photo from base64 data via multipart/form-data to a Telegram user
+ * Returns file_id for subsequent sends
+ */
+async function sendTelegramPhotoBase64(
+  telegramId: string,
+  base64Data: string,
+  caption: string,
+  parseMode: "HTML" | "Markdown" = "HTML"
+): Promise<{ ok: boolean; fileId?: string }> {
+  if (!telegramId || !/^\d+$/.test(telegramId)) {
+    return { ok: false };
+  }
+  try {
+    // Parse base64 data URI: "data:image/jpeg;base64,/9j/..."
+    const match = base64Data.match(/^data:image\/(\w+);base64,(.+)$/);
+    if (!match) {
+      console.error(`Invalid base64 image data`);
+      return { ok: false };
+    }
+    const ext = match[1] === "jpeg" ? "jpg" : match[1];
+    const buffer = Buffer.from(match[2], "base64");
+    const blob = new Blob([buffer], { type: `image/${match[1]}` });
+
+    const formData = new FormData();
+    formData.append("chat_id", telegramId);
+    formData.append("photo", blob, `broadcast.${ext}`);
+    formData.append("caption", caption);
+    formData.append("parse_mode", parseMode);
+
+    const response = await fetch(`${TELEGRAM_API_URL}/sendPhoto`, {
+      method: "POST",
+      body: formData,
+    });
+    const data = await response.json();
+    if (!data.ok) {
+      console.error(`Failed to send Telegram photo (base64) to ${telegramId}:`, data);
+      return { ok: false };
+    }
+    const photos = data.result?.photo;
+    const fileId = photos?.[photos.length - 1]?.file_id;
+    return { ok: true, fileId };
+  } catch (error) {
+    console.error(`Error sending Telegram photo (base64) to ${telegramId}:`, error);
+    return { ok: false };
+  }
+}
+
+/**
+ * Broadcast a message (with optional image) to all agents with telegramId.
+ * Supports image as URL or base64 data URI.
+ * For base64: uploads once to first recipient, then reuses file_id for all others.
  * Returns stats: { sent, failed, total }
  */
 export async function broadcastToAgents(
   agents: Array<{ telegramId: string; fullName: string }>,
   message: string,
-  imageUrl?: string
+  imageUrl?: string,
+  imageBase64?: string
 ): Promise<{ sent: number; failed: number; total: number }> {
   let sent = 0;
   let failed = 0;
   const total = agents.length;
 
+  const hasImage = !!(imageUrl || imageBase64);
+  const isBase64 = !!imageBase64;
+  let cachedFileId: string | undefined;
+
   for (const agent of agents) {
     try {
-      let success: boolean;
-      if (imageUrl) {
-        success = await sendTelegramPhoto(agent.telegramId, imageUrl, message);
+      let success = false;
+
+      if (hasImage) {
+        if (cachedFileId) {
+          // Reuse file_id — instant, no re-upload
+          const result = await sendTelegramPhotoByUrl(agent.telegramId, cachedFileId, message);
+          success = result.ok;
+        } else if (isBase64) {
+          // First send with base64 — upload to Telegram
+          const result = await sendTelegramPhotoBase64(agent.telegramId, imageBase64!, message);
+          success = result.ok;
+          if (result.fileId) cachedFileId = result.fileId;
+        } else {
+          // URL-based
+          const result = await sendTelegramPhotoByUrl(agent.telegramId, imageUrl!, message);
+          success = result.ok;
+          if (result.fileId) cachedFileId = result.fileId;
+        }
       } else {
         success = await sendTelegramMessage(agent.telegramId, message);
       }
+
       if (success) sent++;
       else failed++;
     } catch {

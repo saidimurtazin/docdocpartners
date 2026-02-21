@@ -1,22 +1,62 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Bell, Send, Loader2, Users, CheckCircle2, AlertTriangle, Image } from "lucide-react";
+import { Bell, Send, Loader2, Users, CheckCircle2, AlertTriangle, Image, Upload, X, Link2 } from "lucide-react";
 import AdminLayoutWrapper from "@/components/AdminLayoutWrapper";
 import { toast } from "sonner";
 
 export default function AdminNotifications() {
   const [message, setMessage] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageFileName, setImageFileName] = useState<string | null>(null);
+  const [imageMode, setImageMode] = useState<"file" | "url">("file");
   const [sending, setSending] = useState(false);
   const [lastResult, setLastResult] = useState<{ sent: number; failed: number; total: number } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: recipientInfo, isLoading } = trpc.admin.notifications.recipientCount.useQuery();
   const broadcast = trpc.admin.notifications.broadcast.useMutation();
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Выберите изображение (JPG, PNG, WebP)");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Максимальный размер изображения — 5 МБ");
+      return;
+    }
+
+    setImageFileName(file.name);
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = ev.target?.result as string;
+      setImageBase64(base64);
+      setImagePreview(base64);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const clearImage = () => {
+    setImageBase64(null);
+    setImagePreview(null);
+    setImageFileName(null);
+    setImageUrl("");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
 
   const handleSend = async () => {
     if (!message.trim()) {
@@ -35,7 +75,8 @@ export default function AdminNotifications() {
     try {
       const result = await broadcast.mutateAsync({
         message: message.trim(),
-        imageUrl: imageUrl.trim() || undefined,
+        imageUrl: imageMode === "url" && imageUrl.trim() ? imageUrl.trim() : undefined,
+        imageBase64: imageMode === "file" && imageBase64 ? imageBase64 : undefined,
       });
 
       setLastResult(result);
@@ -56,6 +97,10 @@ export default function AdminNotifications() {
   const charCount = message.length;
   const maxChars = 4000;
   const isOverLimit = charCount > maxChars;
+  const hasImage = (imageMode === "file" && imageBase64) || (imageMode === "url" && imageUrl.trim());
+
+  const captionLimit = hasImage ? 1024 : maxChars;
+  const isOverCaptionLimit = hasImage && charCount > 1024;
 
   return (
     <AdminLayoutWrapper>
@@ -83,54 +128,126 @@ export default function AdminNotifications() {
                   <Label htmlFor="message">Текст сообщения</Label>
                   <Textarea
                     id="message"
-                    placeholder="Введите текст уведомления для агентов...&#10;&#10;Поддерживается HTML-разметка:&#10;<b>жирный</b>, <i>курсив</i>, <a href='url'>ссылка</a>"
+                    placeholder={"Введите текст уведомления для агентов...\n\nПоддерживается HTML-разметка:\n<b>жирный</b>, <i>курсив</i>, <a href='url'>ссылка</a>"}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     rows={8}
                     className="resize-y"
                   />
-                  <div className={`text-xs text-right ${isOverLimit ? "text-destructive font-medium" : "text-muted-foreground"}`}>
-                    {charCount} / {maxChars}
+                  <div className={`text-xs text-right ${
+                    isOverCaptionLimit ? "text-destructive font-medium" :
+                    isOverLimit ? "text-destructive font-medium" : "text-muted-foreground"
+                  }`}>
+                    {charCount} / {captionLimit}
+                    {isOverCaptionLimit && (
+                      <span className="ml-2">(с картинкой макс. 1024 символа)</span>
+                    )}
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="imageUrl" className="flex items-center gap-1.5">
-                    <Image className="w-4 h-4" />
-                    Картинка (необязательно)
-                  </Label>
-                  <Input
-                    id="imageUrl"
-                    placeholder="https://example.com/image.jpg"
-                    value={imageUrl}
-                    onChange={(e) => setImageUrl(e.target.value)}
-                    type="url"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Прямая ссылка на изображение (JPG, PNG). Если указана, сообщение отправится как подпись к картинке.
-                  </p>
-                </div>
-
-                {/* Image preview */}
-                {imageUrl.trim() && (
-                  <div className="border rounded-lg overflow-hidden bg-muted/30">
-                    <img
-                      src={imageUrl}
-                      alt="Превью"
-                      className="max-h-48 object-contain mx-auto"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = "none";
-                      }}
-                      onLoad={(e) => {
-                        (e.target as HTMLImageElement).style.display = "block";
-                      }}
-                    />
+                {/* Image section */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="flex items-center gap-1.5">
+                      <Image className="w-4 h-4" />
+                      Картинка (необязательно)
+                    </Label>
+                    <div className="flex gap-1">
+                      <Button
+                        variant={imageMode === "file" ? "default" : "ghost"}
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => { setImageMode("file"); setImageUrl(""); }}
+                      >
+                        <Upload className="w-3 h-3 mr-1" />
+                        Файл
+                      </Button>
+                      <Button
+                        variant={imageMode === "url" ? "default" : "ghost"}
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => { setImageMode("url"); clearImage(); }}
+                      >
+                        <Link2 className="w-3 h-3 mr-1" />
+                        Ссылка
+                      </Button>
+                    </div>
                   </div>
-                )}
+
+                  {imageMode === "file" ? (
+                    <div>
+                      {!imageBase64 ? (
+                        <div
+                          className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors"
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+                          <p className="text-sm text-muted-foreground">
+                            Нажмите для загрузки или перетащите файл
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            JPG, PNG, WebP до 5 МБ
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="relative border rounded-lg overflow-hidden bg-muted/30">
+                          <img
+                            src={imagePreview!}
+                            alt="Превью"
+                            className="max-h-48 object-contain mx-auto block"
+                          />
+                          <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-t">
+                            <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                              {imageFileName}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={clearImage}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={handleFileSelect}
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <Input
+                        placeholder="https://example.com/image.jpg"
+                        value={imageUrl}
+                        onChange={(e) => setImageUrl(e.target.value)}
+                        type="url"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Прямая ссылка на изображение (JPG, PNG)
+                      </p>
+                      {imageUrl.trim() && (
+                        <div className="mt-2 border rounded-lg overflow-hidden bg-muted/30">
+                          <img
+                            src={imageUrl}
+                            alt="Превью"
+                            className="max-h-48 object-contain mx-auto"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                            onLoad={(e) => { (e.target as HTMLImageElement).style.display = "block"; }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 <Button
                   onClick={handleSend}
-                  disabled={sending || !message.trim() || isOverLimit || isLoading}
+                  disabled={sending || !message.trim() || isOverLimit || isOverCaptionLimit || isLoading}
                   className="w-full sm:w-auto"
                   size="lg"
                 >
@@ -226,10 +343,10 @@ export default function AdminNotifications() {
                     <code className="bg-muted px-1 rounded">&lt;code&gt;код&lt;/code&gt;</code>
                   </li>
                   <li className="pt-1 border-t">
-                    Используйте перенос строки для абзацев
+                    С картинкой макс. 1024 символа
                   </li>
                   <li>
-                    Картинка — прямая ссылка (не Google Drive)
+                    Без картинки макс. 4000 символов
                   </li>
                 </ul>
               </CardContent>
