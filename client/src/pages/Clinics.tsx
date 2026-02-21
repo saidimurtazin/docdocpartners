@@ -1,5 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Building2, Award, Calendar, Languages } from "lucide-react";
+import Logo from "@/components/Logo";
 
 interface Clinic {
   name: string;
@@ -93,10 +94,7 @@ export default function Clinics() {
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
           <a href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-lg">M</span>
-            </div>
-            <span className="font-bold text-xl">DocPartner</span>
+            <Logo size={32} />
           </a>
           <nav className="hidden md:flex items-center gap-6">
             <a href="/#about" className="text-sm font-medium hover:text-primary transition-colors">О программе</a>
@@ -113,7 +111,7 @@ export default function Clinics() {
           <div className="max-w-3xl mx-auto text-center space-y-6">
             <h1 className="text-4xl md:text-5xl font-bold">Клиники-партнеры</h1>
             <p className="text-xl text-muted-foreground">
-              Проверенные медицинские учреждения, участвующие в программе DocPartner. Все клиники имеют необходимые лицензии и сертификаты качества.
+              Проверенные медицинские учреждения, участвующие в программе Doc Partner. Все клиники имеют необходимые лицензии и сертификаты качества.
             </p>
           </div>
         </div>
@@ -170,7 +168,7 @@ export default function Clinics() {
           <div className="max-w-3xl mx-auto text-center space-y-6">
             <h2 className="text-3xl md:text-4xl font-bold">Готовы начать сотрудничество?</h2>
             <p className="text-xl text-muted-foreground">
-              Присоединяйтесь к программе DocPartner и начните рекомендовать пациентов в проверенные клиники
+              Присоединяйтесь к программе Doc Partner и начните рекомендовать пациентов в проверенные клиники
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
               <a 
@@ -198,10 +196,7 @@ export default function Clinics() {
           <div className="grid md:grid-cols-3 gap-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                  <span className="text-primary-foreground font-bold text-lg">M</span>
-                </div>
-                <span className="font-bold text-xl">DocPartner</span>
+                <Logo size={32} />
               </div>
               <p className="text-sm text-muted-foreground">
                 Платформа агентских рекомендаций в сфере здравоохранения
@@ -225,7 +220,7 @@ export default function Clinics() {
             </div>
           </div>
           <div className="border-t mt-8 pt-8 text-center text-sm text-muted-foreground">
-            © 2025 DocPartner. Все права защищены.
+            © 2026 Doc Partner. Все права защищены.
           </div>
         </div>
       </footer>

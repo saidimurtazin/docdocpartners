@@ -29,7 +29,10 @@ import {
   Zap,
   LayoutDashboard,
   ShieldCheck,
-  Smartphone
+  Smartphone,
+  Stethoscope,
+  Send,
+  Banknote
 } from "lucide-react";
 import { Link } from "wouter";
 import DoctorChatbot from "@/components/DoctorChatbot";
@@ -198,9 +201,9 @@ export default function Home() {
               transition={{ duration: 0.7, delay: 0.15 }}
               className="text-center text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold leading-[1.1] mb-8"
             >
-              Рекомендуйте пациентов.{" "}
+              Рекомендуйте пациентам{" "}
               <span className="gradient-gold-text">
-                Зарабатывайте официально.
+                Зарабатывайте официально
               </span>
             </motion.h1>
 
@@ -211,7 +214,7 @@ export default function Home() {
               transition={{ duration: 0.6, delay: 0.3 }}
               className="text-center text-lg sm:text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto leading-relaxed"
             >
-              Присоединяйтесь к партнерской программе DocPartner и получайте{" "}
+              Рекомендации, которые работают. Присоединяйтесь к партнерской программе Doc Partner и получайте{" "}
               <strong className="text-foreground font-semibold">до 10% вознаграждения</strong>{" "}
               за каждого направленного пациента в проверенные клиники России.
             </motion.p>
@@ -279,37 +282,6 @@ export default function Home() {
               ))}
             </motion.div>
 
-            {/* Country Expansion */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.8, delay: 0.8 }}
-              className="flex flex-col items-center gap-6 pt-8 border-t border-border/40"
-            >
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Globe className="w-4 h-4" />
-                <span className="font-medium">Расширяемся на СНГ</span>
-              </div>
-              <div className="flex items-center gap-6">
-                {[
-                  { flag: "\u{1F1F0}\u{1F1FF}", country: "Казахстан" },
-                  { flag: "\u{1F1E6}\u{1F1F2}", country: "Армения" },
-                  { flag: "\u{1F1F0}\u{1F1EC}", country: "Киргизия" },
-                  { flag: "\u{1F1FA}\u{1F1FF}", country: "Узбекистан" }
-                ].map((item) => (
-                  <div key={item.country} className="group relative cursor-pointer">
-                    <div className="text-5xl transition-all group-hover:scale-125 group-hover:drop-shadow-lg">
-                      {item.flag}
-                    </div>
-                    <div className="absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                      <div className="glass-card px-4 py-2 rounded-lg whitespace-nowrap">
-                        <span className="text-sm font-medium">Скоро в {item.country}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
           </div>
         </div>
       </section>
@@ -322,7 +294,7 @@ export default function Home() {
               Начните <span className="gradient-gold-text">зарабатывать</span> сегодня
             </motion.h2>
             <motion.p variants={fadeUp} custom={1} className="text-lg md:text-xl text-muted-foreground leading-relaxed">
-              Три причины присоединиться к DocPartner и рекомендовать пациентов легально
+              Три причины присоединиться к Doc Partner и рекомендовать пациентов официально
             </motion.p>
           </AnimatedSection>
 
@@ -338,7 +310,7 @@ export default function Home() {
               {
                 icon: ShieldCheck,
                 title: "Прозрачные и безопасные выплаты",
-                desc: "Официальный договор, моментальный расчёт комиссии, вывод от 1 000 ₽ на карту МИР. Всё белое и легальное — работайте как самозанятый или физ. лицо.",
+                desc: "Официальный договор, моментальный расчёт комиссии, вывод от 1 000 ₽ на карту МИР. Всё белое и официальное — работайте как самозанятый или физ. лицо.",
                 highlight: "до 10%",
                 gradient: "from-[#334155] to-[#F97316]"
               },
@@ -388,10 +360,10 @@ export default function Home() {
         <div className="container">
           <AnimatedSection className="max-w-3xl mx-auto text-center space-y-6 mb-20">
             <motion.h2 variants={fadeUp} className="text-4xl sm:text-5xl md:text-6xl font-bold">
-              Платформа <span className="gradient-text">DocPartner</span>
+              Что такое <span className="gradient-text">Doc Partner</span>?
             </motion.h2>
             <motion.p variants={fadeUp} custom={1} className="text-lg md:text-xl text-muted-foreground leading-relaxed">
-              DocPartner — это <strong className="text-foreground">B2B-платформа агентских рекомендаций</strong> в сфере здравоохранения. Мы связываем врачей-агентов с проверенными клиниками для направления пациентов на платное лечение.
+              Doc Partner — это <strong className="text-foreground">B2B-платформа агентских рекомендаций</strong> в сфере здравоохранения. Мы связываем врачей-агентов с проверенными клиниками для направления пациентов на платное лечение.
             </motion.p>
           </AnimatedSection>
 
@@ -506,44 +478,176 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ============== HOW IT WORKS ============== */}
-      <section id="how-it-works" className="py-24 bg-background">
+      {/* ============== HOW IT WORKS — VISUAL JOURNEY ============== */}
+      <section id="how-it-works" className="py-24 bg-background overflow-hidden">
         <div className="container">
           <AnimatedSection className="max-w-3xl mx-auto text-center space-y-6 mb-20">
             <motion.h2 variants={fadeUp} className="text-4xl sm:text-5xl md:text-6xl font-bold">
-              Четыре шага к <span className="gradient-gold-text">заработку</span>
+              Несколько <span className="gradient-gold-text">шагов</span> к заработку
             </motion.h2>
             <motion.p variants={fadeUp} custom={1} className="text-lg md:text-xl text-muted-foreground">
-              Простой и прозрачный процесс от регистрации до получения вознаграждения
+              Простой и прозрачный процесс от рекомендации до получения вознаграждения
             </motion.p>
           </AnimatedSection>
 
-          <AnimatedSection className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8 max-w-7xl mx-auto">
-            {[
-              { step: "01", title: "Регистрация", description: "Зарегистрируйтесь в Telegram-боте и подпишите договор оферты. Процесс занимает 5 минут.", icon: MessageSquare },
-              { step: "02", title: "Отправка пациента", description: "Введите ФИО и дату рождения пациента. Данные передаются в CRM и клиники-партнеры.", icon: Users },
-              { step: "03", title: "Лечение", description: "Пациент получает помощь в клинике. Вы отслеживаете статус в реальном времени через бот.", icon: Building2 },
-              { step: "04", title: "Вознаграждение", description: "Получаете 10% от суммы лечения. Выплаты от 1000 руб. доступны в любое время.", icon: Wallet }
-            ].map((item, index) => (
-              <motion.div key={index} variants={fadeUp} custom={index} className="relative">
-                {index < 3 && (
-                  <div className="hidden lg:block absolute top-16 right-0 w-full h-0.5 translate-x-1/2 z-0">
-                    <div className="h-full bg-gradient-to-r from-[#F97316]/40 to-transparent" />
-                  </div>
-                )}
-                <Card className="h-full glass-card border-2 border-white/20 card-glow relative z-10">
-                  <CardContent className="pt-10 pb-8 space-y-5">
-                    <div className="text-7xl font-bold text-[#F97316]/15">{item.step}</div>
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#1E293B] to-[#334155] flex items-center justify-center shadow-lg">
-                      <item.icon className="w-7 h-7 text-white" />
-                    </div>
-                    <h3 className="text-xl font-bold">{item.title}</h3>
-                    <p className="text-muted-foreground leading-relaxed">{item.description}</p>
-                  </CardContent>
-                </Card>
+          {/* Visual Journey */}
+          <div className="relative max-w-6xl mx-auto">
+            {/* Desktop: horizontal timeline */}
+            <AnimatedSection className="hidden lg:block">
+              {/* Connecting line behind circles */}
+              <motion.div
+                variants={fadeUp}
+                className="absolute top-[60px] left-[12%] right-[12%] h-1 rounded-full overflow-hidden"
+              >
+                <div className="h-full bg-gradient-to-r from-[#1E293B] via-[#F97316] to-[#1E293B] opacity-25" />
+                <motion.div
+                  className="absolute top-0 left-0 h-full bg-gradient-to-r from-[#F97316] to-[#FB923C] rounded-full"
+                  initial={{ width: "0%" }}
+                  whileInView={{ width: "100%" }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 2, delay: 0.5, ease: "easeOut" }}
+                />
               </motion.div>
-            ))}
-          </AnimatedSection>
+
+              <div className="flex items-start justify-between relative">
+                {[
+                  {
+                    icon: Stethoscope,
+                    title: "Пациент приходит к вам",
+                    desc: "К вам обращается пациент, которому нужна помощь узкого специалиста или клиника",
+                    step: 1
+                  },
+                  {
+                    icon: Send,
+                    title: "Вы рекомендуете клинику",
+                    desc: "Направляете пациента через Telegram-бот или личный кабинет — это занимает 2 минуты",
+                    step: 2
+                  },
+                  {
+                    icon: Building2,
+                    title: "Пациент получает лечение",
+                    desc: "В проверенной клинике-партнёре с лицензией. Мы отслеживаем весь путь пациента",
+                    step: 3
+                  },
+                  {
+                    icon: Banknote,
+                    title: "Вы получаете вознаграждение",
+                    desc: "До 10% от суммы лечения поступает на вашу карту. Вывод от 1 000 ₽ в любое время",
+                    step: 4
+                  }
+                ].map((item, i) => (
+                  <motion.div
+                    key={i}
+                    variants={fadeUp}
+                    custom={i}
+                    className="flex flex-col items-center text-center w-1/4 relative z-10 px-3"
+                  >
+                    {/* Icon circle */}
+                    <motion.div
+                      className="w-[120px] h-[120px] rounded-full bg-gradient-to-br from-[#1E293B] to-[#334155] flex items-center justify-center shadow-2xl mb-6 ring-4 ring-background relative"
+                      whileHover={{ scale: 1.1 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                    >
+                      <item.icon className="w-12 h-12 text-[#F97316]" />
+                      {/* Step badge */}
+                      <div className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-[#F97316] flex items-center justify-center shadow-lg">
+                        <span className="text-white font-bold text-sm">{item.step}</span>
+                      </div>
+                    </motion.div>
+
+                    {/* Arrow between steps */}
+                    {i < 3 && (
+                      <motion.div
+                        className="absolute top-[52px] -right-3 z-20"
+                        initial={{ opacity: 0, x: -10 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: 0.8 + i * 0.3 }}
+                      >
+                        <ArrowRight className="w-7 h-7 text-[#F97316]" />
+                      </motion.div>
+                    )}
+
+                    <h3 className="text-lg font-bold mb-2 leading-tight">{item.title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
+                  </motion.div>
+                ))}
+              </div>
+            </AnimatedSection>
+
+            {/* Mobile + Tablet: vertical timeline */}
+            <AnimatedSection className="lg:hidden">
+              <div className="relative">
+                {/* Vertical connecting line */}
+                <div className="absolute left-[39px] top-0 bottom-0 w-0.5 bg-gradient-to-b from-[#1E293B] via-[#F97316] to-[#1E293B] opacity-25" />
+
+                <div className="space-y-10">
+                  {[
+                    {
+                      icon: Stethoscope,
+                      title: "Пациент приходит к вам",
+                      desc: "К вам обращается пациент, которому нужна помощь узкого специалиста или клиника",
+                      step: 1
+                    },
+                    {
+                      icon: Send,
+                      title: "Вы рекомендуете клинику",
+                      desc: "Направляете пациента через Telegram-бот или личный кабинет — это занимает 2 минуты",
+                      step: 2
+                    },
+                    {
+                      icon: Building2,
+                      title: "Пациент получает лечение",
+                      desc: "В проверенной клинике-партнёре с лицензией. Мы отслеживаем весь путь пациента",
+                      step: 3
+                    },
+                    {
+                      icon: Banknote,
+                      title: "Вы получаете вознаграждение",
+                      desc: "До 10% от суммы лечения поступает на вашу карту. Вывод от 1 000 ₽ в любое время",
+                      step: 4
+                    }
+                  ].map((item, i) => (
+                    <motion.div
+                      key={i}
+                      variants={fadeUp}
+                      custom={i}
+                      className="flex gap-5 items-start relative"
+                    >
+                      {/* Icon circle */}
+                      <div className="flex-shrink-0 w-20 h-20 rounded-full bg-gradient-to-br from-[#1E293B] to-[#334155] flex items-center justify-center shadow-xl relative z-10 ring-4 ring-background">
+                        <item.icon className="w-8 h-8 text-[#F97316]" />
+                        <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-[#F97316] flex items-center justify-center shadow-md">
+                          <span className="text-white font-bold text-xs">{item.step}</span>
+                        </div>
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 pt-2">
+                        <h3 className="text-lg font-bold mb-1">{item.title}</h3>
+                        <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            </AnimatedSection>
+
+            {/* CTA under journey */}
+            <AnimatedSection className="text-center mt-16">
+              <motion.div variants={fadeUp}>
+                <Button
+                  size="lg"
+                  className="btn-premium text-[#1E293B] font-semibold text-lg h-14 px-8"
+                  onClick={() => window.open('https://t.me/docpartnerbot', '_blank')}
+                >
+                  <MessageSquare className="w-5 h-5 mr-2" />
+                  Начать работу
+                  <ArrowRight className="w-5 h-5 ml-2" />
+                </Button>
+              </motion.div>
+            </AnimatedSection>
+          </div>
         </div>
       </section>
 
@@ -552,7 +656,7 @@ export default function Home() {
         <div className="container">
           <AnimatedSection className="max-w-3xl mx-auto text-center space-y-6 mb-20">
             <motion.h2 variants={fadeUp} className="text-4xl sm:text-5xl md:text-6xl font-bold">
-              Ваши преимущества с <span className="gradient-text">DocPartner</span>
+              Почему выбирают <span className="gradient-text">Doc Partner</span>?
             </motion.h2>
           </AnimatedSection>
 
@@ -667,6 +771,37 @@ export default function Home() {
       </section>
       */}
 
+      {/* ============== CIS EXPANSION ============== */}
+      <section className="py-16 bg-muted/30">
+        <div className="container">
+          <AnimatedSection className="flex flex-col items-center gap-6">
+            <motion.div variants={fadeUp} className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Globe className="w-4 h-4" />
+              <span className="font-medium">Расширяемся на СНГ</span>
+            </motion.div>
+            <motion.div variants={fadeUp} custom={1} className="flex items-center gap-6">
+              {[
+                { flag: "\u{1F1F0}\u{1F1FF}", country: "Казахстан" },
+                { flag: "\u{1F1E6}\u{1F1F2}", country: "Армения" },
+                { flag: "\u{1F1F0}\u{1F1EC}", country: "Киргизия" },
+                { flag: "\u{1F1FA}\u{1F1FF}", country: "Узбекистан" }
+              ].map((item) => (
+                <div key={item.country} className="group relative cursor-pointer">
+                  <div className="text-5xl transition-all group-hover:scale-125 group-hover:drop-shadow-lg">
+                    {item.flag}
+                  </div>
+                  <div className="absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                    <div className="glass-card px-4 py-2 rounded-lg whitespace-nowrap">
+                      <span className="text-sm font-medium">Скоро в {item.country}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </motion.div>
+          </AnimatedSection>
+        </div>
+      </section>
+
       {/* ============== FINAL CTA ============== */}
       <section className="py-32 bg-gradient-to-br from-[#1E293B] to-[#334155] text-white relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full">
@@ -680,7 +815,7 @@ export default function Home() {
               Готовы начать зарабатывать официально?
             </motion.h2>
             <motion.p variants={fadeUp} custom={1} className="text-lg md:text-xl text-white/80">
-              Присоединяйтесь к DocPartner и получайте до 10% от каждой рекомендации
+              Присоединяйтесь к Doc Partner и получайте до 10% от каждой рекомендации
             </motion.p>
             <motion.div variants={fadeUp} custom={2} className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
               <Button
@@ -732,7 +867,7 @@ export default function Home() {
             </div>
           </div>
           <div className="pt-8 border-t border-border/40 text-center text-sm text-muted-foreground">
-            <p>&copy; 2026 DocPartner. Все права защищены.</p>
+            <p>&copy; 2026 Doc Partner. Все права защищены.</p>
           </div>
         </div>
       </footer>
