@@ -45,8 +45,15 @@ export async function processJumpPayment(paymentId: number): Promise<JumpPayoutR
     if (!agent.inn) {
       return { success: false, error: "Agent has no INN" };
     }
+    if (!/^\d{12}$/.test(agent.inn)) {
+      return { success: false, error: `Invalid INN format: "${agent.inn}" (expected 12 digits)` };
+    }
     if (!agent.phone) {
       return { success: false, error: "Agent has no phone" };
+    }
+    const cleanPhone = agent.phone.replace(/[\s\-()]/g, '');
+    if (!/^\+?[78]\d{10}$/.test(cleanPhone)) {
+      return { success: false, error: `Invalid phone format: "${agent.phone}" (expected Russian number)` };
     }
 
     // Determine payout method
@@ -59,6 +66,9 @@ export async function processJumpPayment(paymentId: number): Promise<JumpPayoutR
     }
     if (payoutMethod === "bank_account" && (!agent.bankAccount || !agent.bankBik)) {
       return { success: false, error: "Agent has incomplete bank details" };
+    }
+    if (payoutMethod === "bank_account" && agent.bankBik && !/^\d{9}$/.test(agent.bankBik)) {
+      return { success: false, error: `Invalid BIK format: "${agent.bankBik}" (expected 9 digits)` };
     }
 
     const { firstName, lastName, middleName } = parseAgentName(agent.fullName);

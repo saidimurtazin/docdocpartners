@@ -106,15 +106,15 @@ export function calculateWithdrawalTax(grossAmount: number, isSelfEmployed: bool
 /**
  * Проверить, может ли агент запросить выплату
  */
-export function canRequestPayout(totalReferrals: number, bonusPoints: number): {
+export function canRequestPayout(totalReferrals: number, bonusPoints: number, bonusUnlockThreshold = 10): {
   canWithdraw: boolean;
   reason?: string;
 } {
-  // Для вывода бонусных баллов нужно минимум 10 собственных рекомендаций
-  if (bonusPoints > 0 && totalReferrals < 10) {
+  // Для вывода бонусных баллов нужно минимум bonusUnlockThreshold собственных рекомендаций
+  if (bonusPoints > 0 && totalReferrals < bonusUnlockThreshold) {
     return {
       canWithdraw: false,
-      reason: `Для вывода бонусных баллов необходимо минимум 10 собственных рекомендаций. У вас: ${totalReferrals}`,
+      reason: `Для вывода бонусных баллов необходимо минимум ${bonusUnlockThreshold} собственных рекомендаций. У вас: ${totalReferrals}`,
     };
   }
 

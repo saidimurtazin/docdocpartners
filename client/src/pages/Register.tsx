@@ -121,7 +121,7 @@ export default function Register() {
     switch (step) {
       case 1: return !!registrationToken;
       case 2: return fullName.trim().split(/\s+/).length === 3 && /^[А-Яа-яЁё\s-]+$/.test(fullName.trim());
-      case 3: return phone.replace(/[\s\-()]/g, '').length >= 11;
+      case 3: return /^\+?[78]\d{10}$/.test(phone.replace(/[\s\-()]/g, ''));
       case 4: return !!role && (role !== "Врач" || !!specialization && (specialization !== "Другая" || customSpecialization.trim().length >= 2));
       case 5: return city.trim().length >= 2 && /^[А-Яа-яЁё\s-]+$/.test(city.trim());
       case 6: return true; // optional

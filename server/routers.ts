@@ -72,14 +72,27 @@ async function recalculateMonthlyCommissions(agentId: number, treatmentMonth: st
   const monthReferrals = await db.getReferralsByAgentAndMonth(agentId, treatmentMonth);
   if (monthReferrals.length === 0) return;
 
+  // Batch: collect all updates and total delta, then apply
+  let totalDelta = 0;
+  const updates: { id: number; treatmentAmount: number; commissionAmount: number }[] = [];
+
   for (const ref of monthReferrals) {
     const newCommission = Math.round((ref.treatmentAmount || 0) * effectiveRate / 100);
     const oldCommission = ref.commissionAmount || 0;
-
     if (newCommission !== oldCommission) {
-      // updateReferralAmounts применяет дельту к agent.totalEarnings
-      await db.updateReferralAmounts(ref.id, ref.treatmentAmount || 0, newCommission);
+      updates.push({ id: ref.id, treatmentAmount: ref.treatmentAmount || 0, commissionAmount: newCommission });
+      totalDelta += newCommission - oldCommission;
     }
+  }
+
+  if (updates.length === 0) return;
+
+  // Update each referral's amounts (no agent SELECT per referral)
+  await Promise.all(updates.map(u => db.updateReferralAmountsOnly(u.id, u.treatmentAmount, u.commissionAmount)));
+
+  // Apply total delta to agent earnings in one operation
+  if (totalDelta !== 0) {
+    await db.adjustAgentEarnings(agentId, totalDelta);
   }
 }
 
@@ -909,7 +922,10 @@ DocPartner — B2B-платформа агентских рекомендаци�
         }))
         .mutation(async ({ ctx, input }) => {
           checkRole(ctx, "admin", "support");
+          const agent = await db.getAgentById(input.id);
+          const oldStatus = agent?.status || "unknown";
           await db.updateAgentStatus(input.id, input.status);
+          console.log(`[AuditLog] Agent status changed: agent=${input.id} "${agent?.fullName}" ${oldStatus}→${input.status} by user=${ctx.user.id} (${ctx.user.email})`);
           return { success: true };
         }),
       updateExcludedClinics: protectedProcedure
@@ -1036,6 +1052,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           const oldStatus = referral.status;
 
           await db.updateReferralStatus(input.id, input.status);
+          console.log(`[AuditLog] Referral status changed: referral=${input.id} "${referral.patientFullName}" ${oldStatus}→${input.status} by user=${ctx.user.id} (${ctx.user.email})`);
 
           // Send Telegram notification to agent about status change
           if (oldStatus !== input.status) {
@@ -1106,7 +1123,10 @@ DocPartner — B2B-платформа агентских рекомендаци�
         }))
         .mutation(async ({ ctx, input }) => {
           checkRole(ctx, "admin", "accountant");
+          const paymentBefore = await db.getPaymentById(input.id);
+          const oldPaymentStatus = paymentBefore?.status || "unknown";
           await db.updatePaymentStatus(input.id, input.status, input.transactionId);
+          console.log(`[AuditLog] Payment status changed: payment=${input.id} ${oldPaymentStatus}→${input.status} by user=${ctx.user.id} (${ctx.user.email})`);
 
           // Send Telegram notification to agent about payment status change
           try {
@@ -1827,8 +1847,14 @@ DocPartner — B2B-платформа агентских рекомендаци�
 
       // Bonus info
       const paidReferralCount = referrals.filter(r => r.status === "paid").length;
-      const pendingPaymentsSum = await db.getAgentPendingPaymentsSum(ctx.agentId);
-      const completedPaymentsSum = await db.getAgentCompletedPaymentsSum(ctx.agentId);
+      const [pendingPaymentsSum, completedPaymentsSum] = await Promise.all([
+        db.getAgentPendingPaymentsSum(ctx.agentId),
+        db.getAgentCompletedPaymentsSum(ctx.agentId),
+      ]);
+
+      // Read bonusUnlockThreshold from settings (default 10)
+      const thresholdSetting = await db.getAppSetting("bonusUnlockThreshold");
+      const bonusUnlockThreshold = thresholdSetting ? parseInt(thresholdSetting, 10) : 10;
 
       // Referral program: count active agents invited by this agent
       const { agents: agentsTable } = await import("../drizzle/schema");
@@ -1842,17 +1868,17 @@ DocPartner — B2B-платформа агентских рекомендаци�
       }
 
       return {
-        totalEarnings: agent.totalEarnings || 0,
-        availableBalance: Math.max(0, (agent.totalEarnings || 0) - completedPaymentsSum - pendingPaymentsSum),
+        totalEarnings: agent.totalEarnings ?? 0,
+        availableBalance: Math.max(0, (agent.totalEarnings ?? 0) - completedPaymentsSum - pendingPaymentsSum),
         completedPaymentsSum,
         activeReferrals: activeReferrals.length,
         conversionRate,
         thisMonthEarnings,
         totalReferrals: referrals.length,
         completedReferrals: completedReferrals.length,
-        bonusPoints: agent.bonusPoints || 0,
+        bonusPoints: agent.bonusPoints ?? 0,
         paidReferralCount,
-        bonusUnlockThreshold: 10,
+        bonusUnlockThreshold,
         referredAgentsCount,
         referralLink: `https://t.me/docpartnerbot?start=ref_${ctx.agentId}`,
         isSelfEmployed: agent.isSelfEmployed || "unknown",
@@ -2108,9 +2134,16 @@ DocPartner — B2B-платформа агентских рекомендаци�
           jumpResult = await processJumpPayment(paymentId);
           if (!jumpResult.success) {
             console.warn(`[requestPayment] Jump auto-submit failed for payment ${paymentId}: ${jumpResult.error}`);
+            // Save error to payment notes for admin visibility
+            await db.updatePaymentJumpData(paymentId, {
+              jumpStatusText: `Ошибка: ${(jumpResult.error || "неизвестная").slice(0, 50)}`,
+            });
           }
-        } catch (err) {
+        } catch (err: any) {
           console.error(`[requestPayment] Jump auto-submit error for payment ${paymentId}:`, err);
+          await db.updatePaymentJumpData(paymentId, {
+            jumpStatusText: `Ошибка: ${(err?.message || String(err)).slice(0, 50)}`,
+          });
         }
 
         return { success: true, jumpSubmitted: jumpResult?.success ?? false };
