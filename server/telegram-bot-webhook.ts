@@ -278,7 +278,17 @@ bot.command('start', async (ctx) => {
 
   // Parse referral code from deep link (e.g. /start ref_123)
   const startPayload = (ctx.message?.text || '').split(' ')[1];
-  const referredBy = startPayload && startPayload.startsWith('ref_') ? startPayload.replace('ref_', '') : undefined;
+  let referredBy: string | undefined;
+  if (startPayload?.startsWith('ref_')) {
+    const refValue = startPayload.replace('ref_', '');
+    // Validate: must be a positive integer (agent ID)
+    const parsedRefId = parseInt(refValue, 10);
+    if (!isNaN(parsedRefId) && parsedRefId > 0 && String(parsedRefId) === refValue) {
+      referredBy = refValue;
+    } else {
+      console.warn(`[Telegram Bot] Invalid referral ID: ${refValue}`);
+    }
+  }
 
   // Persist referral link in DB so it survives bot restarts
   if (referredBy) {
@@ -808,9 +818,10 @@ bot.on(message('text'), async (ctx) => {
       const referralLink = `https://t.me/docpartnerbot?start=ref_${agent.id}`;
       const bonusPoints = agent.bonusPoints || 0;
 
-      // Count referred agents from DB
+      // Count referred agents from DB (only active ones)
+      const { and: andOp } = await import('drizzle-orm');
       const referredAgents = await db.select().from(agents)
-        .where(eq(agents.referredBy, agent.id));
+        .where(andOp(eq(agents.referredBy, agent.id), eq(agents.status, 'active')));
       const referredCount = referredAgents.length;
 
       // Get paid referral count for bonus unlock progress
@@ -1786,9 +1797,11 @@ bot.action('contract_accept', async (ctx) => {
     if (referredByValue) {
       const parsedId = parseInt(referredByValue, 10);
       if (!isNaN(parsedId) && parsedId > 0) {
-        const [referrer] = await db.select({ id: agents.id }).from(agents).where(eq(agents.id, parsedId));
-        if (referrer) {
+        const [referrer] = await db.select({ id: agents.id, status: agents.status }).from(agents).where(eq(agents.id, parsedId));
+        if (referrer && referrer.status === 'active') {
           referredByAgentId = referrer.id;
+        } else if (referrer) {
+          console.warn(`[Telegram Bot] Referrer ${parsedId} is not active (status: ${referrer.status}), skipping bonus`);
         }
       }
     }
@@ -1828,6 +1841,7 @@ bot.action('contract_accept', async (ctx) => {
       try {
         const { addBonusPoints } = await import('./db');
         await addBonusPoints(referredByAgentId, 100000);
+        console.log(`[Telegram Bot] Referral bonus +1000₽ credited to agent ${referredByAgentId}`);
 
         // Notify inviting agent
         const [inviter] = await db.select().from(agents).where(eq(agents.id, referredByAgentId));
@@ -1839,9 +1853,11 @@ bot.action('contract_accept', async (ctx) => {
             `+1 000 ₽ начислено в бонусы.\n\n` +
             `💡 Бонусы станут доступны для вывода после 10 оплаченных пациентов.`
           );
+        } else {
+          console.warn(`[Telegram Bot] Referrer ${referredByAgentId} has no telegramId, cannot notify`);
         }
       } catch (err) {
-        console.error('[Telegram Bot] Failed to credit referral bonus:', err);
+        console.error('[Telegram Bot] Failed to credit referral bonus to agent', referredByAgentId, ':', err);
       }
     }
 

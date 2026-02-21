@@ -667,18 +667,24 @@ export const appRouter = router({
         const crypto = await import("crypto");
         const referralCode = crypto.randomBytes(6).toString("hex");
 
-        // 6. Resolve referredBy
+        // 6. Resolve referredBy (only active agents can be referrers)
         let referredByAgentId: number | null = null;
         if (input.referralCode && input.referralCode.trim()) {
           const referrer = await db.getAgentByReferralCode(input.referralCode.trim());
-          if (referrer) {
+          if (referrer && referrer.status === 'active') {
             referredByAgentId = referrer.id;
+          } else if (referrer) {
+            console.warn(`[Register] Referrer ${referrer.id} is not active (status: ${referrer.status}), skipping`);
           } else {
             // Try as agent ID (for backward compat with Telegram ref_ID links)
             const parsedId = parseInt(input.referralCode.trim(), 10);
             if (!isNaN(parsedId) && parsedId > 0) {
               const agentById = await db.getAgentById(parsedId);
-              if (agentById) referredByAgentId = agentById.id;
+              if (agentById && agentById.status === 'active') {
+                referredByAgentId = agentById.id;
+              } else if (agentById) {
+                console.warn(`[Register] Referrer ${parsedId} is not active (status: ${agentById.status}), skipping`);
+              }
             }
           }
         }
@@ -1901,13 +1907,14 @@ DocPartner — B2B-платформа агентских рекомендаци�
       const pendingPaymentsSum = await db.getAgentPendingPaymentsSum(ctx.agentId);
       const completedPaymentsSum = await db.getAgentCompletedPaymentsSum(ctx.agentId);
 
-      // Referral program: count agents invited by this agent
+      // Referral program: count active agents invited by this agent
       const { agents: agentsTable } = await import("../drizzle/schema");
-      const { eq: eqOp } = await import("drizzle-orm");
+      const { eq: eqOp, and: andOp } = await import("drizzle-orm");
       const database = await db.getDb();
       let referredAgentsCount = 0;
       if (database) {
-        const referred = await database.select({ id: agentsTable.id }).from(agentsTable).where(eqOp(agentsTable.referredBy, ctx.agentId));
+        const referred = await database.select({ id: agentsTable.id }).from(agentsTable)
+          .where(andOp(eqOp(agentsTable.referredBy, ctx.agentId), eqOp(agentsTable.status, 'active')));
         referredAgentsCount = referred.length;
       }
 
