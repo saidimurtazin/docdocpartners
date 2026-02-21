@@ -1850,6 +1850,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
         .input(z.object({
           message: z.string().min(1).max(4000),
           imageUrl: z.string().url().optional(),
+          imageBase64: z.string().max(10_000_000).optional(), // ~7.5MB max image
         }))
         .mutation(async ({ ctx, input }) => {
           checkRole(ctx, "admin");
@@ -1863,7 +1864,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           }
 
           const { broadcastToAgents } = await import("./telegram-notifications");
-          const result = await broadcastToAgents(recipients, input.message, input.imageUrl);
+          const result = await broadcastToAgents(recipients, input.message, input.imageUrl, input.imageBase64);
           return result;
         }),
     }),
