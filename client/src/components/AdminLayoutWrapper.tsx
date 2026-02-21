@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import {
   Home, Users, FileText, Wallet, Building2, LogOut, Menu, X,
-  BarChart3, Mail, Settings, ClipboardList, UserCog
+  BarChart3, Mail, Settings, ClipboardList, UserCog, Bell
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -31,6 +31,7 @@ export default function AdminLayoutWrapper({ children }: AdminLayoutWrapperProps
     { path: "/admin/clinics", label: "Клиники", icon: Building2, roles: ["admin"] },
     { path: "/admin/clinic-reports", label: "Отчёты клиник", icon: Mail, roles: ["admin", "support"] },
     { path: "/admin/tasks", label: "Задачи", icon: ClipboardList, roles: ["admin", "support"] },
+    { path: "/admin/notifications", label: "Уведомления", icon: Bell, roles: ["admin"] },
     { path: "/admin/staff", label: "Сотрудники", icon: UserCog, roles: ["admin"] },
     { path: "/admin/settings", label: "Настройки", icon: Settings, roles: ["admin"] },
   ];

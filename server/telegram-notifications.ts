@@ -326,3 +326,71 @@ export async function notifyNewDeviceLogin(
 
   return sendTelegramMessage(telegramId, message);
 }
+
+/**
+ * Send a photo with caption to a Telegram user
+ */
+async function sendTelegramPhoto(
+  telegramId: string,
+  photoUrl: string,
+  caption: string,
+  parseMode: "HTML" | "Markdown" = "HTML"
+): Promise<boolean> {
+  if (!telegramId || !/^\d+$/.test(telegramId)) {
+    return false;
+  }
+  try {
+    const response = await fetch(`${TELEGRAM_API_URL}/sendPhoto`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: telegramId,
+        photo: photoUrl,
+        caption,
+        parse_mode: parseMode,
+      }),
+    });
+    const data = await response.json();
+    if (!data.ok) {
+      console.error(`Failed to send Telegram photo to ${telegramId}:`, data);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error(`Error sending Telegram photo to ${telegramId}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Broadcast a message (with optional image) to all agents with telegramId
+ * Returns stats: { sent, failed, total }
+ */
+export async function broadcastToAgents(
+  agents: Array<{ telegramId: string; fullName: string }>,
+  message: string,
+  imageUrl?: string
+): Promise<{ sent: number; failed: number; total: number }> {
+  let sent = 0;
+  let failed = 0;
+  const total = agents.length;
+
+  for (const agent of agents) {
+    try {
+      let success: boolean;
+      if (imageUrl) {
+        success = await sendTelegramPhoto(agent.telegramId, imageUrl, message);
+      } else {
+        success = await sendTelegramMessage(agent.telegramId, message);
+      }
+      if (success) sent++;
+      else failed++;
+    } catch {
+      failed++;
+    }
+    // Telegram rate limit: ~30 messages/sec, be safe with 50ms delay
+    await new Promise((r) => setTimeout(r, 50));
+  }
+
+  return { sent, failed, total };
+}
