@@ -1815,6 +1815,16 @@ DocPartner — B2B-платформа агентских рекомендаци�
           clinic: input.clinic,
         });
 
+        // Auto-create task for new referral
+        try {
+          await autoCreateTaskForReferral(referralId, "new", {
+            patientFullName: input.patientFullName,
+            agentId: agent.id,
+          });
+        } catch (err) {
+          console.error("[Bot] Failed to auto-create task:", err);
+        }
+
         return { success: true, referralId };
       }),
 
