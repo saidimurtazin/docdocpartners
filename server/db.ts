@@ -1494,11 +1494,11 @@ export async function getAgentPaidReferralCount(agentId: number): Promise<number
  * Разблокировать бонус → перенести bonusPoints в totalEarnings
  * Только если агент имеет >= 10 оплаченных пациентов
  * Использует транзакцию с FOR UPDATE для предотвращения двойного начисления
- * Возвращает true если бонус был разблокирован
+ * Возвращает сумму бонуса (в копейках) или 0 если бонус не разблокирован
  */
-export async function unlockBonusToEarnings(agentId: number): Promise<boolean> {
+export async function unlockBonusToEarnings(agentId: number): Promise<number> {
   const db = await getDb();
-  if (!db) return false;
+  if (!db) return 0;
 
   return await db.transaction(async (tx) => {
     // Lock agent row to prevent concurrent bonus unlocks
@@ -1506,7 +1506,7 @@ export async function unlockBonusToEarnings(agentId: number): Promise<boolean> {
       sql`SELECT id, bonusPoints, totalEarnings FROM agents WHERE id = ${agentId} FOR UPDATE`
     );
     const agentRow = (lockResult as any)[0]?.[0];
-    if (!agentRow || !agentRow.bonusPoints || agentRow.bonusPoints <= 0) return false;
+    if (!agentRow || !agentRow.bonusPoints || agentRow.bonusPoints <= 0) return 0;
 
     // Check paid referral count within the transaction
     const [countResult] = await tx.select({
@@ -1514,7 +1514,7 @@ export async function unlockBonusToEarnings(agentId: number): Promise<boolean> {
     }).from(referrals)
       .where(and(eq(referrals.agentId, agentId), eq(referrals.status, "paid")));
 
-    if (countResult.count < 10) return false;
+    if (countResult.count < 10) return 0;
 
     // Atomically transfer bonus to totalEarnings
     const bonus = agentRow.bonusPoints;
@@ -1523,7 +1523,7 @@ export async function unlockBonusToEarnings(agentId: number): Promise<boolean> {
       bonusPoints: 0,
     } as any).where(eq(agents.id, agentId));
 
-    return true;
+    return bonus;
   });
 }
 

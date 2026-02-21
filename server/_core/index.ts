@@ -393,10 +393,10 @@ async function startServer() {
 
       for (const agent of agentsWithBonus) {
         try {
-          const unlocked = await unlockBonusToEarnings(agent.id);
-          if (unlocked && agent.telegramId) {
+          const unlockedBonus = await unlockBonusToEarnings(agent.id);
+          if (unlockedBonus > 0 && agent.telegramId) {
             const { notifyAgent } = await import("../telegram-bot-webhook");
-            const bonusRub = ((agent.bonusPoints || 0) / 100).toLocaleString("ru-RU");
+            const bonusRub = (unlockedBonus / 100).toLocaleString("ru-RU");
             await notifyAgent(
               agent.telegramId,
               `🎉 <b>Бонус разблокирован!</b>\n\n` +

@@ -35,7 +35,8 @@ export default function AdminLayoutWrapper({ children }: AdminLayoutWrapperProps
   ];
 
   const menuItems = useMemo(() => {
-    const role = user?.role || "admin";
+    const role = user?.role;
+    if (!role) return [];
     return allMenuItems.filter(item => item.roles.includes(role));
   }, [user?.role]);
 
@@ -83,7 +84,7 @@ export default function AdminLayoutWrapper({ children }: AdminLayoutWrapperProps
         {/* User Info */}
         <div className="p-4 border-b border-border">
           <div className="text-xs text-muted-foreground uppercase tracking-wider">
-            {ROLE_LABELS[user?.role || "admin"] || "Сотрудник"}
+            {ROLE_LABELS[user?.role ?? ""] || "Сотрудник"}
           </div>
           <div className="font-semibold mt-1 text-sm">{user?.name || "Загрузка..."}</div>
         </div>
