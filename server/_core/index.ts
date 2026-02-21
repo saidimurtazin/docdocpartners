@@ -10,6 +10,7 @@ import { setupTelegramWebhook } from "../telegram-bot-webhook";
 import cookieParser from "cookie-parser";
 import cron from "node-cron";
 import rateLimit from "express-rate-limit";
+import helmet from "helmet";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -33,6 +34,24 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+
+  // Security headers
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'", "https://api.jump.finance"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        frameAncestors: ["'self'", "https://web.telegram.org"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+  }));
 
   // Setup Telegram bot webhook BEFORE json parser (Telegraf handles its own body parsing)
   const webhookDomain = process.env.WEBHOOK_DOMAIN;
@@ -233,9 +252,8 @@ async function startServer() {
 
             if (item.status.id === JUMP_STATUS.PAID) {
               await updatePaymentJumpData(payment.id, { status: "completed" });
-              // Deduct from agent's totalEarnings
-              const { deductPaymentFromEarnings } = await import("../db");
-              await deductPaymentFromEarnings(payment.agentId, payment.amount);
+              // Balance formula (totalEarnings - completedSum - pendingSum)
+              // already accounts for completed payments — no deduction needed
               if (agent?.telegramId) {
                 await notifyAgent(agent.telegramId, `✅ <b>Выплата ${amountRub} ₽ зачислена!</b>\n\nДеньги поступили на ваш счёт.`);
               }
