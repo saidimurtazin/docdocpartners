@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import Logo from "@/components/Logo";
 import { Shield, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -56,12 +57,8 @@ export default function AdminLogin() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/20 p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-3 mb-4">
-            <Shield className="w-12 h-12 text-primary" />
-            <div className="flex flex-col leading-tight text-left">
-              <span className="font-bold text-2xl">Панель управления</span>
-              <span className="text-sm text-muted-foreground">DocPartner</span>
-            </div>
+          <div className="inline-flex mb-4">
+            <Logo size={48} textSuffix="Admin" />
           </div>
           <p className="text-muted-foreground">Вход для сотрудников</p>
         </div>

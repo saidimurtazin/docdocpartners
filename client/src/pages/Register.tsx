@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { ArrowLeft, ArrowRight, Loader2, Mail, User, Phone, Briefcase, MapPin, Building2, Link2, FileCheck, CheckCircle2, Pencil } from "lucide-react";
 import { Link, useSearch } from "wouter";
+import Logo from "@/components/Logo";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
@@ -211,16 +212,8 @@ export default function Register() {
         {/* Header */}
         <div className="text-center mb-6">
           <Link href="/">
-            <div className="inline-flex items-center gap-3 mb-3 cursor-pointer hover:opacity-80 transition-opacity">
-              <img
-                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663256942923/xohsFKyBQyuhihyR.png"
-                alt="DocPartner Logo"
-                className="w-10 h-10 rounded-lg"
-              />
-              <div className="flex flex-col leading-tight text-left">
-                <span className="font-bold text-lg">DocDoc</span>
-                <span className="font-bold text-lg">Partner</span>
-              </div>
+            <div className="inline-flex cursor-pointer hover:opacity-80 transition-opacity mb-3">
+              <Logo size={40} />
             </div>
           </Link>
           <p className="text-muted-foreground text-sm">Регистрация агента</p>

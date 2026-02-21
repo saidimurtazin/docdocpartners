@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Shield, Users, ArrowLeft, Loader2, Mail, Send } from "lucide-react";
 import { Link } from "wouter";
+import Logo from "@/components/Logo";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
@@ -165,16 +166,8 @@ export default function Login() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link href="/">
-            <div className="inline-flex items-center gap-3 mb-4 cursor-pointer hover:opacity-80 transition-opacity">
-              <img
-                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663256942923/xohsFKyBQyuhihyR.png"
-                alt="DocPartner Logo"
-                className="w-12 h-12 rounded-lg"
-              />
-              <div className="flex flex-col leading-tight text-left">
-                <span className="font-bold text-xl">DocDoc</span>
-                <span className="font-bold text-xl">Partner</span>
-              </div>
+            <div className="inline-flex cursor-pointer hover:opacity-80 transition-opacity mb-4">
+              <Logo size={48} />
             </div>
           </Link>
           <p className="text-muted-foreground">Партнерская программа для врачей</p>

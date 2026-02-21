@@ -43,19 +43,19 @@
 }
 
 :root {
-  /* Premium Navy Blue + Gold Color System */
-  --primary: oklch(0.35 0.08 250); /* Deep Navy Blue */
-  --primary-foreground: oklch(0.98 0.01 250);
-  --secondary-blue: oklch(0.55 0.12 250); /* Royal Blue */
-  --accent-gold: oklch(0.70 0.15 75); /* Premium Gold */
-  --accent-gold-foreground: oklch(0.15 0.05 75);
-  --sidebar-primary: oklch(0.35 0.08 250);
-  --sidebar-primary-foreground: oklch(0.98 0.01 250);
-  --chart-1: oklch(0.65 0.12 250);
-  --chart-2: oklch(0.55 0.12 250);
-  --chart-3: oklch(0.45 0.08 250);
-  --chart-4: oklch(0.70 0.15 75);
-  --chart-5: oklch(0.60 0.12 75);
+  /* Doc Partner: Deep Navy #1E293B + Warm Orange #F97316 */
+  --primary: oklch(0.235 0.035 260); /* Deep Navy #1E293B */
+  --primary-foreground: oklch(0.98 0.005 260);
+  --secondary-blue: oklch(0.35 0.03 260); /* Slate-700 #334155 */
+  --accent-gold: oklch(0.72 0.19 55); /* Warm Orange #F97316 */
+  --accent-gold-foreground: oklch(0.15 0.04 55);
+  --sidebar-primary: oklch(0.235 0.035 260);
+  --sidebar-primary-foreground: oklch(0.98 0.005 260);
+  --chart-1: oklch(0.42 0.025 260);
+  --chart-2: oklch(0.35 0.03 260);
+  --chart-3: oklch(0.30 0.035 260);
+  --chart-4: oklch(0.72 0.19 55);
+  --chart-5: oklch(0.65 0.20 50);
   --radius: 1rem; /* Larger radius for modern look */
   --font-display: 'Manrope', sans-serif;
   --font-body: 'Inter', sans-serif;
@@ -65,12 +65,12 @@
   --spacing-section-mobile: 4rem; /* 64px */
   
   /* Gradient definitions */
-  --gradient-primary: linear-gradient(135deg, oklch(0.35 0.08 250) 0%, oklch(0.55 0.12 250) 100%);
-  --gradient-gold: linear-gradient(135deg, oklch(0.70 0.15 75) 0%, oklch(0.75 0.18 65) 100%);
-  --gradient-mesh: radial-gradient(at 0% 0%, oklch(0.55 0.12 250 / 0.1) 0px, transparent 50%),
-                   radial-gradient(at 100% 100%, oklch(0.70 0.15 75 / 0.08) 0px, transparent 50%);
-  --background: oklch(0.99 0.002 250); /* Subtle blue-tinted white */
-  --foreground: oklch(0.20 0.015 250); /* Dark navy text */
+  --gradient-primary: linear-gradient(135deg, oklch(0.235 0.035 260) 0%, oklch(0.35 0.03 260) 100%);
+  --gradient-gold: linear-gradient(135deg, oklch(0.72 0.19 55) 0%, oklch(0.77 0.17 55) 100%);
+  --gradient-mesh: radial-gradient(at 0% 0%, oklch(0.35 0.03 260 / 0.1) 0px, transparent 50%),
+                   radial-gradient(at 100% 100%, oklch(0.72 0.19 55 / 0.08) 0px, transparent 50%);
+  --background: oklch(0.99 0.002 260); /* Subtle navy-tinted white */
+  --foreground: oklch(0.20 0.015 260); /* Dark navy text */
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.235 0.015 65);
   --popover: oklch(1 0 0);
@@ -184,7 +184,7 @@
   
   .btn-premium:hover {
     transform: translateY(-2px);
-    box-shadow: 0 20px 40px -10px oklch(0.70 0.15 75 / 0.4);
+    box-shadow: 0 20px 40px -10px oklch(0.72 0.19 55 / 0.4);
   }
   
   .btn-premium::before {
@@ -263,8 +263,8 @@
   }
 
   @keyframes pulse-glow {
-    0%, 100% { box-shadow: 0 0 20px oklch(0.70 0.15 75 / 0.2); }
-    50% { box-shadow: 0 0 40px oklch(0.70 0.15 75 / 0.4); }
+    0%, 100% { box-shadow: 0 0 20px oklch(0.72 0.19 55 / 0.2); }
+    50% { box-shadow: 0 0 40px oklch(0.72 0.19 55 / 0.4); }
   }
 
   @keyframes gradient-shift {
@@ -340,8 +340,8 @@
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .card-glow:hover {
-    box-shadow: 0 20px 60px -15px oklch(0.35 0.08 250 / 0.2),
-                0 0 0 1px oklch(0.55 0.12 250 / 0.1);
+    box-shadow: 0 20px 60px -15px oklch(0.235 0.035 260 / 0.2),
+                0 0 0 1px oklch(0.35 0.03 260 / 0.1);
     transform: translateY(-4px);
   }
 
@@ -356,7 +356,7 @@
     right: -1rem;
     width: 2rem;
     height: 2px;
-    background: linear-gradient(90deg, oklch(0.70 0.15 75 / 0.6), transparent);
+    background: linear-gradient(90deg, oklch(0.72 0.19 55 / 0.6), transparent);
   }
   .step-connector:last-child::after {
     display: none;

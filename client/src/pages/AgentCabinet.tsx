@@ -14,6 +14,7 @@ import {
   Loader2
 } from "lucide-react";
 import { useLocation } from "wouter";
+import Logo from "@/components/Logo";
 
 interface AgentSession {
   telegramId: string;
@@ -117,12 +118,7 @@ export default function AgentCabinet() {
       {/* Header */}
       <header className="border-b bg-background/95 backdrop-blur">
         <div className="container flex h-16 items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-lg">M</span>
-            </div>
-            <span className="font-bold text-xl">DocPartner</span>
-          </div>
+          <Logo size={32} />
           <Button variant="outline" size="sm" onClick={handleLogout}>
             <LogOut className="w-4 h-4 mr-2" />
             Выйти
