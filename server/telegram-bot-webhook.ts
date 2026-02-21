@@ -2107,10 +2107,10 @@ bot.action('contact_consent_yes', async (ctx) => {
   session.registrationStep = 'patient_consent';
   await ctx.answerCbQuery();
 
-  // Show preview with final consent buttons
-  const consentKeyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('✅ Да, согласие получено', 'patient_consent_yes')],
-    [Markup.button.callback('❌ Отменить', 'patient_consent_no')]
+  // Show preview with confirm/redo buttons
+  const confirmKeyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('✅ Всё верно', 'patient_consent_yes')],
+    [Markup.button.callback('❌ Сделать запись заново', 'patient_redo')]
   ]);
 
   await ctx.editMessageText(
@@ -2119,9 +2119,8 @@ bot.action('contact_consent_yes', async (ctx) => {
     `🎂 <b>Дата рождения:</b> ${escapeHtml(session.tempData.patientBirthdate || '')}\n` +
     `📞 <b>Телефон:</b> ${escapeHtml(session.tempData.patientPhone || '')}\n` +
     (session.tempData.patientNotes ? `📝 <b>Примечание:</b> ${escapeHtml(session.tempData.patientNotes)}\n` : '') +
-    `📲 <b>Связь DocDoc:</b> ✅ Да, хочет\n\n` +
-    '⚠️ <b>ВАЖНО:</b> Подтвердите, что пациент дал согласие на передачу его персональных данных в клиники-партнеры DocPartner.',
-    { parse_mode: 'HTML', ...consentKeyboard }
+    `📲 <b>Связь DocDoc:</b> ✅ Да, хочет`,
+    { parse_mode: 'HTML', ...confirmKeyboard }
   );
 });
 
@@ -2137,10 +2136,10 @@ bot.action('contact_consent_no', async (ctx) => {
   session.registrationStep = 'patient_consent';
   await ctx.answerCbQuery();
 
-  // Show preview with final consent buttons
-  const consentKeyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('✅ Да, согласие получено', 'patient_consent_yes')],
-    [Markup.button.callback('❌ Отменить', 'patient_consent_no')]
+  // Show preview with confirm/redo buttons
+  const confirmKeyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('✅ Всё верно', 'patient_consent_yes')],
+    [Markup.button.callback('❌ Сделать запись заново', 'patient_redo')]
   ]);
 
   await ctx.editMessageText(
@@ -2149,9 +2148,8 @@ bot.action('contact_consent_no', async (ctx) => {
     `🎂 <b>Дата рождения:</b> ${escapeHtml(session.tempData.patientBirthdate || '')}\n` +
     `📞 <b>Телефон:</b> ${escapeHtml(session.tempData.patientPhone || '')}\n` +
     (session.tempData.patientNotes ? `📝 <b>Примечание:</b> ${escapeHtml(session.tempData.patientNotes)}\n` : '') +
-    `📲 <b>Связь DocDoc:</b> ❌ Нет\n\n` +
-    '⚠️ <b>ВАЖНО:</b> Подтвердите, что пациент дал согласие на передачу его персональных данных в клиники-партнеры DocPartner.',
-    { parse_mode: 'HTML', ...consentKeyboard }
+    `📲 <b>Связь DocDoc:</b> ❌ Нет`,
+    { parse_mode: 'HTML', ...confirmKeyboard }
   );
 });
 
@@ -2224,19 +2222,32 @@ bot.action('patient_consent_yes', async (ctx) => {
   }
 });
 
-// Handle patient consent decline
-bot.action('patient_consent_no', async (ctx) => {
+// Handle patient redo — restart patient submission flow
+bot.action('patient_redo', async (ctx) => {
   const userId = ctx.from?.id;
   if (!userId) return;
 
+  const session = getSession(userId);
+  const agentId = session.tempData?.agentId;
+
+  if (!agentId) {
+    await ctx.answerCbQuery();
+    await ctx.editMessageText('❌ Сессия истекла. Начните заново: /patient');
+    sessions.delete(userId);
+    return;
+  }
+
+  // Restart patient flow — reset tempData but keep agentId
+  session.registrationStep = 'patient_name';
+  session.tempData = { agentId };
+
   await ctx.answerCbQuery();
   await ctx.editMessageText(
-    '❌ <b>Отправка отменена</b>\n\n' +
-    'Без согласия пациента мы не можем обработать рекомендацию.\n\n' +
-    '🔄 Получите согласие пациента и попробуйте снова: /patient',
+    '🔄 <b>Начнём заново</b>\n\n' +
+    'Введите полное имя пациента (Фамилия Имя Отчество):\n\n' +
+    '💡 Введите "Отмена" для отмены отправки пациента.',
     { parse_mode: 'HTML' }
   );
-  sessions.delete(userId);
 })
 
 // /cancel command - Отмена текущего действия
