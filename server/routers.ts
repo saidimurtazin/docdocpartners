@@ -1835,6 +1835,38 @@ DocPartner — B2B-платформа агентских рекомендаци�
           return { success: true };
         }),
     }),
+
+    // NOTIFICATIONS (admin only)
+    notifications: router({
+      // Get list of agents with Telegram IDs for broadcast preview
+      recipientCount: protectedProcedure.query(async ({ ctx }) => {
+        checkRole(ctx, "admin");
+        const allAgents = await db.getAllAgents();
+        const withTelegram = allAgents.filter((a: any) => a.telegramId && a.status === "active");
+        return { total: allAgents.length, withTelegram: withTelegram.length };
+      }),
+      // Send broadcast message to all agents with Telegram
+      broadcast: protectedProcedure
+        .input(z.object({
+          message: z.string().min(1).max(4000),
+          imageUrl: z.string().url().optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          checkRole(ctx, "admin");
+          const allAgents = await db.getAllAgents();
+          const recipients = allAgents
+            .filter((a: any) => a.telegramId && a.status === "active")
+            .map((a: any) => ({ telegramId: a.telegramId!, fullName: a.fullName }));
+
+          if (recipients.length === 0) {
+            return { sent: 0, failed: 0, total: 0 };
+          }
+
+          const { broadcastToAgents } = await import("./telegram-notifications");
+          const result = await broadcastToAgents(recipients, input.message, input.imageUrl);
+          return result;
+        }),
+    }),
   }),
 
   // Public endpoints

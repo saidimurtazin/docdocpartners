@@ -455,6 +455,17 @@ bot.on(message('text'), async (ctx) => {
     if (session.registrationStep) {
       session.registrationStep = undefined;
       session.tempData = {};
+      // Check if agent is registered — show main menu instead of removing keyboard
+      try {
+        const db = await getDb();
+        if (db) {
+          const [agent] = await db.select().from(agents).where(eq(agents.telegramId, userId.toString()));
+          if (agent?.status === 'active') {
+            await ctx.reply('❌ Действие отменено.', mainMenuKeyboard);
+            return;
+          }
+        }
+      } catch {}
       await ctx.reply('❌ Действие отменено.', Markup.removeKeyboard());
       return;
     }
@@ -2281,12 +2292,27 @@ bot.command('cancel', async (ctx) => {
   // Очистка сессии
   sessions.delete(userId);
   
+  // Check if agent is registered — show main menu instead of removing keyboard
+  try {
+    const db = await getDb();
+    if (db) {
+      const [agent] = await db.select().from(agents).where(eq(agents.telegramId, userId.toString()));
+      if (agent?.status === 'active') {
+        if (wasInProgress) {
+          await ctx.reply('❌ <b>Действие отменено.</b>', { parse_mode: 'HTML', ...mainMenuKeyboard });
+        } else {
+          await ctx.reply('ℹ️ Нет активных действий для отмены.', mainMenuKeyboard);
+        }
+        return;
+      }
+    }
+  } catch {}
+
   if (wasInProgress) {
     await ctx.reply(
       '❌ <b>Действие отменено.</b>\n\n' +
       '🔄 Используйте:\n' +
       '/start - Начать регистрацию\n' +
-      '/menu - Показать главное меню\n' +
       '/help - Помощь',
       { parse_mode: 'HTML', ...Markup.removeKeyboard() }
     );

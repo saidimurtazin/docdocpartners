@@ -19,6 +19,7 @@ import AdminClinicReports from "./pages/admin/ClinicReports";
 import AdminSettings from "./pages/admin/Settings";
 import AdminStaff from "./pages/admin/Staff";
 import AdminTasks from "./pages/admin/Tasks";
+import AdminNotifications from "./pages/admin/Notifications";
 import AgentClinics from "./pages/AgentClinics";
 import AdminLogin from "./pages/AdminLogin";
 import AgentCabinet from "./pages/AgentCabinet";
@@ -83,6 +84,7 @@ function Router() {
       <Route path={"/admin/settings"}>{() => <RequireAdmin><AdminSettings /></RequireAdmin>}</Route>
       <Route path={"/admin/staff"}>{() => <RequireAdmin><AdminStaff /></RequireAdmin>}</Route>
       <Route path={"/admin/tasks"}>{() => <RequireAdmin><AdminTasks /></RequireAdmin>}</Route>
+      <Route path={"/admin/notifications"}>{() => <RequireAdmin><AdminNotifications /></RequireAdmin>}</Route>
 
       {/* Public routes */}
       <Route path={"/"} component={Home} />
