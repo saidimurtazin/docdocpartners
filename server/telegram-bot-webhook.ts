@@ -12,6 +12,7 @@ import * as schema from '../drizzle/schema';
 import { eq } from 'drizzle-orm';
 import type { Express } from 'express';
 import { validateFullName, validateEmailAdvanced, validatePhoneAdvanced, validateCity, capitalizeWords } from './validation';
+import { calculateWithdrawalTax } from './payout-calculator';
 
 const bot = new Telegraf(ENV.telegramBotToken);
 
@@ -3140,9 +3141,18 @@ bot.action('payout_confirm_request', async (ctx) => {
       return;
     }
 
+    // Calculate tax breakdown based on self-employment status
+    const isSelfEmployed = agent.isSelfEmployed === "yes";
+    const breakdown = calculateWithdrawalTax(availableBalanceKop, isSelfEmployed);
+
     try {
       await createPaymentWithLock(agent.id, {
-        amount: availableBalanceKop,
+        amount: breakdown.grossAmount,
+        grossAmount: breakdown.grossAmount,
+        netAmount: breakdown.netAmount,
+        taxAmount: breakdown.taxAmount,
+        socialContributions: breakdown.socialContributions,
+        isSelfEmployedSnapshot: isSelfEmployed ? "yes" : "no",
       });
     } catch (err: any) {
       const errMsg = (err as Error).message || '';
@@ -3161,31 +3171,30 @@ bot.action('payout_confirm_request', async (ctx) => {
       throw err;
     }
 
-    const availableBalance = availableBalanceKop / 100;
+    const grossRub = (breakdown.grossAmount / 100).toLocaleString('ru-RU');
+    const netRub = (breakdown.netAmount / 100).toLocaleString('ru-RU');
 
-    // Success message + self-employment notice
+    // Success message with tax breakdown
     let message = '✅ <b>Заявка на выплату создана!</b>\n\n';
-    message += `💵 Сумма: <b>${availableBalance.toLocaleString('ru-RU')} ₽</b>\n\n`;
-    message += '📝 <b>Процесс выплаты:</b>\n';
+    message += `💵 Сумма: <b>${grossRub} ₽</b>\n`;
+    if (!isSelfEmployed && breakdown.taxAmount > 0) {
+      message += `📊 НДФЛ 13%: ${(breakdown.taxAmount / 100).toLocaleString('ru-RU')} ₽\n`;
+      message += `📊 Соц. отчисления 30%: ${(breakdown.socialContributions / 100).toLocaleString('ru-RU')} ₽\n`;
+      message += `💰 К выплате: <b>${netRub} ₽</b>\n`;
+    }
+    message += '\n📝 <b>Процесс выплаты:</b>\n';
     message += '1️⃣ Мы проверим вашу заявку\n';
     message += '2️⃣ Выплата через Jump.Finance\n';
-    message += '3️⃣ Для физлиц: подпишите акт через Jump.Finance\n';
-    message += '3️⃣ Для самозанятых: чек формируется автоматически\n';
+    if (!isSelfEmployed) {
+      message += '3️⃣ Подпишите акт через Jump.Finance\n';
+    } else {
+      message += '3️⃣ Чек формируется автоматически\n';
+    }
     message += '4️⃣ Деньги поступят на карту\n\n';
 
-    // Self-employment notice
-    message += '⚠️ <b>Важная информация о самозанятости:</b>\n\n';
-    message += 'Для выплаты мы проверяем статус самозанятости.\n\n';
-    message += '👤 <b>Если вы самозанятый:</b>\n';
-    message += '• Вознаграждение: <b>10%</b> от суммы лечения\n';
-    message += '• Налог НПД (6%) оплачиваете самостоятельно\n';
-    message += '• Чистыми получаете ~9.4% от суммы лечения\n\n';
-    message += '👤 <b>Если вы НЕ самозанятый:</b>\n';
-    message += '• Вознаграждение: <b>7%</b> от суммы лечения\n';
-    message += '• Мы удерживаем НДФЛ (13%) + взносы\n';
-    message += '• Чистыми получаете ~4.5% от суммы лечения\n\n';
-    message += '💡 <b>Рекомендуем оформить самозанятость</b> для получения максимального вознаграждения.\n';
-    message += 'Подробнее: База знаний → "Как стать самозанятым"';
+    if (!isSelfEmployed) {
+      message += '💡 <b>Рекомендуем оформить самозанятость</b> для получения максимального вознаграждения (без удержаний НДФЛ и взносов).\n';
+    }
 
     // Notify admin
     try {

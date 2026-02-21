@@ -541,6 +541,25 @@ export const appRouter = router({
             .setExpirationTime("30d")
             .sign(secret);
 
+          // Create staff session record in DB (for revocation)
+          const staffDeviceInfo = ctx.req.headers["user-agent"] || null;
+          const staffIpAddress = (ctx.req.headers["x-forwarded-for"] as string)?.split(",")[0] ||
+                                 (ctx.req.headers["x-real-ip"] as string) ||
+                                 ctx.req.socket.remoteAddress || null;
+          const staffExpiresAt = new Date();
+          staffExpiresAt.setDate(staffExpiresAt.getDate() + 30);
+
+          await db.createSession({
+            userId: staffUser.id,
+            sessionToken: token,
+            deviceInfo: staffDeviceInfo,
+            ipAddress: staffIpAddress,
+            loginMethod: "email_otp",
+            lastActivityAt: new Date(),
+            expiresAt: staffExpiresAt,
+            isRevoked: "no",
+          });
+
           // Set session cookie
           const cookieOptions = getSessionCookieOptions(ctx.req);
           ctx.res.cookie(AGENT_COOKIE_NAME, token, {
@@ -1768,11 +1787,30 @@ DocPartner — B2B-платформа агентских рекомендаци�
   // TODO: Migrate AgentCabinet.tsx to use agentProcedure-based endpoints instead of bot.*
   bot: router({
     // Get agent by telegram ID (used by AgentCabinet.tsx)
+    // Returns only safe fields — never expose financial/banking data via public endpoint
     getAgent: publicProcedure
       .input(z.object({ telegramId: z.string() }))
       .query(async ({ input }) => {
         const agent = await db.getAgentByTelegramId(input.telegramId);
-        return { agent };
+        if (!agent) return { agent: null };
+        return {
+          agent: {
+            id: agent.id,
+            telegramId: agent.telegramId,
+            fullName: agent.fullName,
+            email: agent.email,
+            phone: agent.phone,
+            role: agent.role,
+            city: agent.city,
+            specialization: agent.specialization,
+            status: agent.status,
+            referralCode: agent.referralCode,
+            totalEarnings: agent.totalEarnings,
+            totalReferrals: agent.totalReferrals,
+            isSelfEmployed: agent.isSelfEmployed,
+            createdAt: agent.createdAt,
+          },
+        };
       }),
 
     // Get agent statistics (used by AgentCabinet.tsx)

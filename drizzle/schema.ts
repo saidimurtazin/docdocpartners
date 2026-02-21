@@ -86,8 +86,7 @@ export const agents = mysqlTable("agents", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => [
-  index("agents_email_idx").on(table.email),
-  index("agents_phone_idx").on(table.phone),
+  // email and phone have unique constraints (implicit indexes)
   index("agents_status_idx").on(table.status),
   index("agents_referred_by_idx").on(table.referredBy),
 ]);
@@ -184,7 +183,8 @@ export type InsertOtpCode = typeof otpCodes.$inferInsert;
  */
 export const sessions = mysqlTable("sessions", {
   id: int("id").autoincrement().primaryKey(),
-  agentId: int("agentId").notNull(), // reference to agents table
+  agentId: int("agentId"), // nullable (null for staff sessions)
+  userId: int("userId"), // reference to users table (for staff sessions)
   sessionToken: varchar("sessionToken", { length: 255 }).notNull().unique(),
   deviceInfo: text("deviceInfo"), // User-Agent string
   ipAddress: varchar("ipAddress", { length: 45 }), // IPv4 or IPv6
@@ -195,6 +195,7 @@ export const sessions = mysqlTable("sessions", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => [
   index("sessions_agent_id_idx").on(table.agentId),
+  index("sessions_user_id_idx").on(table.userId),
 ]);
 
 export type Session = typeof sessions.$inferSelect;

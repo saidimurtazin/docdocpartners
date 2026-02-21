@@ -1,6 +1,7 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User } from "../../drizzle/schema";
 import { verifyAgentSessionFromRequest, type SessionInfo } from "../agent-session";
+import { AGENT_COOKIE_NAME } from "@shared/const";
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
@@ -20,6 +21,19 @@ export async function createContext(
   // Check for agent/admin session
   try {
     session = await verifyAgentSessionFromRequest(opts.req);
+
+    // Verify session exists in DB and is not revoked
+    if (session) {
+      const rawToken = opts.req.cookies?.[AGENT_COOKIE_NAME];
+      if (rawToken) {
+        const { getSessionByToken } = await import("../db");
+        const dbSession = await getSessionByToken(rawToken);
+        if (!dbSession) {
+          // Session revoked or not found in DB — invalidate
+          session = null;
+        }
+      }
+    }
 
     // For backward compatibility, set agentId if it's an agent session
     if (session?.agentId) {

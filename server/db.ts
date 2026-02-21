@@ -2,6 +2,12 @@ import { eq, desc, and, like, sql, isNotNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users, agents, referrals, payments, doctors, sessions, otpCodes, clinics, clinicReports, paymentActs, appSettings, tasks, type InsertSession, type InsertClinicReport, type InsertPaymentAct, type InsertTask } from "../drizzle/schema";
 import { ENV } from './_core/env';
+import { createHash } from "crypto";
+
+/** Hash a session token with SHA-256 for safe storage */
+export function hashSessionToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -471,10 +477,9 @@ export async function updatePaymentStatus(
   }
   await db.update(payments).set(updateData).where(eq(payments.id, id));
 
-  // Deduct from agent's totalEarnings when payment is completed (prevent double-deduction)
-  if (status === "completed" && oldStatus !== "completed") {
-    await deductPaymentFromEarnings(oldPayment.agentId, oldPayment.amount);
-  }
+  // NOTE: No deduction from totalEarnings needed here.
+  // Balance = totalEarnings - completedSum - pendingSum
+  // automatically accounts for completed payments.
 
   // Send Telegram notification if status changed
   if (oldStatus !== status) {
@@ -775,16 +780,19 @@ export async function getAgentStatistics(agentId: number) {
 export async function createSession(data: InsertSession) {
   const db = await getDb();
   if (!db) return 0;
-  const [result] = await db.insert(sessions).values(data);
+  // Store hashed token in DB for security
+  const hashedData = { ...data, sessionToken: hashSessionToken(data.sessionToken) };
+  const [result] = await db.insert(sessions).values(hashedData);
   return result.insertId;
 }
 
 export async function getSessionByToken(sessionToken: string) {
   const db = await getDb();
   if (!db) return undefined;
+  const hashedToken = hashSessionToken(sessionToken);
   const [session] = await db.select().from(sessions)
     .where(and(
-      eq(sessions.sessionToken, sessionToken),
+      eq(sessions.sessionToken, hashedToken),
       eq(sessions.isRevoked, "no")
     ));
   return session;
@@ -812,9 +820,10 @@ export async function getAllSessionsByAgentId(agentId: number) {
 export async function updateSessionActivity(sessionToken: string) {
   const db = await getDb();
   if (!db) return;
+  const hashedToken = hashSessionToken(sessionToken);
   await db.update(sessions)
     .set({ lastActivityAt: new Date() })
-    .where(eq(sessions.sessionToken, sessionToken));
+    .where(eq(sessions.sessionToken, hashedToken));
 }
 
 export async function revokeSession(sessionId: number) {
@@ -828,19 +837,21 @@ export async function revokeSession(sessionId: number) {
 export async function revokeSessionByToken(sessionToken: string) {
   const db = await getDb();
   if (!db) return;
+  const hashedToken = hashSessionToken(sessionToken);
   await db.update(sessions)
     .set({ isRevoked: "yes" })
-    .where(eq(sessions.sessionToken, sessionToken));
+    .where(eq(sessions.sessionToken, hashedToken));
 }
 
 export async function revokeAllSessionsExceptCurrent(agentId: number, currentSessionToken: string) {
   const db = await getDb();
   if (!db) return;
+  const hashedToken = hashSessionToken(currentSessionToken);
   await db.update(sessions)
     .set({ isRevoked: "yes" })
     .where(and(
       eq(sessions.agentId, agentId),
-      sql`${sessions.sessionToken} != ${currentSessionToken}`,
+      sql`${sessions.sessionToken} != ${hashedToken}`,
       eq(sessions.isRevoked, "no")
     ));
 }
@@ -1157,7 +1168,8 @@ export async function getClinicByName(name: string) {
 }
 
 /**
- * Списание с баланса агента при выплате (атомарно через SQL)
+ * @deprecated Balance is calculated via totalEarnings - completedSum - pendingSum. Do not call.
+ * Kept for reference only.
  */
 export async function deductPaymentFromEarnings(agentId: number, amount: number): Promise<void> {
   const db = await getDb();
@@ -1412,27 +1424,38 @@ export async function getAgentPaidReferralCount(agentId: number): Promise<number
 /**
  * Разблокировать бонус → перенести bonusPoints в totalEarnings
  * Только если агент имеет >= 10 оплаченных пациентов
+ * Использует транзакцию с FOR UPDATE для предотвращения двойного начисления
  * Возвращает true если бонус был разблокирован
  */
 export async function unlockBonusToEarnings(agentId: number): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
 
-  const [agent] = await db.select().from(agents).where(eq(agents.id, agentId)).limit(1);
-  if (!agent || !agent.bonusPoints || agent.bonusPoints <= 0) return false;
+  return await db.transaction(async (tx) => {
+    // Lock agent row to prevent concurrent bonus unlocks
+    const lockResult = await tx.execute(
+      sql`SELECT id, bonusPoints, totalEarnings FROM agents WHERE id = ${agentId} FOR UPDATE`
+    );
+    const agentRow = (lockResult as any)[0]?.[0];
+    if (!agentRow || !agentRow.bonusPoints || agentRow.bonusPoints <= 0) return false;
 
-  // Check if agent has 10+ paid referrals
-  const paidCount = await getAgentPaidReferralCount(agentId);
-  if (paidCount < 10) return false;
+    // Check paid referral count within the transaction
+    const [countResult] = await tx.select({
+      count: sql<number>`count(*)`
+    }).from(referrals)
+      .where(and(eq(referrals.agentId, agentId), eq(referrals.status, "paid")));
 
-  // Atomically move bonusPoints to totalEarnings
-  const bonus = agent.bonusPoints;
-  await db.update(agents).set({
-    totalEarnings: sql`${agents.totalEarnings} + ${bonus}`,
-    bonusPoints: 0,
-  } as any).where(eq(agents.id, agentId));
+    if (countResult.count < 10) return false;
 
-  return true;
+    // Atomically transfer bonus to totalEarnings
+    const bonus = agentRow.bonusPoints;
+    await tx.update(agents).set({
+      totalEarnings: sql`${agents.totalEarnings} + ${bonus}`,
+      bonusPoints: 0,
+    } as any).where(eq(agents.id, agentId));
+
+    return true;
+  });
 }
 
 /**
@@ -1512,9 +1535,19 @@ export async function updateStaffUser(id: number, data: {
   await db.update(users).set(updateData).where(eq(users.id, id));
 }
 
+export async function revokeAllSessionsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(sessions)
+    .set({ isRevoked: "yes" })
+    .where(and(eq(sessions.userId, userId), eq(sessions.isRevoked, "no")));
+}
+
 export async function deleteStaffUser(id: number) {
   const db = await getDb();
   if (!db) return;
+  // Revoke all active sessions before deleting
+  await revokeAllSessionsByUserId(id);
   await db.delete(users).where(eq(users.id, id));
 }
 

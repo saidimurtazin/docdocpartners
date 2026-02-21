@@ -1,6 +1,17 @@
 import { Resend } from 'resend';
 import crypto from 'crypto';
 
+/** Escape user-provided data for safe HTML insertion in email templates */
+function escapeHtml(text: string | undefined | null): string {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
 interface SendEmailParams {
   to: string;
   subject: string;
@@ -141,19 +152,19 @@ export async function sendReferralNotification(params: {
         <div class="content">
           <div class="card">
             <h2>📋 Карточка рекомендации #${params.referralId}</h2>
-            <p><span class="label">👨‍⚕️ Агент:</span><span class="value">${params.agentName}</span></p>
+            <p><span class="label">👨‍⚕️ Агент:</span><span class="value">${escapeHtml(params.agentName)}</span></p>
             <p><span class="label">📅 Дата:</span><span class="value">${new Date().toLocaleDateString('ru-RU')}</span></p>
           </div>
-          
+
           <div class="card">
             <h3>👤 Данные пациента</h3>
-            <p><span class="label">ФИО:</span><span class="value">${params.patientName}</span></p>
-            <p><span class="label">Дата рождения:</span><span class="value">${params.patientBirthdate}</span></p>
-            ${params.patientCity ? `<p><span class="label">Город:</span><span class="value">${params.patientCity}</span></p>` : ''}
-            ${params.patientPhone ? `<p><span class="label">Телефон:</span><span class="value">${params.patientPhone}</span></p>` : ''}
-            ${params.patientEmail ? `<p><span class="label">Email:</span><span class="value">${params.patientEmail}</span></p>` : ''}
-            ${params.clinic ? `<p><span class="label">Клиника:</span><span class="value">${params.clinic}</span></p>` : ''}
-            ${params.notes ? `<p><span class="label">📝 Примечание:</span><span class="value">${params.notes}</span></p>` : ''}
+            <p><span class="label">ФИО:</span><span class="value">${escapeHtml(params.patientName)}</span></p>
+            <p><span class="label">Дата рождения:</span><span class="value">${escapeHtml(params.patientBirthdate)}</span></p>
+            ${params.patientCity ? `<p><span class="label">Город:</span><span class="value">${escapeHtml(params.patientCity)}</span></p>` : ''}
+            ${params.patientPhone ? `<p><span class="label">Телефон:</span><span class="value">${escapeHtml(params.patientPhone)}</span></p>` : ''}
+            ${params.patientEmail ? `<p><span class="label">Email:</span><span class="value">${escapeHtml(params.patientEmail)}</span></p>` : ''}
+            ${params.clinic ? `<p><span class="label">Клиника:</span><span class="value">${escapeHtml(params.clinic)}</span></p>` : ''}
+            ${params.notes ? `<p><span class="label">📝 Примечание:</span><span class="value">${escapeHtml(params.notes)}</span></p>` : ''}
           </div>
           
           <div class="card">
@@ -177,7 +188,7 @@ export async function sendReferralNotification(params: {
   
   return sendInfoEmail({
     to: params.to,
-    subject: `🏥 Новая рекомендация пациента #${params.referralId} от ${params.agentName}`,
+    subject: `🏥 Новая рекомендация пациента #${params.referralId} от ${escapeHtml(params.agentName)}`,
     html,
   });
 }
@@ -284,22 +295,22 @@ export async function sendReferralNotificationToClinic(referral: {
             <div class="card-title">👤 Информация о пациенте</div>
             <div class="info-row">
               <div class="info-label">ФИО:</div>
-              <div class="info-value">${referral.patientName}</div>
+              <div class="info-value">${escapeHtml(referral.patientName)}</div>
             </div>
             <div class="info-row">
               <div class="info-label">Дата рождения:</div>
-              <div class="info-value">${referral.patientBirthDate}</div>
+              <div class="info-value">${escapeHtml(referral.patientBirthDate)}</div>
             </div>
             ${referral.patientPhone ? `
             <div class="info-row">
               <div class="info-label">Телефон:</div>
-              <div class="info-value">${referral.patientPhone}</div>
+              <div class="info-value">${escapeHtml(referral.patientPhone)}</div>
             </div>
             ` : ''}
             ${referral.patientEmail ? `
             <div class="info-row">
               <div class="info-label">Email:</div>
-              <div class="info-value">${referral.patientEmail}</div>
+              <div class="info-value">${escapeHtml(referral.patientEmail)}</div>
             </div>
             ` : ''}
           </div>
@@ -308,25 +319,25 @@ export async function sendReferralNotificationToClinic(referral: {
             <div class="card-title">👨‍⚕️ Информация об агенте</div>
             <div class="info-row">
               <div class="info-label">ФИО агента:</div>
-              <div class="info-value">${referral.agentName}</div>
+              <div class="info-value">${escapeHtml(referral.agentName)}</div>
             </div>
             <div class="info-row">
               <div class="info-label">Телефон агента:</div>
-              <div class="info-value">${referral.agentPhone}</div>
+              <div class="info-value">${escapeHtml(referral.agentPhone)}</div>
             </div>
           </div>
 
           <div class="card">
             <div class="card-title">🏥 Клиника назначения</div>
             <div class="info-row">
-              <div class="info-value">${referral.clinic}</div>
+              <div class="info-value">${escapeHtml(referral.clinic)}</div>
             </div>
           </div>
 
           ${referral.notes ? `
           <div class="card">
             <div class="card-title">📝 Дополнительная информация</div>
-            <div class="info-value">${referral.notes}</div>
+            <div class="info-value">${escapeHtml(referral.notes)}</div>
           </div>
           ` : ''}
 
@@ -346,7 +357,7 @@ export async function sendReferralNotificationToClinic(referral: {
   const recipientEmail = referral.clinicEmail || process.env.CLINIC_NOTIFICATION_EMAIL || 'said.murtazin@mail.ru';
   return sendInfoEmail({
     to: recipientEmail,
-    subject: `Новая рекомендация пациента: ${referral.patientName}`,
+    subject: `Новая рекомендация пациента: ${escapeHtml(referral.patientName)}`,
     html,
   });
 }
@@ -400,10 +411,10 @@ export async function sendAgentStatusUpdate(params: {
           <p>DocPartner</p>
         </div>
         <div class="content">
-          <p>Здравствуйте, ${params.agentName}!</p>
+          <p>Здравствуйте, ${escapeHtml(params.agentName)}!</p>
           <p>${statusInfo.message}</p>
-          ${params.reason ? `<p><strong>Причина:</strong> ${params.reason}</p>` : ''}
-          ${params.status === 'active' ? '<p>Вы можете начать работу через <a href="https://doc-partner.ru/dashboard">личный кабинет</a> или Telegram-бот.</p>' : ''}
+          ${params.reason ? `<p><strong>Причина:</strong> ${escapeHtml(params.reason)}</p>` : ''}
+          ${params.status === 'active' ? '<p>Вернитесь в Telegram-бот, чтобы начать работу.</p>' : ''}
         </div>
         <div class="footer">
           <p>© 2026 DocPartner. Все права защищены.</p>
@@ -536,10 +547,10 @@ export async function sendReferralStatusUpdate(params: {
           <p>DocPartner</p>
         </div>
         <div class="content">
-          <p>Здравствуйте, ${params.agentName}!</p>
+          <p>Здравствуйте, ${escapeHtml(params.agentName)}!</p>
           <p>${statusInfo.message}</p>
           <div class="card">
-            <p><strong>Пациент:</strong> ${params.patientName}</p>
+            <p><strong>Пациент:</strong> ${escapeHtml(params.patientName)}</p>
             <p><strong>Рекомендация:</strong> #${params.referralId}</p>
             ${params.treatmentAmount ? `<p><strong>Сумма лечения:</strong> ${(params.treatmentAmount / 100).toLocaleString('ru-RU')} ₽</p>` : ''}
             ${params.commissionAmount ? `<p><strong>Ваше вознаграждение:</strong> ${(params.commissionAmount / 100).toLocaleString('ru-RU')} ₽</p>` : ''}
@@ -555,7 +566,7 @@ export async function sendReferralStatusUpdate(params: {
 
   return sendEmail({
     to: params.to,
-    subject: `${statusInfo.title} - ${params.patientName}`,
+    subject: `${statusInfo.title} - ${escapeHtml(params.patientName)}`,
     html,
   });
 }
@@ -612,12 +623,12 @@ export async function sendPaymentStatusUpdate(params: {
           <p>DocPartner</p>
         </div>
         <div class="content">
-          <p>Здравствуйте, ${params.agentName}!</p>
+          <p>Здравствуйте, ${escapeHtml(params.agentName)}!</p>
           <p>${statusInfo.message}</p>
           <div class="card">
             <p><strong>Выплата:</strong> #${params.paymentId}</p>
             <p><strong>Сумма:</strong> ${(params.amount / 100).toLocaleString('ru-RU')} ₽</p>
-            ${params.transactionId ? `<p><strong>ID транзакции:</strong> ${params.transactionId}</p>` : ''}
+            ${params.transactionId ? `<p><strong>ID транзакции:</strong> ${escapeHtml(params.transactionId)}</p>` : ''}
           </div>
         </div>
         <div class="footer">
