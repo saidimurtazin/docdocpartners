@@ -2,10 +2,12 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { InstallPWABanner } from "@/components/InstallPWABanner";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch, useLocation } from "wouter";
-import { useEffect } from "react";
+import { Route, Switch, Redirect, useLocation } from "wouter";
+import { useEffect, type ReactNode } from "react";
+import { Loader2 } from "lucide-react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { useAuth } from "@/_core/hooks/useAuth";
 import Home from "./pages/Home";
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminAgents from "./pages/admin/Agents";
@@ -31,6 +33,32 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Documents from "./pages/Documents";
 
+const STAFF_ROLES = ["admin", "support", "accountant"];
+
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+    </div>
+  );
+}
+
+/** Route guard: requires staff auth (admin/support/accountant) */
+function RequireAdmin({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (!user || !STAFF_ROLES.includes(user.role)) return <Redirect to="/admin/login" />;
+  return <>{children}</>;
+}
+
+/** Route guard: requires agent auth */
+function RequireAgent({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (!user) return <Redirect to="/login" />;
+  return <>{children}</>;
+}
+
 function ScrollToTop() {
   const [location] = useLocation();
   useEffect(() => {
@@ -43,33 +71,37 @@ function ScrollToTop() {
 function Router() {
   return (
     <Switch>
-      {/* Admin panel routes (/admin/*) */}
+      {/* Admin panel routes (/admin/*) — protected by RequireAdmin */}
       <Route path={"/admin/login"} component={AdminLogin} />
-      <Route path={"/admin"} component={AdminDashboard} />
-      <Route path={"/admin/agents"} component={AdminAgents} />
-      <Route path={"/admin/referrals"} component={AdminReferrals} />
-      <Route path={"/admin/payments"} component={AdminPayments} />
-      <Route path={"/admin/doctors"} component={AdminDoctors} />
-      <Route path={"/admin/clinics"} component={AdminClinics} />
-      <Route path={"/admin/clinic-reports"} component={AdminClinicReports} />
-      <Route path={"/admin/settings"} component={AdminSettings} />
-      <Route path={"/admin/staff"} component={AdminStaff} />
-      <Route path={"/admin/tasks"} component={AdminTasks} />
+      <Route path={"/admin"}>{() => <RequireAdmin><AdminDashboard /></RequireAdmin>}</Route>
+      <Route path={"/admin/agents"}>{() => <RequireAdmin><AdminAgents /></RequireAdmin>}</Route>
+      <Route path={"/admin/referrals"}>{() => <RequireAdmin><AdminReferrals /></RequireAdmin>}</Route>
+      <Route path={"/admin/payments"}>{() => <RequireAdmin><AdminPayments /></RequireAdmin>}</Route>
+      <Route path={"/admin/doctors"}>{() => <RequireAdmin><AdminDoctors /></RequireAdmin>}</Route>
+      <Route path={"/admin/clinics"}>{() => <RequireAdmin><AdminClinics /></RequireAdmin>}</Route>
+      <Route path={"/admin/clinic-reports"}>{() => <RequireAdmin><AdminClinicReports /></RequireAdmin>}</Route>
+      <Route path={"/admin/settings"}>{() => <RequireAdmin><AdminSettings /></RequireAdmin>}</Route>
+      <Route path={"/admin/staff"}>{() => <RequireAdmin><AdminStaff /></RequireAdmin>}</Route>
+      <Route path={"/admin/tasks"}>{() => <RequireAdmin><AdminTasks /></RequireAdmin>}</Route>
 
-      {/* Agent panel routes */}
+      {/* Public routes */}
       <Route path={"/"} component={Home} />
       <Route path={"/login"} component={Login} />
       <Route path={"/register"} component={Register} />
-      <Route path={"/dashboard"} component={AgentDashboard} />
-      <Route path={"/dashboard/profile"} component={AgentProfile} />
-      <Route path={"/dashboard/payments"} component={AgentPayments} />
-      <Route path={"/dashboard/referrals"} component={AgentReferrals} />
-      <Route path={"/dashboard/clinics"} component={AgentClinics} />
-      <Route path={"/agent/cabinet"} component={AgentCabinet} />
-      <Route path={"/agent/sessions"} component={AgentSessions} />
       <Route path={"/knowledge-base"} component={KnowledgeBase} />
       <Route path={"/clinics"} component={Clinics} />
       <Route path={"/documents"} component={Documents} />
+
+      {/* Agent dashboard routes — protected by RequireAgent */}
+      <Route path={"/dashboard"}>{() => <RequireAgent><AgentDashboard /></RequireAgent>}</Route>
+      <Route path={"/dashboard/profile"}>{() => <RequireAgent><AgentProfile /></RequireAgent>}</Route>
+      <Route path={"/dashboard/payments"}>{() => <RequireAgent><AgentPayments /></RequireAgent>}</Route>
+      <Route path={"/dashboard/referrals"}>{() => <RequireAgent><AgentReferrals /></RequireAgent>}</Route>
+      <Route path={"/dashboard/clinics"}>{() => <RequireAgent><AgentClinics /></RequireAgent>}</Route>
+      <Route path={"/agent/sessions"}>{() => <RequireAgent><AgentSessions /></RequireAgent>}</Route>
+
+      {/* Telegram WebApp — agent cabinet (uses its own session) */}
+      <Route path={"/agent/cabinet"} component={AgentCabinet} />
 
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
