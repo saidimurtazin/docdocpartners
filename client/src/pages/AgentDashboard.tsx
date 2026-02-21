@@ -72,10 +72,10 @@ export default function AgentDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-primary">
-                {formatCurrency(stats?.availableBalance || stats?.totalEarnings || 0)}
+                {formatCurrency(stats?.availableBalance ?? stats?.totalEarnings ?? 0)}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Всего заработано: {formatCurrency(stats?.totalEarnings || 0)}
+                Всего заработано: {formatCurrency(stats?.totalEarnings ?? 0)}
               </p>
             </CardContent>
           </Card>
@@ -89,7 +89,7 @@ export default function AgentDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-primary">
-                {stats?.activeReferrals || 0}
+                {stats?.activeReferrals ?? 0}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 В процессе обработки
@@ -106,7 +106,7 @@ export default function AgentDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-primary">
-                {stats?.conversionRate || 0}%
+                {stats?.conversionRate ?? 0}%
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 Успешных сделок
@@ -123,7 +123,7 @@ export default function AgentDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-primary">
-                {formatCurrency(stats?.thisMonthEarnings || 0)}
+                {formatCurrency(stats?.thisMonthEarnings ?? 0)}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 Текущий период
@@ -133,7 +133,7 @@ export default function AgentDashboard() {
         </div>
 
         {/* Referral Bonus Card */}
-        {stats && (stats.bonusPoints || 0) > 0 && (
+        {stats && (stats.bonusPoints ?? 0) > 0 && (
           <Card className="border-2 border-amber-200 bg-amber-50/50 mb-8">
             <CardContent className="flex items-center gap-4 py-4">
               <Gift className="w-8 h-8 text-amber-500 flex-shrink-0" />

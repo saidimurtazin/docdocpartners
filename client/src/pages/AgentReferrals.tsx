@@ -111,6 +111,19 @@ export default function AgentReferrals() {
       setFormError("Формат даты: ДД.ММ.ГГГГ (например, 15.03.1985)");
       return;
     }
+    // Validate date is real and patient is 0-120 years old
+    const [dd, mm, yyyy] = formData.patientBirthdate.split('.').map(Number);
+    const birthDate = new Date(yyyy, mm - 1, dd);
+    if (birthDate.getDate() !== dd || birthDate.getMonth() !== mm - 1 || birthDate.getFullYear() !== yyyy) {
+      setFormError("Указана несуществующая дата");
+      return;
+    }
+    const ageDiff = Date.now() - birthDate.getTime();
+    const ageYears = Math.floor(ageDiff / (365.25 * 24 * 60 * 60 * 1000));
+    if (ageYears < 0 || ageYears > 120) {
+      setFormError("Возраст пациента должен быть от 0 до 120 лет");
+      return;
+    }
 
     try {
       await createReferral.mutateAsync({

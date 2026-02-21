@@ -417,6 +417,30 @@ export async function updateReferralAmounts(id: number, treatmentAmount: number,
   }
 }
 
+/**
+ * Update referral amounts only (no agent earnings adjustment).
+ * Used by batch recalculation to avoid N+1.
+ */
+export async function updateReferralAmountsOnly(id: number, treatmentAmount: number, commissionAmount: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(referrals)
+    .set({ treatmentAmount, commissionAmount })
+    .where(eq(referrals.id, id));
+}
+
+/**
+ * Adjust agent totalEarnings by delta (positive or negative).
+ * Used by batch recalculation.
+ */
+export async function adjustAgentEarnings(agentId: number, delta: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(agents)
+    .set({ totalEarnings: sql`GREATEST(0, ${agents.totalEarnings} + ${delta})` } as any)
+    .where(eq(agents.id, agentId));
+}
+
 // PAYMENTS
 
 export async function getAllPayments(options?: { page?: number; pageSize?: number }) {
@@ -1496,9 +1520,12 @@ export async function getAgentPaidReferralCount(agentId: number): Promise<number
  * Использует транзакцию с FOR UPDATE для предотвращения двойного начисления
  * Возвращает сумму бонуса (в копейках) или 0 если бонус не разблокирован
  */
-export async function unlockBonusToEarnings(agentId: number): Promise<number> {
+export async function unlockBonusToEarnings(agentId: number, threshold?: number): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
+
+  // Read threshold from settings if not provided
+  const bonusThreshold = threshold ?? parseInt(await getAppSetting("bonusUnlockThreshold") || "10", 10);
 
   return await db.transaction(async (tx) => {
     // Lock agent row to prevent concurrent bonus unlocks
@@ -1514,7 +1541,7 @@ export async function unlockBonusToEarnings(agentId: number): Promise<number> {
     }).from(referrals)
       .where(and(eq(referrals.agentId, agentId), eq(referrals.status, "paid")));
 
-    if (countResult.count < 10) return 0;
+    if (countResult.count < bonusThreshold) return 0;
 
     // Atomically transfer bonus to totalEarnings
     const bonus = agentRow.bonusPoints;
@@ -1528,7 +1555,7 @@ export async function unlockBonusToEarnings(agentId: number): Promise<number> {
 }
 
 /**
- * Hard-delete agent and ALL related records (sessions, referrals, payments, paymentActs).
+ * Hard-delete agent and ALL related records (sessions, referrals, payments, paymentActs, tasks, otpCodes).
  * Use with extreme caution — this is irreversible.
  */
 export async function hardDeleteAgent(agentId: number) {
@@ -1543,16 +1570,22 @@ export async function hardDeleteAgent(agentId: number) {
   await db.delete(paymentActs).where(eq(paymentActs.agentId, agentId));
   // 2. Payments
   await db.delete(payments).where(eq(payments.agentId, agentId));
-  // 3. Clinic reports linked to referrals of this agent
+  // 3. Tasks linked to this agent
+  await db.delete(tasks).where(eq(tasks.agentId, agentId));
+  // 4. Clinic reports linked to referrals of this agent
   const agentReferrals = await db.select({ id: referrals.id }).from(referrals).where(eq(referrals.agentId, agentId));
   for (const ref of agentReferrals) {
     await db.delete(clinicReports).where(eq(clinicReports.referralId, ref.id));
   }
-  // 4. Referrals
+  // 5. Referrals
   await db.delete(referrals).where(eq(referrals.agentId, agentId));
-  // 5. Sessions
+  // 6. Sessions
   await db.delete(sessions).where(eq(sessions.agentId, agentId));
-  // 6. Agent itself
+  // 7. OTP codes for agent's email
+  if (agent.email) {
+    await db.delete(otpCodes).where(eq(otpCodes.email, agent.email));
+  }
+  // 8. Agent itself
   await db.delete(agents).where(eq(agents.id, agentId));
 
   return { deleted: true, agentName: agent.fullName, agentId: agent.id };

@@ -20,6 +20,16 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Loader2, ArrowLeft, Download, Search, X, CreditCard, Smartphone, Building2, Shield, Trash2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
@@ -35,6 +45,7 @@ export default function AdminAgents() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [visibleCount, setVisibleCount] = useState(LOAD_MORE_STEP);
+  const [deleteAgent, setDeleteAgent] = useState<{ id: number; name: string } | null>(null);
 
   const { data: agents, isLoading, refetch } = trpc.admin.agents.list.useQuery();
   const { data: clinicsList } = trpc.admin.clinics.list.useQuery();
@@ -338,11 +349,7 @@ export default function AdminAgents() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => {
-                              if (confirm(`Удалить агента "${agent.fullName}" и ВСЕ связанные данные? Это необратимо!`)) {
-                                hardDeleteAgent.mutate({ agentId: agent.id });
-                              }
-                            }}
+                            onClick={() => setDeleteAgent({ id: agent.id, name: agent.fullName })}
                             disabled={hardDeleteAgent.isPending}
                             className="text-xs text-destructive hover:text-destructive"
                           >
@@ -371,7 +378,31 @@ export default function AdminAgents() {
         </Card>
       </div>
 
-      {/* Commission tiers moved to /admin/settings */}
+      {/* Hard Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteAgent} onOpenChange={(open) => { if (!open) setDeleteAgent(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить агента?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Вы собираетесь удалить агента <strong>«{deleteAgent?.name}»</strong> и ВСЕ связанные данные (рекомендации, выплаты, акты, сессии). Это действие необратимо!
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteAgent) {
+                  hardDeleteAgent.mutate({ agentId: deleteAgent.id });
+                  setDeleteAgent(null);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Удалить безвозвратно
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AdminLayoutWrapper>
   );
 }
