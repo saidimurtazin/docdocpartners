@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
+import Logo from "@/components/Logo";
 import { ReactNode, useState, useMemo } from "react";
 
 interface AdminLayoutWrapperProps {
@@ -60,16 +61,8 @@ export default function AdminLayoutWrapper({ children }: AdminLayoutWrapperProps
         {/* Logo */}
         <div className="p-6 border-b border-border flex items-center justify-between">
           <Link href="/admin">
-            <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
-              <img
-                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663256942923/xohsFKyBQyuhihyR.png"
-                alt="DocPartner Logo"
-                className="w-10 h-10 rounded-lg"
-              />
-              <div className="flex flex-col leading-tight">
-                <span className="font-bold text-sm">DocDoc</span>
-                <span className="font-bold text-sm text-primary">Admin</span>
-              </div>
+            <div className="cursor-pointer hover:opacity-80 transition-opacity">
+              <Logo size={36} textSuffix="Admin" />
             </div>
           </Link>
           <Button

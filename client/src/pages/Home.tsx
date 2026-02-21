@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import DoctorChatbot from "@/components/DoctorChatbot";
+import Logo from "@/components/Logo";
 import { useRef, lazy, Suspense } from "react";
 import { motion, useInView, useScroll, useTransform } from "framer-motion";
 import AnimatedCounter from "@/components/AnimatedCounter";
@@ -109,25 +110,15 @@ export default function Home() {
       {/* Modern Header */}
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl">
         <div className="container flex h-20 items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img
-              src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663256942923/xohsFKyBQyuhihyR.png"
-              alt="DocPartner Logo"
-              className="w-10 h-10 rounded-lg"
-            />
-            <div className="flex flex-col leading-tight">
-              <span className="font-bold text-lg">DocDoc</span>
-              <span className="font-bold text-lg">Partner</span>
-            </div>
-          </div>
+          <Logo size={40} />
           <nav className="hidden md:flex items-center gap-8">
-            <a href="#why-join" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">О программе</a>
-            <a href="#how-it-works" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">Как работает</a>
-            <Link href="/clinics" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">
+            <a href="#why-join" className="text-sm font-medium hover:text-[#1E293B] transition-colors">О программе</a>
+            <a href="#how-it-works" className="text-sm font-medium hover:text-[#1E293B] transition-colors">Как работает</a>
+            <Link href="/clinics" className="text-sm font-medium hover:text-[#1E293B] transition-colors">
               Клиники
             </Link>
-            <a href="#benefits" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">Преимущества</a>
-            <Link href="/knowledge-base" className="text-sm font-medium hover:text-[oklch(0.35_0.08_250)] transition-colors">
+            <a href="#benefits" className="text-sm font-medium hover:text-[#1E293B] transition-colors">Преимущества</a>
+            <Link href="/knowledge-base" className="text-sm font-medium hover:text-[#1E293B] transition-colors">
               База знаний
             </Link>
           </nav>
@@ -140,7 +131,7 @@ export default function Home() {
               <Button variant="outline" onClick={() => window.location.href = '/login'} className="h-9 sm:h-11 px-3 sm:px-4 text-sm">Войти</Button>
             )}
             <Button
-              className="btn-premium text-[oklch(0.15_0.05_75)] font-semibold h-9 sm:h-11 px-3 sm:px-6 text-sm"
+              className="btn-premium text-[#1E293B] font-semibold h-9 sm:h-11 px-3 sm:px-6 text-sm"
               onClick={() => window.open('https://t.me/docpartnerbot', '_blank')}
             >
               <MessageSquare className="w-4 h-4 mr-1 sm:mr-2" />
@@ -154,20 +145,20 @@ export default function Home() {
 
       {/* ============== TRUST TICKER ============== */}
       {publicStats && (publicStats.agentCount > 0 || publicStats.referralCount > 0) && (
-        <div className="w-full bg-gradient-to-r from-[oklch(0.35_0.08_250)] to-[oklch(0.55_0.12_250)] py-2.5 overflow-hidden">
+        <div className="w-full bg-gradient-to-r from-[#1E293B] to-[#334155] py-2.5 overflow-hidden">
           <div className="container flex items-center justify-center gap-6 md:gap-12 text-white text-sm font-medium">
             <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-[oklch(0.85_0.12_75)]" />
+              <Users className="w-4 h-4 text-[#FDBA74]" />
               <span>{publicStats.agentCount} агентов</span>
             </div>
             <div className="w-1 h-1 rounded-full bg-white/40" />
             <div className="flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-[oklch(0.85_0.12_75)]" />
+              <TrendingUp className="w-4 h-4 text-[#FDBA74]" />
               <span>{publicStats.referralCount} рекомендаций</span>
             </div>
             <div className="w-1 h-1 rounded-full bg-white/40" />
             <div className="flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-[oklch(0.85_0.12_75)]" />
+              <Building2 className="w-4 h-4 text-[#FDBA74]" />
               <span>{publicStats.clinicCount} клиник</span>
             </div>
           </div>
@@ -179,8 +170,8 @@ export default function Home() {
         <ParticleBackground particleCount={40} color="rgba(26, 47, 90, 0.15)" />
 
         {/* Animated gradient orbs */}
-        <div className="absolute top-20 left-10 w-72 h-72 bg-[oklch(0.55_0.12_250)] rounded-full mix-blend-multiply filter blur-[120px] opacity-20 animate-float" />
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-[oklch(0.70_0.15_75)] rounded-full mix-blend-multiply filter blur-[120px] opacity-15 animate-float" style={{ animationDelay: "1.5s" }} />
+        <div className="absolute top-20 left-10 w-72 h-72 bg-[#334155] rounded-full mix-blend-multiply filter blur-[120px] opacity-20 animate-float" />
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-[#F97316] rounded-full mix-blend-multiply filter blur-[120px] opacity-15 animate-float" style={{ animationDelay: "1.5s" }} />
 
         {/* Hero text with parallax — heading and subheading fade on scroll */}
         <motion.div style={{ y: heroY, opacity: heroOpacity }} className="container relative z-10">
@@ -193,8 +184,8 @@ export default function Home() {
               className="flex justify-center mb-8"
             >
               <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full glass-card animate-pulse-glow">
-                <Sparkles className="w-4 h-4 text-[oklch(0.70_0.15_75)]" />
-                <span className="text-sm font-semibold bg-gradient-to-r from-[oklch(0.35_0.08_250)] to-[oklch(0.55_0.12_250)] bg-clip-text text-transparent">
+                <Sparkles className="w-4 h-4 text-[#F97316]" />
+                <span className="text-sm font-semibold bg-gradient-to-r from-[#1E293B] to-[#334155] bg-clip-text text-transparent">
                   Медицинская партнерская программа
                 </span>
               </div>
@@ -237,7 +228,7 @@ export default function Home() {
           >
             <Button
               size="lg"
-              className="btn-premium text-[oklch(0.15_0.05_75)] font-semibold text-lg h-16 px-10 animate-pulse-glow"
+              className="btn-premium text-[#1E293B] font-semibold text-lg h-16 px-10 animate-pulse-glow"
               onClick={() => window.open('https://t.me/docpartnerbot', '_blank')}
             >
               <MessageSquare className="w-5 h-5 mr-2" />
@@ -342,21 +333,21 @@ export default function Home() {
                 title: "Единое окно для рекомендаций",
                 desc: "Одна платформа для направления пациентов во все клиники-партнёры. Без звонков, переписок и неформальных договорённостей — всё в одном месте.",
                 highlight: "50+ клиник",
-                gradient: "from-[oklch(0.35_0.08_250)] to-[oklch(0.55_0.12_250)]"
+                gradient: "from-[#1E293B] to-[#334155]"
               },
               {
                 icon: ShieldCheck,
                 title: "Прозрачные и безопасные выплаты",
                 desc: "Официальный договор, моментальный расчёт комиссии, вывод от 1 000 ₽ на карту МИР. Всё белое и легальное — работайте как самозанятый или физ. лицо.",
                 highlight: "до 10%",
-                gradient: "from-[oklch(0.55_0.12_250)] to-[oklch(0.70_0.15_75)]"
+                gradient: "from-[#334155] to-[#F97316]"
               },
               {
                 icon: Smartphone,
                 title: "Удобная механика рекомендаций",
                 desc: "Отправка пациента за 2 минуты через Telegram-бот или личный кабинет. Отслеживание статуса каждой рекомендации в реальном времени.",
                 highlight: "2 минуты",
-                gradient: "from-[oklch(0.70_0.15_75)] to-[oklch(0.75_0.18_65)]"
+                gradient: "from-[#F97316] to-[#FB923C]"
               }
             ].map((item, index) => (
               <motion.div key={index} variants={fadeUp} custom={index}>
@@ -380,7 +371,7 @@ export default function Home() {
             <motion.div variants={fadeUp}>
               <Button
                 size="lg"
-                className="btn-premium text-[oklch(0.15_0.05_75)] font-semibold text-lg h-14 px-8"
+                className="btn-premium text-[#1E293B] font-semibold text-lg h-14 px-8"
                 onClick={() => window.open('https://t.me/docpartnerbot', '_blank')}
               >
                 <MessageSquare className="w-5 h-5 mr-2" />
@@ -410,19 +401,19 @@ export default function Home() {
                 icon: Users,
                 title: "Для врачей",
                 desc: "Врачи хотят помочь пациенту найти профильного врача, но не имеют инфраструктуры для легальных рекомендаций и проверенные клиники в одном месте.",
-                gradient: "from-[oklch(0.35_0.08_250)] to-[oklch(0.55_0.12_250)]"
+                gradient: "from-[#1E293B] to-[#334155]"
               },
               {
                 icon: Building2,
                 title: "Для клиник",
                 desc: "Клиники получают качественный поток пациентов от проверенных врачей-агентов без огромных затрат на маркетинг и бухгалтерское сопровождение.",
-                gradient: "from-[oklch(0.35_0.08_250)] to-[oklch(0.55_0.12_250)]"
+                gradient: "from-[#1E293B] to-[#334155]"
               },
               {
                 icon: Shield,
                 title: "Для пациентов",
                 desc: "Пациенты получают рекомендации от доверенных врачей и попадают в проверенные клиники с гарантией качества.",
-                gradient: "from-[oklch(0.35_0.08_250)] to-[oklch(0.55_0.12_250)]"
+                gradient: "from-[#1E293B] to-[#334155]"
               }
             ].map((item, index) => (
               <motion.div key={index} variants={fadeUp} custom={index}>
@@ -456,7 +447,7 @@ export default function Home() {
                 Каждый 3-й пациент получает <span className="gradient-gold-text">рекомендацию</span> на платную клинику
               </motion.h2>
               <motion.p variants={fadeUp} custom={2} className="text-lg text-muted-foreground">
-                По данным <a href="https://sk.ru" target="_blank" rel="noopener noreferrer" className="text-[oklch(0.35_0.08_250)] hover:underline font-semibold">исследования Сколково (2024)</a>, 57% взрослых россиян оплачивали медуслуги за последние 12 месяцев.
+                По данным <a href="https://sk.ru" target="_blank" rel="noopener noreferrer" className="text-[#1E293B] hover:underline font-semibold">исследования Сколково (2024)</a>, 57% взрослых россиян оплачивали медуслуги за последние 12 месяцев.
               </motion.p>
               <div className="space-y-6">
                 {[
@@ -491,7 +482,7 @@ export default function Home() {
 
             <AnimatedSection>
               <motion.div variants={fadeInScale} className="relative">
-                <div className="absolute inset-0 bg-gradient-to-br from-[oklch(0.55_0.12_250)]/20 to-transparent rounded-3xl blur-3xl" />
+                <div className="absolute inset-0 bg-gradient-to-br from-[#334155]/20 to-transparent rounded-3xl blur-3xl" />
                 <img
                   src="/clinic-partnership.jpg"
                   alt="Консультация врача"
@@ -537,13 +528,13 @@ export default function Home() {
               <motion.div key={index} variants={fadeUp} custom={index} className="relative">
                 {index < 3 && (
                   <div className="hidden lg:block absolute top-16 right-0 w-full h-0.5 translate-x-1/2 z-0">
-                    <div className="h-full bg-gradient-to-r from-[oklch(0.70_0.15_75)]/40 to-transparent" />
+                    <div className="h-full bg-gradient-to-r from-[#F97316]/40 to-transparent" />
                   </div>
                 )}
                 <Card className="h-full glass-card border-2 border-white/20 card-glow relative z-10">
                   <CardContent className="pt-10 pb-8 space-y-5">
-                    <div className="text-7xl font-bold text-[oklch(0.70_0.15_75)]/15">{item.step}</div>
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[oklch(0.35_0.08_250)] to-[oklch(0.55_0.12_250)] flex items-center justify-center shadow-lg">
+                    <div className="text-7xl font-bold text-[#F97316]/15">{item.step}</div>
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#1E293B] to-[#334155] flex items-center justify-center shadow-lg">
                       <item.icon className="w-7 h-7 text-white" />
                     </div>
                     <h3 className="text-xl font-bold">{item.title}</h3>
@@ -577,8 +568,8 @@ export default function Home() {
               <motion.div key={index} variants={fadeUp} custom={index}>
                 <Card className="glass-card border-2 border-white/20 h-full card-glow">
                   <CardContent className="pt-10 pb-8 space-y-5">
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[oklch(0.70_0.15_75)] to-[oklch(0.75_0.18_65)] flex items-center justify-center shadow-lg">
-                      <benefit.icon className="w-7 h-7 text-[oklch(0.15_0.05_75)]" />
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#F97316] to-[#FB923C] flex items-center justify-center shadow-lg">
+                      <benefit.icon className="w-7 h-7 text-[#1E293B]" />
                     </div>
                     <h3 className="text-xl font-bold">{benefit.title}</h3>
                     <p className="text-muted-foreground leading-relaxed">{benefit.description}</p>
@@ -639,7 +630,7 @@ export default function Home() {
 
           <AnimatedSection className="text-center mt-12">
             <motion.div variants={fadeUp}>
-              <Link href="/clinics" className="inline-flex items-center gap-2 text-[oklch(0.35_0.08_250)] hover:text-[oklch(0.55_0.12_250)] font-semibold transition-colors group">
+              <Link href="/clinics" className="inline-flex items-center gap-2 text-[#1E293B] hover:text-[#334155] font-semibold transition-colors group">
                 Посмотреть все клиники
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </Link>
@@ -677,10 +668,10 @@ export default function Home() {
       */}
 
       {/* ============== FINAL CTA ============== */}
-      <section className="py-32 bg-gradient-to-br from-[oklch(0.35_0.08_250)] to-[oklch(0.55_0.12_250)] text-white relative overflow-hidden">
+      <section className="py-32 bg-gradient-to-br from-[#1E293B] to-[#334155] text-white relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full">
           <div className="absolute top-10 right-20 w-40 h-40 bg-white/5 rounded-full blur-2xl" />
-          <div className="absolute bottom-10 left-20 w-60 h-60 bg-[oklch(0.70_0.15_75)]/10 rounded-full blur-3xl" />
+          <div className="absolute bottom-10 left-20 w-60 h-60 bg-[#F97316]/10 rounded-full blur-3xl" />
         </div>
 
         <div className="container relative z-10">
@@ -694,7 +685,7 @@ export default function Home() {
             <motion.div variants={fadeUp} custom={2} className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
               <Button
                 size="lg"
-                className="btn-premium text-[oklch(0.15_0.05_75)] font-semibold text-lg h-16 px-10"
+                className="btn-premium text-[#1E293B] font-semibold text-lg h-16 px-10"
                 onClick={() => window.open('https://t.me/docpartnerbot', '_blank')}
               >
                 <MessageSquare className="w-5 h-5 mr-2" />
@@ -711,14 +702,7 @@ export default function Home() {
         <div className="container">
           <div className="grid md:grid-cols-4 gap-12 mb-12">
             <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <img
-                  src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663256942923/xohsFKyBQyuhihyR.png"
-                  alt="DocPartner Logo"
-                  className="w-10 h-10 rounded-lg"
-                />
-                <span className="font-bold text-xl">DocPartner</span>
-              </div>
+              <Logo size={40} />
               <p className="text-sm text-muted-foreground">
                 Медицинская партнерская программа для врачей и медицинских специалистов
               </p>

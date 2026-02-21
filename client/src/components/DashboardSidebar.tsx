@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { Home, Users, Wallet, User as UserIcon, LogOut, Building2, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
+import Logo from "@/components/Logo";
 import { useState } from "react";
 
 export default function DashboardSidebar() {
@@ -32,7 +33,7 @@ export default function DashboardSidebar() {
         <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
           <Menu className="w-5 h-5" />
         </Button>
-        <span className="font-semibold text-sm">DocPartner</span>
+        <span className="font-semibold text-sm" style={{ color: '#1E293B' }}>Doc Partner</span>
       </div>
 
       {/* Sidebar */}
@@ -45,16 +46,8 @@ export default function DashboardSidebar() {
         {/* Logo */}
         <div className="p-6 border-b border-border flex items-center justify-between">
           <Link href="/">
-            <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
-              <img
-                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663256942923/xohsFKyBQyuhihyR.png"
-                alt="DocPartner Logo"
-                className="w-10 h-10 rounded-lg"
-              />
-              <div className="flex flex-col leading-tight">
-                <span className="font-bold text-sm">DocDoc</span>
-                <span className="font-bold text-sm">Partner</span>
-              </div>
+            <div className="cursor-pointer hover:opacity-80 transition-opacity">
+              <Logo size={36} />
             </div>
           </Link>
           <Button
@@ -86,7 +79,7 @@ export default function DashboardSidebar() {
                     variant={isActive ? "default" : "ghost"}
                     className={`w-full justify-start gap-3 ${
                       isActive
-                        ? "bg-[oklch(0.35_0.08_250)] text-white hover:bg-[oklch(0.35_0.08_250)]/90"
+                        ? "bg-[#1E293B] text-white hover:bg-[#1E293B]/90"
                         : "hover:bg-accent"
                     }`}
                     onClick={() => setSidebarOpen(false)}
