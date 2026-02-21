@@ -32,11 +32,8 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  app.use(cookieParser());
-  // Setup Telegram bot webhook BEFORE other middleware
+
+  // Setup Telegram bot webhook BEFORE json parser (Telegraf handles its own body parsing)
   const webhookDomain = process.env.WEBHOOK_DOMAIN;
   if (!webhookDomain) {
     console.error('[Server] ERROR: WEBHOOK_DOMAIN environment variable is required!');
@@ -45,6 +42,11 @@ async function startServer() {
     throw new Error('WEBHOOK_DOMAIN is required');
   }
   await setupTelegramWebhook(app, '/telegram-webhook', webhookDomain);
+
+  // Configure body parser with larger size limit for file uploads (AFTER webhook)
+  app.use(express.json({ limit: "50mb" }));
+  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  app.use(cookieParser());
 
   // Debug endpoint — manually trigger email poll and return detailed results
   app.get("/api/debug-poll", async (req, res) => {
