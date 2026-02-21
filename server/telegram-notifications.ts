@@ -16,6 +16,11 @@ async function sendTelegramMessage(
   message: string,
   parseMode: "HTML" | "Markdown" = "HTML"
 ): Promise<boolean> {
+  // Validate telegramId is a numeric string
+  if (!telegramId || !/^\d+$/.test(telegramId)) {
+    console.warn(`[Telegram] Invalid telegramId: "${telegramId}" — skipping notification`);
+    return false;
+  }
   try {
     const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
       method: "POST",

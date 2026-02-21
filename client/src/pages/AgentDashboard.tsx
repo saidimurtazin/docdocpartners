@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { TrendingUp, Users, Percent, Activity, Banknote, Gift } from "lucide-react";
 import DashboardLayoutWrapper from "@/components/DashboardLayoutWrapper";
@@ -14,12 +15,44 @@ export default function AgentDashboard() {
 
   if (statsLoading || monthlyLoading || statusLoading || referralsLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/30">
-        <div className="text-center">
-          <Activity className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-muted-foreground">Загрузка дашборда...</p>
+      <DashboardLayoutWrapper>
+        <div className="min-h-screen bg-muted/30">
+          <div className="bg-gradient-to-r from-primary to-primary/80 text-white py-12">
+            <div className="container">
+              <Skeleton className="h-10 w-72 bg-white/20 mb-2" />
+              <Skeleton className="h-5 w-96 bg-white/10" />
+            </div>
+          </div>
+          <div className="container py-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              {[...Array(4)].map((_, i) => (
+                <Card key={i} className="border-2">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-5 w-5 rounded" />
+                  </CardHeader>
+                  <CardContent>
+                    <Skeleton className="h-9 w-32 mb-1" />
+                    <Skeleton className="h-3 w-24" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              {[...Array(2)].map((_, i) => (
+                <Card key={i} className="border-2">
+                  <CardHeader>
+                    <Skeleton className="h-6 w-48" />
+                  </CardHeader>
+                  <CardContent>
+                    <Skeleton className="h-[300px] w-full rounded" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
+      </DashboardLayoutWrapper>
     );
   }
 

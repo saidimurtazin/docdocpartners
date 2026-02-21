@@ -37,22 +37,24 @@ export default function AgentPayments() {
 
     const grossKopecks = amountNum * 100;
     if (isSelfEmployed) {
+      const npdKopecks = Math.floor(grossKopecks * 0.06);
       return {
         gross: amountNum,
         net: amountNum,
         tax: 0,
         social: 0,
-        npdEstimate: Math.floor(grossKopecks * 0.06) / 100,
+        npdEstimate: npdKopecks / 100,
         isSelfEmployed: true,
       };
     }
-    const tax = Math.floor(grossKopecks * 0.13) / 100;
-    const social = Math.floor(grossKopecks * 0.30) / 100;
+    const taxKopecks = Math.floor(grossKopecks * 0.13);
+    const socialKopecks = Math.floor(grossKopecks * 0.30);
+    const netKopecks = grossKopecks - taxKopecks - socialKopecks;
     return {
       gross: amountNum,
-      net: amountNum - tax - social,
-      tax,
-      social,
+      net: netKopecks / 100,
+      tax: taxKopecks / 100,
+      social: socialKopecks / 100,
       npdEstimate: 0,
       isSelfEmployed: false,
     };

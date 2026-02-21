@@ -23,7 +23,6 @@ import {
   Wallet,
   Sparkles,
   Globe,
-  MapPin,
   ChevronRight,
   Star,
   Zap,
@@ -37,13 +36,11 @@ import {
 import { Link } from "wouter";
 import DoctorChatbot from "@/components/DoctorChatbot";
 import Logo from "@/components/Logo";
-import { useRef, lazy, Suspense } from "react";
+import { useRef } from "react";
 import { motion, useInView, useScroll, useTransform } from "framer-motion";
 import AnimatedCounter from "@/components/AnimatedCounter";
 import ParticleBackground from "@/components/ParticleBackground";
 import { trpc } from "@/lib/trpc";
-
-const ClinicMap = lazy(() => import("@/components/ClinicMap"));
 
 // Animation variants
 const fadeUp = {
@@ -86,26 +83,12 @@ function AnimatedSection({ children, className = "" }: { children: React.ReactNo
 
 export default function Home() {
   const { isAuthenticated } = useAuth();
-  const { data: dbClinics } = trpc.public.clinics.useQuery(undefined, { retry: false });
   const { data: publicStats } = trpc.public.stats.useQuery(undefined, { retry: false });
 
   // Parallax for hero
   const { scrollY } = useScroll();
   const heroY = useTransform(scrollY, [0, 600], [0, 150]);
   const heroOpacity = useTransform(scrollY, [0, 400], [1, 0]);
-
-  // Map clinic data
-  const mapClinics = (dbClinics || []).map((c: any) => ({
-    id: c.id,
-    name: c.name,
-    city: c.city || "",
-    address: c.address,
-    type: c.type,
-    lat: c.latitude || 0,
-    lng: c.longitude || 0,
-    specializations: c.specializations,
-    phone: c.phone,
-  }));
 
   return (
     <>
@@ -131,7 +114,9 @@ export default function Home() {
                 <Button variant="outline" className="h-9 sm:h-11 px-3 sm:px-4 text-sm">Кабинет</Button>
               </Link>
             ) : (
-              <Button variant="outline" onClick={() => window.location.href = '/login'} className="h-9 sm:h-11 px-3 sm:px-4 text-sm">Войти</Button>
+              <Link href="/login">
+                <Button variant="outline" className="h-9 sm:h-11 px-3 sm:px-4 text-sm">Войти</Button>
+              </Link>
             )}
             <Button
               className="btn-premium text-[#1E293B] font-semibold h-9 sm:h-11 px-3 sm:px-6 text-sm"
@@ -742,34 +727,6 @@ export default function Home() {
           </AnimatedSection>
         </div>
       </section>
-
-      {/* ============== MAP SECTION (hidden, can be re-enabled later) ============== */}
-      {/*
-      <section id="map" className="py-24 mesh-bg">
-        <div className="container">
-          <AnimatedSection className="max-w-3xl mx-auto text-center space-y-6 mb-16">
-            <motion.h2 variants={fadeUp} className="text-4xl sm:text-5xl md:text-6xl font-bold">
-              <span className="gradient-text">География</span> партнеров
-            </motion.h2>
-            <motion.p variants={fadeUp} custom={1} className="text-lg md:text-xl text-muted-foreground">
-              Наши клиники-партнеры расположены по всей России. Интерактивная карта поможет найти ближайшую клинику.
-            </motion.p>
-          </AnimatedSection>
-
-          <AnimatedSection>
-            <motion.div variants={fadeInScale}>
-              <Suspense fallback={
-                <div className="w-full h-[500px] rounded-2xl skeleton flex items-center justify-center">
-                  <MapPin className="w-8 h-8 text-muted-foreground animate-bounce" />
-                </div>
-              }>
-                <ClinicMap clinics={mapClinics} height="500px" />
-              </Suspense>
-            </motion.div>
-          </AnimatedSection>
-        </div>
-      </section>
-      */}
 
       {/* ============== CIS EXPANSION ============== */}
       <section className="py-16 bg-muted/30">

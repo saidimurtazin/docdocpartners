@@ -1610,7 +1610,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
         .input(z.object({
           id: z.number(),
           referralId: z.number().optional(),
-          treatmentAmount: z.number().optional(), // kopecks
+          treatmentAmount: z.number().min(100).optional(), // kopecks, min 1 ruble
           notes: z.string().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
@@ -1625,12 +1625,21 @@ DocPartner — B2B-платформа агентских рекомендаци�
           // Link to referral if provided
           const refId = input.referralId || report.referralId;
           if (refId) {
+            const referral = await db.getReferralById(refId);
+            if (!referral) throw new TRPCError({ code: "NOT_FOUND", message: "Referral not found" });
+
+            // Warn (but don't block) if report clinic ≠ referral clinic
+            if (report.clinicId && referral.clinic) {
+              const reportClinic = await db.getClinicById(report.clinicId);
+              if (reportClinic && reportClinic.name !== referral.clinic) {
+                console.warn(`[AuditLog] Clinic mismatch: report="${reportClinic.name}" ≠ referral="${referral.clinic}" (report=${input.id}, referral=${refId}) by user=${ctx.user.id}`);
+              }
+            }
+
             await db.linkClinicReportToReferral(input.id, refId);
 
             const amount = input.treatmentAmount || report.treatmentAmount || 0;
             if (amount > 0) {
-              const referral = await db.getReferralById(refId);
-              if (!referral) throw new TRPCError({ code: "NOT_FOUND", message: "Referral not found" });
 
               // Определить treatmentMonth из visitDate отчёта
               let treatmentMonth: string | null = null;

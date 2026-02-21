@@ -160,7 +160,15 @@ export default function AdminStaff() {
       </div>
 
       {/* Add Staff Dialog */}
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+      <Dialog open={showDialog} onOpenChange={(open) => {
+        setShowDialog(open);
+        if (!open) {
+          setNewName("");
+          setNewEmail("");
+          setNewPhone("");
+          setNewRole("support");
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Добавить сотрудника</DialogTitle>
