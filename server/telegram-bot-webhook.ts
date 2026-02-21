@@ -3657,9 +3657,10 @@ bot.catch((err, ctx) => {
  * @param webhookDomain Your domain (e.g., 'https://yourdomain.com')
  */
 export async function setupTelegramWebhook(app: Express, webhookPath: string, webhookDomain: string) {
-  // Use Telegraf's built-in webhookCallback (handles body parsing internally)
+  // Use Telegraf's webhookCallback — let Telegraf handle path matching internally
   // IMPORTANT: This must be registered BEFORE express.json() middleware
-  app.use(webhookPath, bot.webhookCallback(webhookPath));
+  // DO NOT use app.use(webhookPath, bot.webhookCallback(webhookPath)) — double-path bug!
+  app.use(bot.webhookCallback(webhookPath));
   console.log('[Telegram Bot] Webhook endpoint ready at', webhookPath);
 
   // Try to set webhook URL (non-blocking)
