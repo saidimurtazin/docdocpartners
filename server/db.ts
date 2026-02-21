@@ -1,5 +1,6 @@
 import { eq, desc, and, like, sql, isNotNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
+import { createPool, type Pool } from "mysql2/promise";
 import { InsertUser, users, agents, referrals, payments, doctors, sessions, otpCodes, clinics, clinicReports, paymentActs, appSettings, tasks, type InsertSession, type InsertClinicReport, type InsertPaymentAct, type InsertTask } from "../drizzle/schema";
 import { ENV } from './_core/env';
 import { createHash } from "crypto";
@@ -10,18 +11,39 @@ export function hashSessionToken(token: string): string {
 }
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _pool: Pool | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
+// Lazily create the drizzle instance with explicit pool configuration.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      _pool = createPool({
+        uri: process.env.DATABASE_URL,
+        connectionLimit: 20,
+        connectTimeout: 10_000,
+        waitForConnections: true,
+        queueLimit: 0,
+        enableKeepAlive: true,
+        keepAliveInitialDelay: 30_000,
+      });
+      _db = drizzle(_pool);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
+      _pool = null;
     }
   }
   return _db;
+}
+
+/** Close the database connection pool (for graceful shutdown) */
+export async function closePool(): Promise<void> {
+  if (_pool) {
+    await _pool.end();
+    _pool = null;
+    _db = null;
+    console.log("[Database] Pool closed");
+  }
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
@@ -123,10 +145,22 @@ export async function getUserByEmail(email: string) {
 
 // AGENTS
 
-export async function getAllAgents() {
+export async function getAllAgents(options?: { page?: number; pageSize?: number }) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(agents).orderBy(desc(agents.createdAt));
+  const query = db.select().from(agents).orderBy(desc(agents.createdAt));
+  if (options?.page && options?.pageSize) {
+    const offset = (options.page - 1) * options.pageSize;
+    return query.limit(options.pageSize).offset(offset);
+  }
+  return query;
+}
+
+export async function getAgentsCount(): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.select({ count: sql<number>`count(*)` }).from(agents);
+  return result.count;
 }
 
 export async function getAgentById(id: number) {
@@ -231,10 +265,22 @@ export async function updateAgentTelegramData(id: number, data: {
 
 // REFERRALS
 
-export async function getAllReferrals() {
+export async function getAllReferrals(options?: { page?: number; pageSize?: number }) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(referrals).orderBy(desc(referrals.createdAt));
+  const query = db.select().from(referrals).orderBy(desc(referrals.createdAt));
+  if (options?.page && options?.pageSize) {
+    const offset = (options.page - 1) * options.pageSize;
+    return query.limit(options.pageSize).offset(offset);
+  }
+  return query;
+}
+
+export async function getReferralsCount(): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.select({ count: sql<number>`count(*)` }).from(referrals);
+  return result.count;
 }
 
 export async function getReferralById(id: number) {
@@ -344,11 +390,11 @@ export async function updateReferralAmounts(id: number, treatmentAmount: number,
 
 // PAYMENTS
 
-export async function getAllPayments() {
+export async function getAllPayments(options?: { page?: number; pageSize?: number }) {
   const db = await getDb();
   if (!db) return [];
   // Join with agents to get agent name
-  const result = await db.select({
+  const query = db.select({
     id: payments.id,
     agentId: payments.agentId,
     agentFullName: agents.fullName,
@@ -377,7 +423,18 @@ export async function getAllPayments() {
     .from(payments)
     .leftJoin(agents, eq(payments.agentId, agents.id))
     .orderBy(desc(payments.createdAt));
-  return result;
+  if (options?.page && options?.pageSize) {
+    const offset = (options.page - 1) * options.pageSize;
+    return query.limit(options.pageSize).offset(offset);
+  }
+  return query;
+}
+
+export async function getPaymentsCount(): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.select({ count: sql<number>`count(*)` }).from(payments);
+  return result.count;
 }
 
 export async function getPaymentsWithAgents() {
@@ -632,6 +689,18 @@ export async function getProcessingJumpPayments() {
         isNotNull(payments.jumpPaymentId)
       )
     );
+}
+
+/** Find payments stuck in "processing" longer than hoursThreshold (#24) */
+export async function getStaleProcessingPayments(hoursThreshold: number = 48) {
+  const db = await getDb();
+  if (!db) return [];
+  const cutoff = new Date(Date.now() - hoursThreshold * 60 * 60 * 1000);
+  return db.select().from(payments)
+    .where(and(
+      eq(payments.status, "processing"),
+      sql`${payments.requestedAt} < ${cutoff}`
+    ));
 }
 
 export async function updateAgentPersonalInfo(agentId: number, data: {

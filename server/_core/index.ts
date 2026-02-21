@@ -12,6 +12,18 @@ import cron from "node-cron";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 
+// Cron overlap guards (single-instance, in-memory)
+const cronLocks = {
+  emailPoll: false,
+  jumpPoll: false,
+  jumpIdentification: false,
+  bonusCheck: false,
+  cleanup: false,
+};
+
+// Store cron tasks for graceful shutdown
+const cronTasks: ReturnType<typeof cron.schedule>[] = [];
+
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
     const server = net.createServer();
@@ -205,7 +217,9 @@ async function startServer() {
   });
 
   // Clinic reports email polling — every 5 minutes
-  cron.schedule("*/5 * * * *", async () => {
+  cronTasks.push(cron.schedule("*/5 * * * *", async () => {
+    if (cronLocks.emailPoll) return;
+    cronLocks.emailPoll = true;
     try {
       console.log("[Cron] Starting clinic email poll...");
       const { processNewClinicEmails } = await import("../clinic-report-processor");
@@ -215,90 +229,121 @@ async function startServer() {
       }
     } catch (error) {
       console.error("[Cron] Email poll failed:", error);
+    } finally {
+      cronLocks.emailPoll = false;
     }
-  });
+  }));
   console.log("[Cron] Clinic email polling scheduled (every 5 minutes)");
 
   // Jump.Finance payment status polling — every minute
-  cron.schedule("* * * * *", async () => {
+  cronTasks.push(cron.schedule("* * * * *", async () => {
+    if (cronLocks.jumpPoll) return;
+    cronLocks.jumpPoll = true;
     try {
       const { jumpFinance, JUMP_STATUS } = await import("../jump-finance");
       if (!jumpFinance.isConfigured) return;
 
-      const { getProcessingJumpPayments, updatePaymentJumpData, getAgentById } = await import("../db");
+      const { getProcessingJumpPayments, updatePaymentJumpData, getAgentById, getStaleProcessingPayments } = await import("../db");
       const processingPayments = await getProcessingJumpPayments();
-      if (processingPayments.length === 0) return;
 
-      console.log(`[Jump Cron] Polling ${processingPayments.length} payment(s)...`);
+      if (processingPayments.length > 0) {
+        console.log(`[Jump Cron] Polling ${processingPayments.length} payment(s)...`);
 
-      for (const payment of processingPayments) {
-        if (!payment.jumpPaymentId) continue;
-        try {
-          const { item } = await jumpFinance.getPayment(payment.jumpPaymentId);
-          const statusChanged = item.status.id !== payment.jumpStatus;
+        for (const payment of processingPayments) {
+          if (!payment.jumpPaymentId) continue;
+          try {
+            const { item } = await jumpFinance.getPayment(payment.jumpPaymentId);
+            const statusChanged = item.status.id !== payment.jumpStatus;
 
-          await updatePaymentJumpData(payment.id, {
-            jumpStatus: item.status.id,
-            jumpStatusText: item.status.title,
-            jumpAmountPaid: item.amount_paid ? Math.round(item.amount_paid * 100) : undefined,
-            jumpCommission: item.commission ? Math.round(item.commission * 100) : undefined,
-          });
+            await updatePaymentJumpData(payment.id, {
+              jumpStatus: item.status.id,
+              jumpStatusText: item.status.title,
+              jumpAmountPaid: item.amount_paid ? Math.round(item.amount_paid * 100) : undefined,
+              jumpCommission: item.commission ? Math.round(item.commission * 100) : undefined,
+            });
 
-          // Handle final statuses
-          if (item.is_final && statusChanged) {
-            const agent = await getAgentById(payment.agentId);
-            const { notifyAgent } = await import("../telegram-bot-webhook");
-            const amountRub = (payment.amount / 100).toLocaleString("ru-RU");
-
-            if (item.status.id === JUMP_STATUS.PAID) {
-              await updatePaymentJumpData(payment.id, { status: "completed" });
-              // Balance formula (totalEarnings - completedSum - pendingSum)
-              // already accounts for completed payments — no deduction needed
-              if (agent?.telegramId) {
-                await notifyAgent(agent.telegramId, `✅ <b>Выплата ${amountRub} ₽ зачислена!</b>\n\nДеньги поступили на ваш счёт.`);
-              }
-            } else if (item.status.id === JUMP_STATUS.REJECTED) {
-              await updatePaymentJumpData(payment.id, { status: "failed" });
-              if (agent?.telegramId) {
-                await notifyAgent(agent.telegramId, `❌ <b>Выплата ${amountRub} ₽ отклонена</b>\n\nПроверьте ваши реквизиты и обратитесь в поддержку.`);
-              }
-            } else if (item.status.id === JUMP_STATUS.DELETED) {
-              await updatePaymentJumpData(payment.id, { status: "failed" });
-            }
-          }
-
-          // Notify about awaiting signature (non-final)
-          if (item.status.id === JUMP_STATUS.AWAITING_SIGNATURE && statusChanged) {
-            const agent = await getAgentById(payment.agentId);
-            if (agent?.telegramId) {
-              const { notifyAgent } = await import("../telegram-bot-webhook");
-              await notifyAgent(agent.telegramId, `📝 <b>Подпишите документы</b>\n\nДля завершения выплаты необходимо подписать акт в Jump.Finance.`);
-            }
-          }
-
-          // Notify admin about errors
-          if (item.status.id === JUMP_STATUS.ERROR && statusChanged) {
-            const { ENV: envConfig } = await import("./env");
-            if (envConfig.adminTelegramId) {
+            // Handle final statuses
+            if (item.is_final && statusChanged) {
               const agent = await getAgentById(payment.agentId);
               const { notifyAgent } = await import("../telegram-bot-webhook");
-              await notifyAgent(envConfig.adminTelegramId, `⚠️ <b>Ошибка выплаты Jump</b>\n\nАгент: ${agent?.fullName || payment.agentId}\nСумма: ${(payment.amount / 100).toLocaleString("ru-RU")} ₽\nJump ID: ${payment.jumpPaymentId}`);
+              const amountRub = (payment.amount / 100).toLocaleString("ru-RU");
+
+              if (item.status.id === JUMP_STATUS.PAID) {
+                await updatePaymentJumpData(payment.id, { status: "completed" });
+                // Balance formula (totalEarnings - completedSum - pendingSum)
+                // already accounts for completed payments — no deduction needed
+                if (agent?.telegramId) {
+                  await notifyAgent(agent.telegramId, `✅ <b>Выплата ${amountRub} ₽ зачислена!</b>\n\nДеньги поступили на ваш счёт.`);
+                }
+              } else if (item.status.id === JUMP_STATUS.REJECTED) {
+                await updatePaymentJumpData(payment.id, { status: "failed" });
+                if (agent?.telegramId) {
+                  await notifyAgent(agent.telegramId, `❌ <b>Выплата ${amountRub} ₽ отклонена</b>\n\nПроверьте ваши реквизиты и обратитесь в поддержку.`);
+                }
+              } else if (item.status.id === JUMP_STATUS.DELETED) {
+                await updatePaymentJumpData(payment.id, { status: "failed" });
+              }
             }
+
+            // Notify about awaiting signature (non-final)
+            if (item.status.id === JUMP_STATUS.AWAITING_SIGNATURE && statusChanged) {
+              const agent = await getAgentById(payment.agentId);
+              if (agent?.telegramId) {
+                const { notifyAgent } = await import("../telegram-bot-webhook");
+                await notifyAgent(agent.telegramId, `📝 <b>Подпишите документы</b>\n\nДля завершения выплаты необходимо подписать акт в Jump.Finance.`);
+              }
+            }
+
+            // Notify admin about errors
+            if (item.status.id === JUMP_STATUS.ERROR && statusChanged) {
+              const { ENV: envConfig } = await import("./env");
+              if (envConfig.adminTelegramId) {
+                const agent = await getAgentById(payment.agentId);
+                const { notifyAgent } = await import("../telegram-bot-webhook");
+                await notifyAgent(envConfig.adminTelegramId, `⚠️ <b>Ошибка выплаты Jump</b>\n\nАгент: ${agent?.fullName || payment.agentId}\nСумма: ${(payment.amount / 100).toLocaleString("ru-RU")} ₽\nJump ID: ${payment.jumpPaymentId}`);
+              }
+            }
+          } catch (err) {
+            console.error(`[Jump Cron] Failed to poll payment ${payment.id}:`, err);
           }
-        } catch (err) {
-          console.error(`[Jump Cron] Failed to poll payment ${payment.id}:`, err);
         }
+      }
+
+      // Auto-fail payments stuck in "processing" >48h (#24)
+      try {
+        const stalePayments = await getStaleProcessingPayments(48);
+        for (const payment of stalePayments) {
+          console.warn(`[Jump Cron] Payment ${payment.id} stuck >48h, auto-failing`);
+          await updatePaymentJumpData(payment.id, {
+            status: "failed",
+            jumpStatusText: "Timeout — auto-failed after 48h",
+          });
+          const agent = await getAgentById(payment.agentId);
+          if (agent?.telegramId) {
+            const { notifyAgent } = await import("../telegram-bot-webhook");
+            const amountRub = (payment.amount / 100).toLocaleString("ru-RU");
+            await notifyAgent(agent.telegramId,
+              `⚠️ <b>Выплата ${amountRub} ₽ отменена</b>\n\nПлатёж не обработан за 48ч. Средства возвращены на баланс.`
+            );
+          }
+        }
+      } catch (err) {
+        console.error("[Jump Cron] Stale payment check failed:", err);
       }
     } catch (error) {
       console.error("[Jump Cron] Poll failed:", error);
+    } finally {
+      cronLocks.jumpPoll = false;
     }
-  });
+  }));
   if (process.env.JUMP_FINANCE_API_KEY) {
     console.log("[Cron] Jump.Finance payment polling scheduled (every minute)");
   }
 
   // Jump.Finance identification status polling — every 10 minutes
-  cron.schedule("*/10 * * * *", async () => {
+  cronTasks.push(cron.schedule("*/10 * * * *", async () => {
+    if (cronLocks.jumpIdentification) return;
+    cronLocks.jumpIdentification = true;
     try {
       const { jumpFinance } = await import("../jump-finance");
       if (!jumpFinance.isConfigured) return;
@@ -321,11 +366,15 @@ async function startServer() {
       }
     } catch (error) {
       console.error("[Jump Cron] Identification poll failed:", error);
+    } finally {
+      cronLocks.jumpIdentification = false;
     }
-  });
+  }));
 
   // Referral bonus unlock check — every hour
-  cron.schedule("0 * * * *", async () => {
+  cronTasks.push(cron.schedule("0 * * * *", async () => {
+    if (cronLocks.bonusCheck) return;
+    cronLocks.bonusCheck = true;
     try {
       const { getDb, unlockBonusToEarnings } = await import("../db");
       const { agents: agentsTable } = await import("../../drizzle/schema");
@@ -361,9 +410,60 @@ async function startServer() {
       }
     } catch (error) {
       console.error("[Bonus Cron] Failed:", error);
+    } finally {
+      cronLocks.bonusCheck = false;
     }
-  });
+  }));
   console.log("[Cron] Referral bonus unlock check scheduled (every hour)");
+
+  // Cleanup expired sessions & OTPs — every 6 hours (#17)
+  cronTasks.push(cron.schedule("0 */6 * * *", async () => {
+    if (cronLocks.cleanup) return;
+    cronLocks.cleanup = true;
+    try {
+      const { cleanupExpiredSessions } = await import("../db");
+      const { cleanupExpiredOTPs } = await import("../otp");
+      await cleanupExpiredSessions();
+      await cleanupExpiredOTPs();
+      console.log("[Cron] Expired sessions & OTPs cleaned up");
+    } catch (error) {
+      console.error("[Cron] Cleanup failed:", error);
+    } finally {
+      cronLocks.cleanup = false;
+    }
+  }));
+  console.log("[Cron] Session/OTP cleanup scheduled (every 6 hours)");
+
+  // Graceful shutdown (#18)
+  const shutdown = async (signal: string) => {
+    console.log(`[Server] ${signal} received, shutting down gracefully...`);
+
+    // Stop all cron tasks
+    for (const task of cronTasks) task.stop();
+    console.log("[Server] Cron tasks stopped");
+
+    // Close HTTP server (stop accepting new connections)
+    server.close(() => {
+      console.log("[Server] HTTP server closed");
+    });
+
+    // Close database pool
+    try {
+      const { closePool } = await import("../db");
+      await closePool();
+    } catch (err) {
+      console.error("[Server] Error closing DB pool:", err);
+    }
+
+    // Force exit after 10s
+    setTimeout(() => {
+      console.error("[Server] Forced exit after timeout");
+      process.exit(1);
+    }, 10_000).unref();
+  };
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
 startServer().catch(console.error);
