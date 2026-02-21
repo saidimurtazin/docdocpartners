@@ -271,6 +271,179 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ============== HOW IT WORKS — VISUAL JOURNEY ============== */}
+      <section id="how-it-works" className="py-24 bg-background overflow-hidden">
+        <div className="container">
+          <AnimatedSection className="max-w-3xl mx-auto text-center space-y-6 mb-20">
+            <motion.h2 variants={fadeUp} className="text-4xl sm:text-5xl md:text-6xl font-bold">
+              Несколько <span className="gradient-gold-text">шагов</span> к заработку
+            </motion.h2>
+            <motion.p variants={fadeUp} custom={1} className="text-lg md:text-xl text-muted-foreground">
+              Простой и прозрачный процесс от рекомендации до получения вознаграждения
+            </motion.p>
+          </AnimatedSection>
+
+          {/* Visual Journey */}
+          <div className="relative max-w-6xl mx-auto">
+            {/* Desktop: horizontal timeline */}
+            <AnimatedSection className="hidden lg:block">
+              {/* Connecting line behind circles */}
+              <motion.div
+                variants={fadeUp}
+                className="absolute top-[60px] left-[12%] right-[12%] h-1 rounded-full overflow-hidden"
+              >
+                <div className="h-full bg-gradient-to-r from-[#1E293B] via-[#F97316] to-[#1E293B] opacity-25" />
+                <motion.div
+                  className="absolute top-0 left-0 h-full bg-gradient-to-r from-[#F97316] to-[#FB923C] rounded-full"
+                  initial={{ width: "0%" }}
+                  whileInView={{ width: "100%" }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 2, delay: 0.5, ease: "easeOut" }}
+                />
+              </motion.div>
+
+              <div className="flex items-start justify-between relative">
+                {[
+                  {
+                    icon: Stethoscope,
+                    title: "Пациент приходит к вам",
+                    desc: "К вам обращается пациент, которому нужна помощь узкого специалиста или клиника",
+                    step: 1
+                  },
+                  {
+                    icon: Send,
+                    title: "Вы рекомендуете клинику",
+                    desc: "Направляете пациента через Telegram-бот или личный кабинет — это занимает 2 минуты",
+                    step: 2
+                  },
+                  {
+                    icon: Building2,
+                    title: "Пациент получает лечение",
+                    desc: "В проверенной клинике-партнёре с лицензией. Мы отслеживаем весь путь пациента",
+                    step: 3
+                  },
+                  {
+                    icon: Banknote,
+                    title: "Вы получаете вознаграждение",
+                    desc: "До 10% от суммы лечения поступает на вашу карту. Вывод от 1 000 ₽ в любое время",
+                    step: 4
+                  }
+                ].map((item, i) => (
+                  <motion.div
+                    key={i}
+                    variants={fadeUp}
+                    custom={i}
+                    className="flex flex-col items-center text-center w-1/4 relative z-10 px-3"
+                  >
+                    {/* Icon circle */}
+                    <motion.div
+                      className="w-[120px] h-[120px] rounded-full bg-gradient-to-br from-[#1E293B] to-[#334155] flex items-center justify-center shadow-2xl mb-6 ring-4 ring-background relative"
+                      whileHover={{ scale: 1.1 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                    >
+                      <item.icon className="w-12 h-12 text-[#F97316]" />
+                      {/* Step badge */}
+                      <div className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-[#F97316] flex items-center justify-center shadow-lg">
+                        <span className="text-white font-bold text-sm">{item.step}</span>
+                      </div>
+                    </motion.div>
+
+                    {/* Arrow between steps */}
+                    {i < 3 && (
+                      <motion.div
+                        className="absolute top-[52px] -right-3 z-20"
+                        initial={{ opacity: 0, x: -10 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: 0.8 + i * 0.3 }}
+                      >
+                        <ArrowRight className="w-7 h-7 text-[#F97316]" />
+                      </motion.div>
+                    )}
+
+                    <h3 className="text-lg font-bold mb-2 leading-tight">{item.title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
+                  </motion.div>
+                ))}
+              </div>
+            </AnimatedSection>
+
+            {/* Mobile + Tablet: vertical timeline */}
+            <AnimatedSection className="lg:hidden">
+              <div className="relative">
+                {/* Vertical connecting line */}
+                <div className="absolute left-[39px] top-0 bottom-0 w-0.5 bg-gradient-to-b from-[#1E293B] via-[#F97316] to-[#1E293B] opacity-25" />
+
+                <div className="space-y-10">
+                  {[
+                    {
+                      icon: Stethoscope,
+                      title: "Пациент приходит к вам",
+                      desc: "К вам обращается пациент, которому нужна помощь узкого специалиста или клиника",
+                      step: 1
+                    },
+                    {
+                      icon: Send,
+                      title: "Вы рекомендуете клинику",
+                      desc: "Направляете пациента через Telegram-бот или личный кабинет — это занимает 2 минуты",
+                      step: 2
+                    },
+                    {
+                      icon: Building2,
+                      title: "Пациент получает лечение",
+                      desc: "В проверенной клинике-партнёре с лицензией. Мы отслеживаем весь путь пациента",
+                      step: 3
+                    },
+                    {
+                      icon: Banknote,
+                      title: "Вы получаете вознаграждение",
+                      desc: "До 10% от суммы лечения поступает на вашу карту. Вывод от 1 000 ₽ в любое время",
+                      step: 4
+                    }
+                  ].map((item, i) => (
+                    <motion.div
+                      key={i}
+                      variants={fadeUp}
+                      custom={i}
+                      className="flex gap-5 items-start relative"
+                    >
+                      {/* Icon circle */}
+                      <div className="flex-shrink-0 w-20 h-20 rounded-full bg-gradient-to-br from-[#1E293B] to-[#334155] flex items-center justify-center shadow-xl relative z-10 ring-4 ring-background">
+                        <item.icon className="w-8 h-8 text-[#F97316]" />
+                        <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-[#F97316] flex items-center justify-center shadow-md">
+                          <span className="text-white font-bold text-xs">{item.step}</span>
+                        </div>
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 pt-2">
+                        <h3 className="text-lg font-bold mb-1">{item.title}</h3>
+                        <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            </AnimatedSection>
+
+            {/* CTA under journey */}
+            <AnimatedSection className="text-center mt-16">
+              <motion.div variants={fadeUp}>
+                <Button
+                  size="lg"
+                  className="btn-premium text-[#1E293B] font-semibold text-lg h-14 px-8"
+                  onClick={() => window.open('https://t.me/docpartnerbot', '_blank')}
+                >
+                  <MessageSquare className="w-5 h-5 mr-2" />
+                  Начать работу
+                  <ArrowRight className="w-5 h-5 ml-2" />
+                </Button>
+              </motion.div>
+            </AnimatedSection>
+          </div>
+        </div>
+      </section>
+
       {/* ============== WHY JOIN — VALUE PROPOSITION ============== */}
       <section id="why-join" className="py-24 bg-background">
         <div className="container">
@@ -457,179 +630,6 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
-              </motion.div>
-            </AnimatedSection>
-          </div>
-        </div>
-      </section>
-
-      {/* ============== HOW IT WORKS — VISUAL JOURNEY ============== */}
-      <section id="how-it-works" className="py-24 bg-background overflow-hidden">
-        <div className="container">
-          <AnimatedSection className="max-w-3xl mx-auto text-center space-y-6 mb-20">
-            <motion.h2 variants={fadeUp} className="text-4xl sm:text-5xl md:text-6xl font-bold">
-              Несколько <span className="gradient-gold-text">шагов</span> к заработку
-            </motion.h2>
-            <motion.p variants={fadeUp} custom={1} className="text-lg md:text-xl text-muted-foreground">
-              Простой и прозрачный процесс от рекомендации до получения вознаграждения
-            </motion.p>
-          </AnimatedSection>
-
-          {/* Visual Journey */}
-          <div className="relative max-w-6xl mx-auto">
-            {/* Desktop: horizontal timeline */}
-            <AnimatedSection className="hidden lg:block">
-              {/* Connecting line behind circles */}
-              <motion.div
-                variants={fadeUp}
-                className="absolute top-[60px] left-[12%] right-[12%] h-1 rounded-full overflow-hidden"
-              >
-                <div className="h-full bg-gradient-to-r from-[#1E293B] via-[#F97316] to-[#1E293B] opacity-25" />
-                <motion.div
-                  className="absolute top-0 left-0 h-full bg-gradient-to-r from-[#F97316] to-[#FB923C] rounded-full"
-                  initial={{ width: "0%" }}
-                  whileInView={{ width: "100%" }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 2, delay: 0.5, ease: "easeOut" }}
-                />
-              </motion.div>
-
-              <div className="flex items-start justify-between relative">
-                {[
-                  {
-                    icon: Stethoscope,
-                    title: "Пациент приходит к вам",
-                    desc: "К вам обращается пациент, которому нужна помощь узкого специалиста или клиника",
-                    step: 1
-                  },
-                  {
-                    icon: Send,
-                    title: "Вы рекомендуете клинику",
-                    desc: "Направляете пациента через Telegram-бот или личный кабинет — это занимает 2 минуты",
-                    step: 2
-                  },
-                  {
-                    icon: Building2,
-                    title: "Пациент получает лечение",
-                    desc: "В проверенной клинике-партнёре с лицензией. Мы отслеживаем весь путь пациента",
-                    step: 3
-                  },
-                  {
-                    icon: Banknote,
-                    title: "Вы получаете вознаграждение",
-                    desc: "До 10% от суммы лечения поступает на вашу карту. Вывод от 1 000 ₽ в любое время",
-                    step: 4
-                  }
-                ].map((item, i) => (
-                  <motion.div
-                    key={i}
-                    variants={fadeUp}
-                    custom={i}
-                    className="flex flex-col items-center text-center w-1/4 relative z-10 px-3"
-                  >
-                    {/* Icon circle */}
-                    <motion.div
-                      className="w-[120px] h-[120px] rounded-full bg-gradient-to-br from-[#1E293B] to-[#334155] flex items-center justify-center shadow-2xl mb-6 ring-4 ring-background relative"
-                      whileHover={{ scale: 1.1 }}
-                      transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                    >
-                      <item.icon className="w-12 h-12 text-[#F97316]" />
-                      {/* Step badge */}
-                      <div className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-[#F97316] flex items-center justify-center shadow-lg">
-                        <span className="text-white font-bold text-sm">{item.step}</span>
-                      </div>
-                    </motion.div>
-
-                    {/* Arrow between steps */}
-                    {i < 3 && (
-                      <motion.div
-                        className="absolute top-[52px] -right-3 z-20"
-                        initial={{ opacity: 0, x: -10 }}
-                        whileInView={{ opacity: 1, x: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ delay: 0.8 + i * 0.3 }}
-                      >
-                        <ArrowRight className="w-7 h-7 text-[#F97316]" />
-                      </motion.div>
-                    )}
-
-                    <h3 className="text-lg font-bold mb-2 leading-tight">{item.title}</h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
-                  </motion.div>
-                ))}
-              </div>
-            </AnimatedSection>
-
-            {/* Mobile + Tablet: vertical timeline */}
-            <AnimatedSection className="lg:hidden">
-              <div className="relative">
-                {/* Vertical connecting line */}
-                <div className="absolute left-[39px] top-0 bottom-0 w-0.5 bg-gradient-to-b from-[#1E293B] via-[#F97316] to-[#1E293B] opacity-25" />
-
-                <div className="space-y-10">
-                  {[
-                    {
-                      icon: Stethoscope,
-                      title: "Пациент приходит к вам",
-                      desc: "К вам обращается пациент, которому нужна помощь узкого специалиста или клиника",
-                      step: 1
-                    },
-                    {
-                      icon: Send,
-                      title: "Вы рекомендуете клинику",
-                      desc: "Направляете пациента через Telegram-бот или личный кабинет — это занимает 2 минуты",
-                      step: 2
-                    },
-                    {
-                      icon: Building2,
-                      title: "Пациент получает лечение",
-                      desc: "В проверенной клинике-партнёре с лицензией. Мы отслеживаем весь путь пациента",
-                      step: 3
-                    },
-                    {
-                      icon: Banknote,
-                      title: "Вы получаете вознаграждение",
-                      desc: "До 10% от суммы лечения поступает на вашу карту. Вывод от 1 000 ₽ в любое время",
-                      step: 4
-                    }
-                  ].map((item, i) => (
-                    <motion.div
-                      key={i}
-                      variants={fadeUp}
-                      custom={i}
-                      className="flex gap-5 items-start relative"
-                    >
-                      {/* Icon circle */}
-                      <div className="flex-shrink-0 w-20 h-20 rounded-full bg-gradient-to-br from-[#1E293B] to-[#334155] flex items-center justify-center shadow-xl relative z-10 ring-4 ring-background">
-                        <item.icon className="w-8 h-8 text-[#F97316]" />
-                        <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-[#F97316] flex items-center justify-center shadow-md">
-                          <span className="text-white font-bold text-xs">{item.step}</span>
-                        </div>
-                      </div>
-
-                      {/* Content */}
-                      <div className="flex-1 pt-2">
-                        <h3 className="text-lg font-bold mb-1">{item.title}</h3>
-                        <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-            </AnimatedSection>
-
-            {/* CTA under journey */}
-            <AnimatedSection className="text-center mt-16">
-              <motion.div variants={fadeUp}>
-                <Button
-                  size="lg"
-                  className="btn-premium text-[#1E293B] font-semibold text-lg h-14 px-8"
-                  onClick={() => window.open('https://t.me/docpartnerbot', '_blank')}
-                >
-                  <MessageSquare className="w-5 h-5 mr-2" />
-                  Начать работу
-                  <ArrowRight className="w-5 h-5 ml-2" />
-                </Button>
               </motion.div>
             </AnimatedSection>
           </div>
