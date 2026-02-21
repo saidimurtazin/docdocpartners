@@ -576,7 +576,8 @@ bot.on(message('text'), async (ctx) => {
         return;
       }
 
-      const availableBalanceKop = agent.totalEarnings || 0;
+      const { getAgentAvailableBalance } = await import('./db');
+      const availableBalanceKop = await getAgentAvailableBalance(agent.id);
       const availableBalance = availableBalanceKop / 100; // копейки → рубли
       const minPayout = 1000; // 1000 рублей
 
@@ -2548,9 +2549,9 @@ bot.command('payments', async (ctx) => {
     const totalEarned = agent.totalEarnings || 0; // in kopecks
     const totalEarnedRub = (totalEarned / 100).toFixed(2);
 
-    // For now, assume no payments have been made (no payments table integration yet)
-    const totalPaid = 0;
-    const available = totalEarned - totalPaid;
+    const { getAgentAvailableBalance, getAgentCompletedPaymentsSum } = await import('./db');
+    const totalPaid = await getAgentCompletedPaymentsSum(agent.id);
+    const available = await getAgentAvailableBalance(agent.id);
     const availableRub = (available / 100).toFixed(2);
 
     let message = '💰 <b>Мои выплаты</b>\n\n';
@@ -2903,7 +2904,9 @@ bot.action('cmd_request_payout', async (ctx) => {
     const [agent] = await db.select().from(agents).where(eq(agents.telegramId, userId.toString()));
     if (!agent) { await ctx.reply('Вы еще не зарегистрированы. Используйте /start'); return; }
 
-    const availableBalance = (agent.totalEarnings || 0) / 100;
+    const { getAgentAvailableBalance } = await import('./db');
+    const availableBalanceKop = await getAgentAvailableBalance(agent.id);
+    const availableBalance = availableBalanceKop / 100;
     const minPayout = 1000;
 
     let message = '💰 <b>Запрос выплаты</b>\n\n';
@@ -3116,12 +3119,6 @@ bot.action('payout_confirm_request', async (ctx) => {
     const [agent] = await db.select().from(agents).where(eq(agents.telegramId, userId.toString()));
     if (!agent) { await ctx.reply('Вы еще не зарегистрированы.'); return; }
 
-    const availableBalanceKop = agent.totalEarnings || 0;
-    if (availableBalanceKop < 100000) { // 1000 руб в копейках
-      await ctx.reply('⚠️ Недостаточно средств для вывода.');
-      return;
-    }
-
     // Check requisites based on payout method
     const payoutMethod = agent.payoutMethod || 'card';
     const hasRequisites = agent.inn && (
@@ -3134,26 +3131,35 @@ bot.action('payout_confirm_request', async (ctx) => {
       return;
     }
 
-    // Check for existing pending payments
-    const existingPayments = await db.select().from(schema.payments)
-      .where(eq(schema.payments.agentId, agent.id));
-    const hasPending = existingPayments.some(p => p.status === 'pending' || p.status === 'processing');
-    if (hasPending) {
-      await ctx.reply(
-        '⚠️ <b>У вас уже есть необработанная заявка на выплату.</b>\n\n' +
-        'Дождитесь её обработки перед созданием новой.',
-        { parse_mode: 'HTML' }
-      );
+    // Use transactional payout with locking to prevent race conditions
+    const { createPaymentWithLock, getAgentAvailableBalance } = await import('./db');
+    const availableBalanceKop = await getAgentAvailableBalance(agent.id);
+
+    if (availableBalanceKop < 100000) { // 1000 руб в копейках
+      await ctx.reply('⚠️ Недостаточно средств для вывода.');
       return;
     }
 
-    // Create payment request
-    await db.insert(schema.payments).values({
-      agentId: agent.id,
-      amount: availableBalanceKop,
-      status: 'pending',
-      createdAt: new Date(),
-    });
+    try {
+      await createPaymentWithLock(agent.id, {
+        amount: availableBalanceKop,
+      });
+    } catch (err: any) {
+      const errMsg = (err as Error).message || '';
+      if (errMsg.includes('Недостаточно средств')) {
+        await ctx.reply('⚠️ Недостаточно средств для вывода.');
+        return;
+      }
+      if (errMsg.includes('необработанная заявка')) {
+        await ctx.reply(
+          '⚠️ <b>У вас уже есть необработанная заявка на выплату.</b>\n\n' +
+          'Дождитесь её обработки перед созданием новой.',
+          { parse_mode: 'HTML' }
+        );
+        return;
+      }
+      throw err;
+    }
 
     const availableBalance = availableBalanceKop / 100;
 
@@ -3244,7 +3250,8 @@ bot.action('payout_confirm_requisites', async (ctx) => {
     session.registrationStep = undefined;
     session.tempData = {};
 
-    const availableBalance = (agent.totalEarnings || 0) / 100;
+    const { getAgentAvailableBalance: getAvailBal } = await import('./db');
+    const availableBalance = (await getAvailBal(agent.id)) / 100;
     const seLabel = data.payoutSelfEmployed === 'yes' ? 'Да' : 'Нет';
     let methodInfo = '';
     if (method === 'card') {
@@ -3407,14 +3414,18 @@ bot.action('cmd_payments', async (ctx) => {
       return;
     }
 
-    const payments = await db.select().from(schema.payments)
+    const agentPayments = await db.select().from(schema.payments)
       .where(eq(schema.payments.agentId, agent.id));
 
-    if (payments.length === 0) {
+    const { getAgentAvailableBalance: getAvailBalance } = await import('./db');
+    const availBalKop = await getAvailBalance(agent.id);
+    const availBalRub = (availBalKop / 100).toLocaleString('ru-RU');
+
+    if (agentPayments.length === 0) {
       await ctx.reply(
         '💰 <b>Мои выплаты</b>\n\n' +
         'У вас пока нет выплат.\n\n' +
-        `💵 Доступно к выводу: <b>${((agent.totalEarnings || 0) / 100).toLocaleString('ru-RU')} ₽</b>\n\n` +
+        `💵 Доступно к выводу: <b>${availBalRub} ₽</b>\n\n` +
         '💡 Минимальная сумма вывода: 1 000 ₽',
         { parse_mode: 'HTML' }
       );
@@ -3422,13 +3433,13 @@ bot.action('cmd_payments', async (ctx) => {
     }
 
     let message = '💰 <b>Мои выплаты</b>\n\n';
-    payments.slice(0, 5).forEach((payment) => {
+    agentPayments.slice(0, 5).forEach((payment) => {
       const statusEmoji = payment.status === 'completed' ? '✅' : payment.status === 'pending' ? '⏳' : '🔄';
       message += `${statusEmoji} <b>${(payment.amount / 100).toLocaleString('ru-RU')} ₽</b>\n`;
       message += `   Статус: ${payment.status}\n\n`;
     });
 
-    message += `\n💵 Доступно к выводу: <b>${((agent.totalEarnings || 0) / 100).toLocaleString('ru-RU')} ₽</b>`;
+    message += `\n💵 Доступно к выводу: <b>${availBalRub} ₽</b>`;
 
     await ctx.reply(message, { parse_mode: 'HTML' });
   } catch (error) {

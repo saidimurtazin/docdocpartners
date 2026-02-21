@@ -281,9 +281,10 @@ export const appRouter = router({
 
         if (staffUser && STAFF_ROLES.includes(staffUser.role as StaffRole)) {
           // Generate OTP for staff
-          const code = Math.floor(100000 + Math.random() * 900000).toString();
-          const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-          console.log("[RequestOTP] Staff OTP request for:", input.email, "role:", staffUser.role, "telegramId:", staffUser.telegramId || "none");
+          const crypto = await import("crypto");
+          const code = crypto.randomInt(100000, 1000000).toString();
+          const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+          if (process.env.NODE_ENV !== "production") console.log('[RequestOTP] Staff code generated for', input.email);
 
           // Save OTP to database
           const dbInstance = await db.getDb();
@@ -295,6 +296,13 @@ export const appRouter = router({
           }
 
           const { otpCodes: otpCodesTable } = await import("../drizzle/schema");
+          const { eq: eqOtp, and: andOtp } = await import("drizzle-orm");
+
+          // Invalidate existing unused OTPs for this email
+          await dbInstance.update(otpCodesTable)
+            .set({ used: "yes" })
+            .where(andOtp(eqOtp(otpCodesTable.email, input.email), eqOtp(otpCodesTable.used, "no")));
+
           await dbInstance.insert(otpCodesTable).values({
             email: input.email,
             code,
@@ -1755,86 +1763,11 @@ DocPartner — B2B-платформа агентских рекомендаци�
     }),
   }),
 
-  // BOT API - Public endpoints for Telegram bot integration
+  // BOT API - Limited public endpoints for client integration
+  // NOTE: Bot itself uses DB directly (telegram-bot-webhook.ts), NOT these tRPC endpoints
+  // TODO: Migrate AgentCabinet.tsx to use agentProcedure-based endpoints instead of bot.*
   bot: router({
-    // Register new agent
-    registerAgent: publicProcedure
-      .input(z.object({
-        telegramId: z.string(),
-        fullName: z.string(),
-        email: z.string().email(),
-        phone: z.string(),
-        role: z.string(),
-        city: z.string(),
-        specialization: z.string().optional(),
-        referredBy: z.string().optional(),
-        excludedClinics: z.string().optional(), // JSON array of clinic IDs
-      }))
-      .mutation(async ({ input }) => {
-        // Generate referralCode if not present
-        const crypto = await import("crypto");
-        const referralCode = crypto.randomBytes(6).toString("hex");
-        const agent = await db.createAgent({ ...input, referralCode });
-        return { success: true, agent };
-      }),
-
-    // Create referral and send email notification
-    createReferral: publicProcedure
-      .input(z.object({
-        telegramId: z.string(),
-        patientFullName: z.string(),
-        patientBirthdate: z.string(),
-        patientCity: z.string().optional(),
-        patientPhone: z.string().optional(),
-        patientEmail: z.string().optional(),
-        clinic: z.string().optional(),
-      }))
-      .mutation(async ({ input }) => {
-        // Find agent by telegram ID
-        const agent = await db.getAgentByTelegramId(input.telegramId);
-        if (!agent) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Agent not found" });
-        }
-
-        // Create referral
-        const referralId = await db.createReferral({
-          agentId: agent.id,
-          patientFullName: input.patientFullName,
-          patientBirthdate: input.patientBirthdate,
-          patientCity: input.patientCity,
-          patientPhone: input.patientPhone,
-          patientEmail: input.patientEmail,
-          clinic: input.clinic,
-        });
-
-        // Send email notification to clinic
-        const { sendReferralNotification } = await import("./email");
-        await sendReferralNotification({
-          to: "said.murtazin@mail.ru",
-          referralId,
-          agentName: agent.fullName,
-          patientName: input.patientFullName,
-          patientBirthdate: input.patientBirthdate,
-          patientCity: input.patientCity,
-          patientPhone: input.patientPhone,
-          patientEmail: input.patientEmail,
-          clinic: input.clinic,
-        });
-
-        // Auto-create task for new referral
-        try {
-          await autoCreateTaskForReferral(referralId, "new", {
-            patientFullName: input.patientFullName,
-            agentId: agent.id,
-          });
-        } catch (err) {
-          console.error("[Bot] Failed to auto-create task:", err);
-        }
-
-        return { success: true, referralId };
-      }),
-
-    // Get agent by telegram ID
+    // Get agent by telegram ID (used by AgentCabinet.tsx)
     getAgent: publicProcedure
       .input(z.object({ telegramId: z.string() }))
       .query(async ({ input }) => {
@@ -1842,101 +1775,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
         return { agent };
       }),
 
-    // Update agent requisites (INN, bank details, card, SBP)
-    updateRequisites: publicProcedure
-      .input(z.object({
-        telegramId: z.string(),
-        inn: z.string(),
-        isSelfEmployed: z.enum(["yes", "no", "unknown"]),
-        payoutMethod: z.enum(["card", "sbp", "bank_account"]).optional(),
-        cardNumber: z.string().optional(),
-        bankName: z.string().optional(),
-        bankAccount: z.string().optional(),
-        bankBik: z.string().optional(),
-      }))
-      .mutation(async ({ input }) => {
-        const agent = await db.getAgentByTelegramId(input.telegramId);
-        if (!agent) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Agent not found" });
-        }
-
-        await db.updateAgentRequisites(agent.id, {
-          inn: input.inn,
-          isSelfEmployed: input.isSelfEmployed,
-          ...(input.payoutMethod && { payoutMethod: input.payoutMethod }),
-          ...(input.cardNumber && { cardNumber: input.cardNumber }),
-          ...(input.bankName && { bankName: input.bankName }),
-          ...(input.bankAccount && { bankAccount: input.bankAccount }),
-          ...(input.bankBik && { bankBik: input.bankBik }),
-        });
-
-        return { success: true };
-      }),
-
-    // Get agent referrals
-    getAgentReferrals: publicProcedure
-      .input(z.object({ telegramId: z.string() }))
-      .query(async ({ input }) => {
-        const agent = await db.getAgentByTelegramId(input.telegramId);
-        if (!agent) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Agent not found" });
-        }
-
-        const referrals = await db.getReferralsByAgentId(agent.id);
-        return { referrals };
-      }),
-
-    // Get agent payments
-    getAgentPayments: publicProcedure
-      .input(z.object({ telegramId: z.string() }))
-      .query(async ({ input }) => {
-        const agent = await db.getAgentByTelegramId(input.telegramId);
-        if (!agent) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Agent not found" });
-        }
-
-        const payments = await db.getPaymentsByAgentId(agent.id);
-        return { payments };
-      }),
-
-    // Request payout
-    requestPayout: publicProcedure
-      .input(z.object({
-        telegramId: z.string(),
-        amount: z.number(),
-      }))
-      .mutation(async ({ input }) => {
-        const agent = await db.getAgentByTelegramId(input.telegramId);
-        if (!agent) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Agent not found" });
-        }
-
-        // Check if agent has complete requisites
-        if (!agent.inn || !agent.bankAccount || !agent.bankName || !agent.bankBik) {
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: "Заполните все реквизиты (ИНН, банк, счёт, БИК) перед запросом выплаты"
-          });
-        }
-
-        // Check minimum amount
-        if (input.amount < 100000) { // 1000 RUB in kopecks
-          throw new TRPCError({ 
-            code: "BAD_REQUEST", 
-            message: "Minimum payout amount is 1000 RUB" 
-          });
-        }
-
-        const paymentId = await db.createPayment({
-          agentId: agent.id,
-          amount: input.amount,
-          status: "pending",
-        });
-
-        return { success: true, paymentId };
-      }),
-
-    // Get agent statistics
+    // Get agent statistics (used by AgentCabinet.tsx)
     getAgentStatistics: publicProcedure
       .input(z.object({ telegramId: z.string() }))
       .query(async ({ input }) => {

@@ -1,4 +1,4 @@
-import { boolean, double, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { boolean, double, index, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -85,7 +85,12 @@ export const agents = mysqlTable("agents", {
   commissionOverride: text("commissionOverride"), // JSON: [{minMonthlyRevenue: number, commissionRate: number}] — индивидуальные тарифы
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (table) => [
+  index("agents_email_idx").on(table.email),
+  index("agents_phone_idx").on(table.phone),
+  index("agents_status_idx").on(table.status),
+  index("agents_referred_by_idx").on(table.referredBy),
+]);
 
 export type Agent = typeof agents.$inferSelect;
 export type InsertAgent = typeof agents.$inferInsert;
@@ -110,7 +115,12 @@ export const referrals = mysqlTable("referrals", {
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (table) => [
+  index("referrals_agent_id_idx").on(table.agentId),
+  index("referrals_status_idx").on(table.status),
+  index("referrals_treatment_month_idx").on(table.treatmentMonth),
+  index("referrals_agent_status_idx").on(table.agentId, table.status),
+]);
 
 export type Referral = typeof referrals.$inferSelect;
 export type InsertReferral = typeof referrals.$inferInsert;
@@ -142,7 +152,11 @@ export const payments = mysqlTable("payments", {
   completedAt: timestamp("completedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (table) => [
+  index("payments_agent_id_idx").on(table.agentId),
+  index("payments_status_idx").on(table.status),
+  index("payments_agent_status_idx").on(table.agentId, table.status),
+]);
 
 export type Payment = typeof payments.$inferSelect;
 export type InsertPayment = typeof payments.$inferInsert;
@@ -157,7 +171,10 @@ export const otpCodes = mysqlTable("otpCodes", {
   expiresAt: timestamp("expiresAt").notNull(),
   used: mysqlEnum("used", ["yes", "no"]).default("no").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => [
+  index("otp_codes_email_idx").on(table.email),
+  index("otp_codes_email_used_idx").on(table.email, table.used),
+]);
 
 export type OtpCode = typeof otpCodes.$inferSelect;
 export type InsertOtpCode = typeof otpCodes.$inferInsert;
@@ -176,7 +193,9 @@ export const sessions = mysqlTable("sessions", {
   expiresAt: timestamp("expiresAt").notNull(),
   isRevoked: mysqlEnum("isRevoked", ["yes", "no"]).default("no").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => [
+  index("sessions_agent_id_idx").on(table.agentId),
+]);
 
 export type Session = typeof sessions.$inferSelect;
 export type InsertSession = typeof sessions.$inferInsert;
@@ -250,7 +269,11 @@ export const clinicReports = mysqlTable("clinic_reports", {
 
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (table) => [
+  index("clinic_reports_referral_id_idx").on(table.referralId),
+  index("clinic_reports_clinic_id_idx").on(table.clinicId),
+  index("clinic_reports_status_idx").on(table.status),
+]);
 
 export type ClinicReport = typeof clinicReports.$inferSelect;
 export type InsertClinicReport = typeof clinicReports.$inferInsert;
@@ -302,7 +325,10 @@ export const paymentActs = mysqlTable("payment_acts", {
 
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (table) => [
+  index("payment_acts_payment_id_idx").on(table.paymentId),
+  index("payment_acts_agent_id_idx").on(table.agentId),
+]);
 
 export type PaymentAct = typeof paymentActs.$inferSelect;
 export type InsertPaymentAct = typeof paymentActs.$inferInsert;
@@ -338,7 +364,11 @@ export const tasks = mysqlTable("tasks", {
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (table) => [
+  index("tasks_status_idx").on(table.status),
+  index("tasks_referral_id_idx").on(table.referralId),
+  index("tasks_assigned_to_idx").on(table.assignedTo),
+]);
 
 export type Task = typeof tasks.$inferSelect;
 export type InsertTask = typeof tasks.$inferInsert;

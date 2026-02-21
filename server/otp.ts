@@ -19,6 +19,11 @@ export async function createAndSendOTP(email: string, purpose: 'registration' | 
     const db = await getDb();
     if (!db) throw new Error("Database not available");
 
+    // Invalidate any existing unused OTPs for this email
+    await db.update(otpCodes)
+      .set({ used: "yes" })
+      .where(and(eq(otpCodes.email, email), eq(otpCodes.used, "no")));
+
     await db.insert(otpCodes).values({
       email,
       code,
