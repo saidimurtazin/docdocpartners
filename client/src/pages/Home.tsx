@@ -36,7 +36,8 @@ import {
 import { Link } from "wouter";
 import DoctorChatbot from "@/components/DoctorChatbot";
 import Logo from "@/components/Logo";
-import { useRef } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
+import useEmblaCarousel from "embla-carousel-react";
 import { motion, useInView, useScroll, useTransform } from "framer-motion";
 import AnimatedCounter from "@/components/AnimatedCounter";
 import ParticleBackground from "@/components/ParticleBackground";
@@ -78,6 +79,67 @@ function AnimatedSection({ children, className = "" }: { children: React.ReactNo
     >
       {children}
     </motion.div>
+  );
+}
+
+// Benefits carousel for mobile — swipeable cards
+function BenefitsCarousel() {
+  const benefits = [
+    { icon: Shield, title: "Полная легальность", description: "Все выплаты проходят через официальный договор. Вы работаете как самозанятый или физ. лицо." },
+    { icon: TrendingUp, title: "Прозрачная система", description: "Отслеживайте статус каждой рекомендации в реальном времени через Telegram-бот." },
+    { icon: Wallet, title: "Быстрые выплаты", description: "Минимальная сумма вывода — 1000 руб. Выплаты в течение 3 рабочих дней." },
+    { icon: Star, title: "Проверенные клиники", description: "Работаем только с лицензированными медицинскими учреждениями с хорошей репутацией." },
+    { icon: BarChart3, title: "Детальная статистика", description: "Полная аналитика по вашим рекомендациям, заработку и бонусным баллам." },
+    { icon: FileText, title: "База знаний", description: "Подробные инструкции, FAQ и поддержка на каждом этапе работы." },
+  ];
+
+  const [emblaRef, emblaApi] = useEmblaCarousel({ align: "start", loop: false, dragFree: true });
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const onSelect = useCallback(() => {
+    if (!emblaApi) return;
+    setActiveIndex(emblaApi.selectedScrollSnap());
+  }, [emblaApi]);
+
+  useEffect(() => {
+    if (!emblaApi) return;
+    onSelect();
+    emblaApi.on("select", onSelect);
+    return () => { emblaApi.off("select", onSelect); };
+  }, [emblaApi, onSelect]);
+
+  return (
+    <div className="md:hidden">
+      <div className="overflow-hidden -mx-4 px-4" ref={emblaRef}>
+        <div className="flex gap-4">
+          {benefits.map((benefit, index) => (
+            <div key={index} className="flex-[0_0_80%] min-w-0">
+              <Card className="glass-card border-2 border-white/20 h-full card-glow">
+                <CardContent className="pt-8 pb-6 space-y-4">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#F97316] to-[#FB923C] flex items-center justify-center shadow-lg">
+                    <benefit.icon className="w-6 h-6 text-[#1E293B]" />
+                  </div>
+                  <h3 className="text-lg font-bold">{benefit.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{benefit.description}</p>
+                </CardContent>
+              </Card>
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Dot indicators */}
+      <div className="flex justify-center gap-1.5 mt-6">
+        {benefits.map((_, index) => (
+          <button
+            key={index}
+            className={`w-2 h-2 rounded-full transition-all ${
+              index === activeIndex ? "bg-[#F97316] w-6" : "bg-[#F97316]/25"
+            }`}
+            onClick={() => emblaApi?.scrollTo(index)}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -287,20 +349,16 @@ export default function Home() {
           <div className="relative max-w-6xl mx-auto">
             {/* Desktop: horizontal timeline */}
             <AnimatedSection className="hidden lg:block">
-              {/* Connecting line behind circles */}
-              <motion.div
-                variants={fadeUp}
-                className="absolute top-[60px] left-[12%] right-[12%] h-1 rounded-full overflow-hidden"
-              >
-                <div className="h-full bg-gradient-to-r from-[#1E293B] via-[#F97316] to-[#1E293B] opacity-25" />
+              {/* Connecting line behind circles — centered on 120px icon circles */}
+              <div className="absolute top-[60px] left-[12%] right-[12%] h-[3px] rounded-full bg-[#F97316]/15 overflow-hidden">
                 <motion.div
-                  className="absolute top-0 left-0 h-full bg-gradient-to-r from-[#F97316] to-[#FB923C] rounded-full"
+                  className="h-full bg-gradient-to-r from-[#F97316] via-[#FB923C] to-[#F97316] rounded-full"
                   initial={{ width: "0%" }}
                   whileInView={{ width: "100%" }}
                   viewport={{ once: true }}
-                  transition={{ duration: 2, delay: 0.5, ease: "easeOut" }}
+                  transition={{ duration: 2.5, delay: 0.3, ease: "easeOut" }}
                 />
-              </motion.div>
+              </div>
 
               <div className="flex items-start justify-between relative">
                 {[
@@ -348,19 +406,6 @@ export default function Home() {
                       </div>
                     </motion.div>
 
-                    {/* Arrow between steps */}
-                    {i < 3 && (
-                      <motion.div
-                        className="absolute top-[52px] -right-3 z-20"
-                        initial={{ opacity: 0, x: -10 }}
-                        whileInView={{ opacity: 1, x: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ delay: 0.8 + i * 0.3 }}
-                      >
-                        <ArrowRight className="w-7 h-7 text-[#F97316]" />
-                      </motion.div>
-                    )}
-
                     <h3 className="text-lg font-bold mb-2 leading-tight">{item.title}</h3>
                     <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
                   </motion.div>
@@ -371,8 +416,16 @@ export default function Home() {
             {/* Mobile + Tablet: vertical timeline */}
             <AnimatedSection className="lg:hidden">
               <div className="relative">
-                {/* Vertical connecting line */}
-                <div className="absolute left-[39px] top-0 bottom-0 w-0.5 bg-gradient-to-b from-[#1E293B] via-[#F97316] to-[#1E293B] opacity-25" />
+                {/* Vertical connecting line — animated */}
+                <div className="absolute left-[39px] top-0 bottom-0 w-[3px] rounded-full bg-[#F97316]/15 overflow-hidden">
+                  <motion.div
+                    className="w-full bg-gradient-to-b from-[#F97316] via-[#FB923C] to-[#F97316] rounded-full"
+                    initial={{ height: "0%" }}
+                    whileInView={{ height: "100%" }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 2.5, delay: 0.3, ease: "easeOut" }}
+                  />
+                </div>
 
                 <div className="space-y-10">
                   {[
@@ -645,7 +698,8 @@ export default function Home() {
             </motion.h2>
           </AnimatedSection>
 
-          <AnimatedSection className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 max-w-7xl mx-auto">
+          {/* Desktop: grid layout */}
+          <AnimatedSection className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 max-w-7xl mx-auto">
             {[
               { icon: Shield, title: "Полная легальность", description: "Все выплаты проходят через официальный договор. Вы работаете как самозанятый или физ. лицо." },
               { icon: TrendingUp, title: "Прозрачная система", description: "Отслеживайте статус каждой рекомендации в реальном времени через Telegram-бот." },
@@ -667,6 +721,9 @@ export default function Home() {
               </motion.div>
             ))}
           </AnimatedSection>
+
+          {/* Mobile: swipeable carousel */}
+          <BenefitsCarousel />
         </div>
       </section>
 
