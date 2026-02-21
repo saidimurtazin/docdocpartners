@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import Logo from "@/components/Logo";
 import {
   Shield,
   FileCheck,
@@ -25,12 +26,9 @@ export default function KnowledgeBase() {
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-lg">M</span>
-            </div>
-            <span className="font-bold text-xl">DocPartner</span>
-          </div>
+          <a href="/" className="flex items-center gap-2">
+            <Logo size={32} />
+          </a>
           <nav className="hidden md:flex items-center gap-6">
             <a href="/" className="text-sm font-medium hover:text-primary transition-colors">Главная</a>
             <a href="/knowledge-base" className="text-sm font-medium text-primary">База знаний</a>
@@ -44,7 +42,7 @@ export default function KnowledgeBase() {
         <div className="container">
           <div className="max-w-3xl mx-auto text-center space-y-4">
             <Badge className="mb-4">База знаний</Badge>
-            <h1 className="text-4xl md:text-5xl font-bold">Всё о программе DocPartner</h1>
+            <h1 className="text-4xl md:text-5xl font-bold">Всё о программе Doc Partner</h1>
             <p className="text-xl text-muted-foreground">
               Полная информация о том, как работает партнерская программа, гарантии выплат и процесс сотрудничества
             </p>
@@ -70,7 +68,7 @@ export default function KnowledgeBase() {
               <CardContent className="space-y-6">
                 <div className="prose prose-sm max-w-none">
                   <p className="text-muted-foreground leading-relaxed">
-                    DocPartner гарантирует выплату вознаграждения за каждого успешно направленного пациента. 
+                    Doc Partner гарантирует выплату вознаграждения за каждого успешно направленного пациента. 
                     Выплата производится после подтверждения клиникой факта оказания услуг и получения оплаты от пациента.
                   </p>
                 </div>
@@ -444,7 +442,7 @@ export default function KnowledgeBase() {
                     </li>
                     <li className="flex gap-3">
                       <span className="flex-shrink-0 font-semibold text-primary">4.</span>
-                      <span>Добавьте ИНН в профиль DocPartner через бот @docpartnerbot</span>
+                      <span>Добавьте ИНН в профиль Doc Partner через бот @docpartnerbot</span>
                     </li>
                   </ol>
                 </div>
