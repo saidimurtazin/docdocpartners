@@ -971,10 +971,22 @@ DocPartner — B2B-платформа агентских рекомендаци�
 
     // AGENTS
     agents: router({
-      list: protectedProcedure.query(async ({ ctx }) => {
-        checkRole(ctx, "admin", "support");
-        return db.getAllAgents();
-      }),
+      list: protectedProcedure
+        .input(z.object({
+          page: z.number().min(1).optional(),
+          pageSize: z.number().min(1).max(100).optional(),
+        }).optional())
+        .query(async ({ ctx, input }) => {
+          checkRole(ctx, "admin", "support");
+          if (input?.page && input?.pageSize) {
+            const [data, total] = await Promise.all([
+              db.getAllAgents({ page: input.page, pageSize: input.pageSize }),
+              db.getAgentsCount(),
+            ]);
+            return { data, total, page: input.page, pageSize: input.pageSize };
+          }
+          return db.getAllAgents();
+        }),
       getById: protectedProcedure
         .input(z.object({ id: z.number() }))
         .query(async ({ ctx, input }) => {
@@ -1079,10 +1091,22 @@ DocPartner — B2B-платформа агентских рекомендаци�
 
     // REFERRALS
     referrals: router({
-      list: protectedProcedure.query(async ({ ctx }) => {
-        checkRole(ctx, "admin", "support");
-        return db.getAllReferrals();
-      }),
+      list: protectedProcedure
+        .input(z.object({
+          page: z.number().min(1).optional(),
+          pageSize: z.number().min(1).max(100).optional(),
+        }).optional())
+        .query(async ({ ctx, input }) => {
+          checkRole(ctx, "admin", "support");
+          if (input?.page && input?.pageSize) {
+            const [data, total] = await Promise.all([
+              db.getAllReferrals({ page: input.page, pageSize: input.pageSize }),
+              db.getReferralsCount(),
+            ]);
+            return { data, total, page: input.page, pageSize: input.pageSize };
+          }
+          return db.getAllReferrals();
+        }),
       getById: protectedProcedure
         .input(z.object({ id: z.number() }))
         .query(async ({ ctx, input }) => {
@@ -1149,10 +1173,22 @@ DocPartner — B2B-платформа агентских рекомендаци�
 
     // PAYMENTS
     payments: router({
-      list: protectedProcedure.query(async ({ ctx }) => {
-        checkRole(ctx, "admin", "accountant");
-        return db.getAllPayments();
-      }),
+      list: protectedProcedure
+        .input(z.object({
+          page: z.number().min(1).optional(),
+          pageSize: z.number().min(1).max(100).optional(),
+        }).optional())
+        .query(async ({ ctx, input }) => {
+          checkRole(ctx, "admin", "accountant");
+          if (input?.page && input?.pageSize) {
+            const [data, total] = await Promise.all([
+              db.getAllPayments({ page: input.page, pageSize: input.pageSize }),
+              db.getPaymentsCount(),
+            ]);
+            return { data, total, page: input.page, pageSize: input.pageSize };
+          }
+          return db.getAllPayments();
+        }),
       updateStatus: protectedProcedure
         .input(z.object({
           id: z.number(),
