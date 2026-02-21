@@ -244,8 +244,10 @@ export async function parseClinicEmail(
 
     console.log(`[ClinicParser] Extracted ${patients.length} patient reports`);
     return patients;
-  } catch (error) {
-    console.error("[ClinicParser] AI parsing error:", error);
-    return [];
+  } catch (error: any) {
+    const msg = error?.message || String(error);
+    console.error(`[ClinicParser] AI parsing FAILED: ${msg}`);
+    // Return sentinel value so processor can distinguish "AI crashed" from "no patients"
+    return [{ patientName: "__AI_PARSE_FAILED__", clinicName: "", visitDate: "", treatmentAmount: 0, services: [], confidence: 0 }];
   }
 }

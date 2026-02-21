@@ -49,8 +49,12 @@ export async function processNewClinicEmails(): Promise<ProcessResult> {
         // 4. Parse with AI (pass attachments for multimodal processing)
         const patients = await parseClinicEmail(email.textBody, email.from, email.subject, email.attachments);
 
-        if (patients.length === 0) {
+        // Check if AI parsing failed (sentinel value)
+        const aiParseFailed = patients.length === 1 && patients[0].patientName === "__AI_PARSE_FAILED__";
+
+        if (patients.length === 0 || aiParseFailed) {
           // Save the email anyway with empty extraction (for admin review)
+          const status = aiParseFailed ? "ai_parse_failed" as any : "pending_review";
           await db.createClinicReport({
             clinicId: senderClinic.clinicId,
             emailFrom: email.from,
@@ -63,11 +67,15 @@ export async function processNewClinicEmails(): Promise<ProcessResult> {
             treatmentAmount: 0,
             services: "[]",
             clinicName: senderClinic.clinicName,
-            status: "pending_review",
+            status,
             aiConfidence: 0,
             matchConfidence: 0,
           });
           result.created++;
+          if (aiParseFailed) {
+            console.warn(`[Processor] AI parsing failed for email ${email.messageId} — saved with status "ai_parse_failed"`);
+            result.errors++;
+          }
           continue;
         }
 

@@ -167,7 +167,23 @@ export default function AdminAgents() {
         <Card>
           <CardHeader>
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <CardTitle>Все агенты ({filtered.length})</CardTitle>
+              <div className="flex items-center gap-3">
+                <CardTitle>Все агенты ({filtered.length})</CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExport}
+                  disabled={exportAgents.isPending}
+                  className="hidden sm:inline-flex"
+                >
+                  {exportAgents.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  <span className="ml-1.5">Экспорт</span>
+                </Button>
+              </div>
               <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -198,36 +214,36 @@ export default function AdminAgents() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ID</TableHead>
+                    <TableHead className="hidden lg:table-cell">ID</TableHead>
                     <TableHead>ФИО</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Телефон</TableHead>
-                    <TableHead>Роль</TableHead>
-                    <TableHead>Город</TableHead>
+                    <TableHead className="hidden md:table-cell">Email</TableHead>
+                    <TableHead className="hidden md:table-cell">Телефон</TableHead>
+                    <TableHead className="hidden xl:table-cell">Роль</TableHead>
+                    <TableHead className="hidden xl:table-cell">Город</TableHead>
                     <TableHead>Статус</TableHead>
-                    <TableHead>Рекомендаций</TableHead>
-                    <TableHead>Заработано</TableHead>
-                    <TableHead>Реквизиты</TableHead>
-                    <TableHead>Исключения</TableHead>
-                    <TableHead>Дата регистрации</TableHead>
+                    <TableHead className="hidden lg:table-cell">Рекомендаций</TableHead>
+                    <TableHead className="hidden lg:table-cell">Заработано</TableHead>
+                    <TableHead className="hidden xl:table-cell">Реквизиты</TableHead>
+                    <TableHead className="hidden xl:table-cell">Исключения</TableHead>
+                    <TableHead className="hidden lg:table-cell">Дата регистрации</TableHead>
                     <TableHead>Действия</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {visible.map((agent) => (
                     <TableRow key={agent.id}>
-                      <TableCell>{agent.id}</TableCell>
+                      <TableCell className="hidden lg:table-cell">{agent.id}</TableCell>
                       <TableCell className="font-medium">{agent.fullName}</TableCell>
-                      <TableCell>{agent.email || "—"}</TableCell>
-                      <TableCell>{agent.phone || "—"}</TableCell>
-                      <TableCell>{agent.role || "—"}</TableCell>
-                      <TableCell>{agent.city || "—"}</TableCell>
+                      <TableCell className="hidden md:table-cell">{agent.email || "—"}</TableCell>
+                      <TableCell className="hidden md:table-cell">{agent.phone || "—"}</TableCell>
+                      <TableCell className="hidden xl:table-cell">{agent.role || "—"}</TableCell>
+                      <TableCell className="hidden xl:table-cell">{agent.city || "—"}</TableCell>
                       <TableCell>{getStatusBadge(agent.status)}</TableCell>
-                      <TableCell>{agent.totalReferrals}</TableCell>
-                      <TableCell>
+                      <TableCell className="hidden lg:table-cell">{agent.totalReferrals}</TableCell>
+                      <TableCell className="hidden lg:table-cell">
                         {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB" }).format((agent.totalEarnings || 0) / 100)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden xl:table-cell">
                         {agent.inn || agent.bankAccount || (agent as any).cardNumber ? (
                           <div className="text-xs space-y-0.5">
                             <div>ИНН: {agent.inn || "—"}</div>
@@ -259,7 +275,7 @@ export default function AdminAgents() {
                           <span className="text-muted-foreground">Не указаны</span>
                         )}
                       </TableCell>
-                      <TableCell className="max-w-[200px]">
+                      <TableCell className="hidden xl:table-cell max-w-[200px]">
                         {(() => {
                           const excluded = getExcludedClinicNames((agent as any).excludedClinics);
                           if (excluded.length === 0) return <span className="text-muted-foreground text-xs">—</span>;
@@ -282,7 +298,7 @@ export default function AdminAgents() {
                           );
                         })()}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden lg:table-cell">
                         {agent.createdAt ? format(new Date(agent.createdAt), "dd.MM.yyyy", { locale: ru }) : "—"}
                       </TableCell>
                       <TableCell>

@@ -2,7 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Users, FileText, Wallet, TrendingUp, Calendar, Building2, Award } from "lucide-react";
+import { Loader2, Users, FileText, Wallet, TrendingUp, Calendar, Building2, Award, AlertTriangle } from "lucide-react";
 import { useLocation } from "wouter";
 import { useMemo } from "react";
 import AdminLayoutWrapper from "@/components/AdminLayoutWrapper";
@@ -21,18 +21,21 @@ export default function AdminDashboard() {
   );
 
   // Get statistics
-  const { data: stats, isLoading: loadingStats } = trpc.admin.statistics.useQuery(undefined, {
+  const { data: stats, isLoading: loadingStats, error: statsError } = trpc.admin.statistics.useQuery(undefined, {
     enabled: !!user && user.role === "admin",
+    retry: 1,
   });
-  
+
   // Get all referrals for charts
-  const { data: allReferrals, isLoading: loadingReferrals } = trpc.admin.referrals.list.useQuery(undefined, {
+  const { data: allReferrals, isLoading: loadingReferrals, error: referralsError } = trpc.admin.referrals.list.useQuery(undefined, {
     enabled: !!user && user.role === "admin",
+    retry: 1,
   });
 
   // Get all agents for top performers
-  const { data: allAgents, isLoading: loadingAgents } = trpc.admin.agents.list.useQuery(undefined, {
+  const { data: allAgents, isLoading: loadingAgents, error: agentsError } = trpc.admin.agents.list.useQuery(undefined, {
     enabled: !!user && user.role === "admin",
+    retry: 1,
   });
 
   // Calculate referrals by status
@@ -163,6 +166,21 @@ export default function AdminDashboard() {
     <AdminLayoutWrapper>
     <div className="min-h-screen bg-background">
       <div className="container py-8 space-y-8">
+        {/* Error Banner */}
+        {(statsError || referralsError || agentsError) && (
+          <Card className="border-destructive bg-destructive/5">
+            <CardContent className="flex items-center gap-3 py-4">
+              <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0" />
+              <div>
+                <p className="font-medium text-destructive">Ошибка загрузки данных</p>
+                <p className="text-sm text-muted-foreground">
+                  {statsError?.message || referralsError?.message || agentsError?.message || "Не удалось загрузить данные. Попробуйте обновить страницу."}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Statistics Cards */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <Card>

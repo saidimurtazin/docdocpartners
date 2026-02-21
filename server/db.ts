@@ -482,9 +482,9 @@ export async function getPaymentsWithAgents() {
 
 export async function getPaymentById(id: number) {
   const db = await getDb();
-  if (!db) return null;
+  if (!db) return undefined;
   const [payment] = await db.select().from(payments).where(eq(payments.id, id)).limit(1);
-  return payment || null;
+  return payment;
 }
 
 export async function getPaymentsByAgentId(agentId: number) {

@@ -82,7 +82,7 @@ export const agents = mysqlTable("agents", {
   jumpRequisiteId: int("jumpRequisiteId"), // ID реквизита в Jump.Finance
   jumpIdentified: boolean("jumpIdentified").default(false), // прошёл идентификацию в Jump
   excludedClinics: text("excludedClinics"), // JSON array of clinic IDs, e.g. "[1,3,5]"
-  commissionOverride: text("commissionOverride"), // JSON: [{minMonthlyRevenue: number, commissionRate: number}] — индивидуальные тарифы
+  commissionOverride: text("commissionOverride"), // DEPRECATED: never read, use app_settings["agentCommissionTiers"]. TODO: drop in next migration
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => [
@@ -131,7 +131,7 @@ export const payments = mysqlTable("payments", {
   id: int("id").autoincrement().primaryKey(),
   agentId: int("agentId").notNull(),
   amount: int("amount").notNull(), // в копейках (gross — списывается с баланса)
-  grossAmount: int("grossAmount"), // валовая сумма = amount (дублирование для явности)
+  grossAmount: int("grossAmount"), // DEPRECATED: duplicates `amount`, never written. TODO: drop in next migration
   netAmount: int("netAmount"), // чистая сумма к выплате (после вычетов)
   taxAmount: int("taxAmount").default(0), // НДФЛ 13% для физлица (копейки)
   socialContributions: int("socialContributions").default(0), // соц. отчисления 30% для физлица (копейки)
