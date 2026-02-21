@@ -82,6 +82,80 @@ function AnimatedSection({ children, className = "" }: { children: React.ReactNo
   );
 }
 
+// Clinic data for carousel and grid
+const clinics = [
+  { name: "Евроонко", type: "Онкология", since: "2011", image: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=400&h=300&fit=crop" },
+  { name: "ЕМС", type: "Многопрофильная", since: "1989", image: "https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?w=400&h=300&fit=crop" },
+  { name: "МИБС", type: "Онкология", since: "2006", image: "https://images.unsplash.com/photo-1538108149393-fbbd81895907?w=400&h=300&fit=crop" },
+  { name: "Медси", type: "Многопрофильная", since: "1957", image: "https://images.unsplash.com/photo-1632833239869-a37e3a5806d2?w=400&h=300&fit=crop" },
+  { name: "Клиника Ройтберга", type: "Многопрофильная", since: "1990", image: "https://images.unsplash.com/photo-1586773860418-d37222d8fce3?w=400&h=300&fit=crop" },
+  { name: "Мать и дитя", type: "Акушерство", since: "2006", image: "https://images.unsplash.com/photo-1631217868264-e5b90bb7e133?w=400&h=300&fit=crop" },
+  { name: "Поликлиника.ру", type: "Многопрофильная", since: "1998", image: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=400&h=300&fit=crop" },
+  { name: "СМ-Клиника", type: "Многопрофильная", since: "2002", image: "https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?w=400&h=300&fit=crop" },
+];
+
+// Clinics carousel for mobile — swipeable cards
+function ClinicsCarousel() {
+  const [emblaRef, emblaApi] = useEmblaCarousel({ align: "start", loop: false, dragFree: true });
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const onSelect = useCallback(() => {
+    if (!emblaApi) return;
+    setActiveIndex(emblaApi.selectedScrollSnap());
+  }, [emblaApi]);
+
+  useEffect(() => {
+    if (!emblaApi) return;
+    onSelect();
+    emblaApi.on("select", onSelect);
+    return () => { emblaApi.off("select", onSelect); };
+  }, [emblaApi, onSelect]);
+
+  return (
+    <div className="md:hidden">
+      <div className="overflow-hidden -mx-4 px-4" ref={emblaRef}>
+        <div className="flex gap-4">
+          {clinics.map((clinic, index) => (
+            <div key={index} className="flex-[0_0_75%] min-w-0">
+              <Card className="glass-card border-2 border-white/20 card-glow overflow-hidden h-full">
+                <div className="relative h-40 overflow-hidden">
+                  <img
+                    src={clinic.image}
+                    alt={clinic.name}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                  <div className="absolute bottom-3 left-3 right-3">
+                    <h3 className="text-white font-bold text-lg drop-shadow-lg">{clinic.name}</h3>
+                  </div>
+                </div>
+                <CardContent className="pt-4 pb-5 space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{clinic.type}</span>
+                    <span className="text-muted-foreground">c {clinic.since}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Dot indicators */}
+      <div className="flex justify-center gap-1.5 mt-6">
+        {clinics.map((_, index) => (
+          <button
+            key={index}
+            className={`w-2 h-2 rounded-full transition-all ${
+              index === activeIndex ? "bg-[#F97316] w-6" : "bg-[#F97316]/25"
+            }`}
+            onClick={() => emblaApi?.scrollTo(index)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // Benefits carousel for mobile — swipeable cards
 function BenefitsCarousel() {
   const benefits = [
@@ -739,17 +813,9 @@ export default function Home() {
             </motion.p>
           </AnimatedSection>
 
-          <AnimatedSection className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
-            {[
-              { name: "Евроонко", type: "Онкология", since: "2011", image: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=400&h=300&fit=crop" },
-              { name: "ЕМС", type: "Многопрофильная", since: "1989", image: "https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?w=400&h=300&fit=crop" },
-              { name: "МИБС", type: "Онкология", since: "2006", image: "https://images.unsplash.com/photo-1538108149393-fbbd81895907?w=400&h=300&fit=crop" },
-              { name: "Медси", type: "Многопрофильная", since: "1957", image: "https://images.unsplash.com/photo-1632833239869-a37e3a5806d2?w=400&h=300&fit=crop" },
-              { name: "Клиника Ройтберга", type: "Многопрофильная", since: "1990", image: "https://images.unsplash.com/photo-1586773860418-d37222d8fce3?w=400&h=300&fit=crop" },
-              { name: "Мать и дитя", type: "Акушерство", since: "2006", image: "https://images.unsplash.com/photo-1631217868264-e5b90bb7e133?w=400&h=300&fit=crop" },
-              { name: "Поликлиника.ру", type: "Многопрофильная", since: "1998", image: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?w=400&h=300&fit=crop" },
-              { name: "СМ-Клиника", type: "Многопрофильная", since: "2002", image: "https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?w=400&h=300&fit=crop" }
-            ].map((clinic, index) => (
+          {/* Desktop/Tablet: grid */}
+          <AnimatedSection className="hidden md:grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+            {clinics.map((clinic, index) => (
               <motion.div key={index} variants={fadeUp} custom={index}>
                 <Card className="glass-card border-2 border-white/20 card-glow overflow-hidden h-full">
                   <div className="relative h-40 overflow-hidden group">
@@ -773,6 +839,9 @@ export default function Home() {
               </motion.div>
             ))}
           </AnimatedSection>
+
+          {/* Mobile: swipeable carousel */}
+          <ClinicsCarousel />
 
           <AnimatedSection className="text-center mt-12">
             <motion.div variants={fadeUp}>
