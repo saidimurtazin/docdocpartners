@@ -9,6 +9,7 @@ import { serveStatic, setupVite } from "./vite";
 import { setupTelegramWebhook } from "../telegram-bot-webhook";
 import cookieParser from "cookie-parser";
 import cron from "node-cron";
+import rateLimit from "express-rate-limit";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -48,20 +49,42 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use(cookieParser());
 
-  // Debug endpoint — manually trigger email poll and return detailed results
-  app.get("/api/debug-poll", async (req, res) => {
-    if (req.query.key !== "medigate2025") {
-      res.status(403).json({ error: "forbidden" });
-      return;
-    }
-    try {
-      const { processNewClinicEmails } = await import("../clinic-report-processor");
-      const result = await processNewClinicEmails();
-      res.json({ ok: true, result });
-    } catch (error: any) {
-      res.json({ ok: false, error: error.message, stack: error.stack });
-    }
+  // Rate limiter for OTP endpoints: 5 requests / 15 min per IP
+  const otpLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Слишком много запросов. Попробуйте через 15 минут." },
   });
+
+  // Apply OTP rate limiter to auth endpoints before tRPC
+  app.use('/api/trpc', (req, res, next) => {
+    const url = req.url || '';
+    const otpEndpoints = ['auth.requestOtp', 'auth.verifyOtp', 'auth.requestRegistrationOtp', 'auth.verifyRegistrationOtp'];
+    if (otpEndpoints.some(ep => url.includes(ep))) {
+      return otpLimiter(req, res, next);
+    }
+    next();
+  });
+
+  // Debug endpoint — only available in non-production environments
+  if (process.env.NODE_ENV !== 'production') {
+    app.get("/api/debug-poll", async (req, res) => {
+      const debugKey = process.env.DEBUG_POLL_KEY;
+      if (!debugKey || req.query.key !== debugKey) {
+        res.status(403).json({ error: "forbidden" });
+        return;
+      }
+      try {
+        const { processNewClinicEmails } = await import("../clinic-report-processor");
+        const result = await processNewClinicEmails();
+        res.json({ ok: true, result });
+      } catch (error: any) {
+        res.json({ ok: false, error: error.message });
+      }
+    });
+  }
 
   // PDF download endpoint for payment acts
   app.get("/api/acts/:actId/pdf", async (req, res) => {

@@ -1171,6 +1171,108 @@ export async function getAgentCompletedPaymentsSum(agentId: number): Promise<num
 }
 
 /**
+ * Calculate agent's available balance (totalEarnings - completed - pending payments)
+ * Single source of truth for balance calculation used by both dashboard and bot.
+ */
+export async function getAgentAvailableBalance(agentId: number): Promise<number> {
+  const totalEarnings = (await getAgentById(agentId))?.totalEarnings || 0;
+  const pendingSum = await getAgentPendingPaymentsSum(agentId);
+  const completedSum = await getAgentCompletedPaymentsSum(agentId);
+  return Math.max(0, totalEarnings - completedSum - pendingSum);
+}
+
+/**
+ * Create a payment request with pessimistic locking to prevent race conditions.
+ * Uses MySQL transaction + SELECT FOR UPDATE on the agent row.
+ */
+export async function createPaymentWithLock(
+  agentId: number,
+  paymentData: {
+    amount: number;
+    grossAmount?: number;
+    netAmount?: number;
+    taxAmount?: number;
+    socialContributions?: number;
+    isSelfEmployedSnapshot?: "yes" | "no";
+  }
+): Promise<{ paymentId: number; availableBalance: number }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return await db.transaction(async (tx) => {
+    // 1. Lock the agent row with FOR UPDATE to prevent concurrent payouts
+    const lockResult = await tx.execute(
+      sql`SELECT id, totalEarnings FROM agents WHERE id = ${agentId} FOR UPDATE`
+    );
+    const agentRow = (lockResult as any)[0]?.[0];
+    if (!agentRow) throw new Error("Agent not found");
+
+    const totalEarnings: number = agentRow.totalEarnings || 0;
+
+    // 2. Sum pending payments within the transaction
+    const [pendingResult] = await tx.select({
+      sum: sql<number>`COALESCE(SUM(${payments.amount}), 0)`
+    }).from(payments)
+      .where(and(
+        eq(payments.agentId, agentId),
+        sql`${payments.status} IN ('pending', 'processing', 'act_generated', 'sent_for_signing', 'signed', 'ready_for_payment')`
+      ));
+
+    // 3. Sum completed payments within the transaction
+    const [completedResult] = await tx.select({
+      sum: sql<number>`COALESCE(SUM(${payments.amount}), 0)`
+    }).from(payments)
+      .where(and(
+        eq(payments.agentId, agentId),
+        eq(payments.status, "completed")
+      ));
+
+    const pendingSum = pendingResult.sum;
+    const completedSum = completedResult.sum;
+    const availableBalance = totalEarnings - completedSum - pendingSum;
+
+    // 4. Validate amount
+    if (paymentData.amount > availableBalance) {
+      throw new Error(`Недостаточно средств: доступно ${availableBalance}, запрошено ${paymentData.amount}`);
+    }
+
+    if (paymentData.amount < 100000) { // 1000 RUB minimum
+      throw new Error("Минимальная сумма выплаты — 1 000 ₽");
+    }
+
+    // 5. Check for existing pending payment (deduplication)
+    const [existingPending] = await tx.select({ id: payments.id }).from(payments)
+      .where(and(
+        eq(payments.agentId, agentId),
+        sql`${payments.status} IN ('pending', 'processing')`
+      ))
+      .limit(1);
+
+    if (existingPending) {
+      throw new Error("У вас уже есть необработанная заявка на выплату");
+    }
+
+    // 6. Insert payment within the same transaction
+    const [result] = await tx.insert(payments).values({
+      agentId,
+      amount: paymentData.amount,
+      grossAmount: paymentData.grossAmount ?? paymentData.amount,
+      netAmount: paymentData.netAmount,
+      taxAmount: paymentData.taxAmount ?? 0,
+      socialContributions: paymentData.socialContributions ?? 0,
+      isSelfEmployedSnapshot: paymentData.isSelfEmployedSnapshot,
+      status: "pending",
+      createdAt: new Date(),
+    });
+
+    return {
+      paymentId: result.insertId,
+      availableBalance,
+    };
+  });
+}
+
+/**
  * Месячная выручка агента (сумма treatmentAmount за текущий месяц, visited/paid)
  */
 export async function getAgentMonthlyRevenue(agentId: number): Promise<number> {
