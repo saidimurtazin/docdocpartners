@@ -80,6 +80,9 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use(cookieParser());
 
+  // Trust proxy (Railway runs behind a reverse proxy)
+  app.set("trust proxy", 1);
+
   // Rate limiter for OTP endpoints: 5 requests / 15 min per IP
   const otpLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
