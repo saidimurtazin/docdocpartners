@@ -2028,6 +2028,10 @@ DocPartner — B2B-платформа агентских рекомендаци�
         referredAgentsCount,
         referralLink: `https://t.me/docpartnerbot?start=ref_${ctx.agentId}`,
         isSelfEmployed: agent.isSelfEmployed || "unknown",
+        // Onboarding fields
+        agentFullName: agent.fullName,
+        hasTelegram: !!agent.telegramId,
+        hasRequisites: !!(agent.inn || agent.cardNumber || agent.bankAccount),
       };
     }),
 

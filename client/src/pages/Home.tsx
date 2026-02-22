@@ -31,8 +31,15 @@ import {
   Smartphone,
   Stethoscope,
   Send,
-  Banknote
+  Banknote,
+  HelpCircle
 } from "lucide-react";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Link } from "wouter";
 import DoctorChatbot from "@/components/DoctorChatbot";
 import Logo from "@/components/Logo";
@@ -885,6 +892,106 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ============== FAQ ============== */}
+      <section id="faq" className="py-24 bg-background">
+        <div className="container">
+          <AnimatedSection className="max-w-3xl mx-auto text-center space-y-6 mb-16">
+            <motion.div variants={fadeUp} className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-sm font-medium text-primary">
+              <HelpCircle className="w-4 h-4" />
+              Ответы на вопросы
+            </motion.div>
+            <motion.h2 variants={fadeUp} custom={1} className="text-4xl sm:text-5xl md:text-6xl font-bold">
+              Частые <span className="gradient-gold-text">вопросы</span>
+            </motion.h2>
+          </AnimatedSection>
+
+          <AnimatedSection className="max-w-3xl mx-auto">
+            <motion.div variants={fadeUp}>
+              <Accordion type="multiple" className="space-y-3">
+                <AccordionItem value="what-is" className="border-2 rounded-xl px-6 data-[state=open]:border-primary/30 transition-colors">
+                  <AccordionTrigger className="text-left text-base font-semibold hover:no-underline py-5">
+                    Что такое Doc Partner?
+                  </AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground leading-relaxed pb-5">
+                    Doc Partner — это медицинская партнерская программа для врачей и медицинских специалистов. Вы рекомендуете пациентам проверенные клиники-партнеры и получаете официальное вознаграждение за каждого направленного пациента, прошедшего лечение.
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="earnings" className="border-2 rounded-xl px-6 data-[state=open]:border-primary/30 transition-colors">
+                  <AccordionTrigger className="text-left text-base font-semibold hover:no-underline py-5">
+                    Сколько я могу заработать?
+                  </AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground leading-relaxed pb-5">
+                    Вознаграждение составляет до 10% от суммы лечения пациента. Размер зависит от клиники и типа услуги. Все расчеты прозрачны — вы видите статус каждой рекомендации и начисления в личном кабинете или Telegram-боте.
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="payouts" className="border-2 rounded-xl px-6 data-[state=open]:border-primary/30 transition-colors">
+                  <AccordionTrigger className="text-left text-base font-semibold hover:no-underline py-5">
+                    Как быстро приходят выплаты?
+                  </AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground leading-relaxed pb-5">
+                    Выплаты обрабатываются в течение 3-5 рабочих дней после запроса. Минимальная сумма для вывода — 1 000 руб. Доступные способы: перевод на карту (СБП) или банковский счет.
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="self-employed" className="border-2 rounded-xl px-6 data-[state=open]:border-primary/30 transition-colors">
+                  <AccordionTrigger className="text-left text-base font-semibold hover:no-underline py-5">
+                    Нужно ли оформлять самозанятость?
+                  </AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground leading-relaxed pb-5">
+                    Не обязательно, но рекомендуем. Самозанятые получают полную ставку вознаграждения (до 10%) и платят только 6% НПД. Без статуса самозанятого выплаты возможны, но после вычета НДФЛ 13% итоговая ставка будет ниже. Оформить самозанятость можно за 5 минут через приложение «Мой налог».
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="clinics" className="border-2 rounded-xl px-6 data-[state=open]:border-primary/30 transition-colors">
+                  <AccordionTrigger className="text-left text-base font-semibold hover:no-underline py-5">
+                    Какие клиники участвуют в программе?
+                  </AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground leading-relaxed pb-5">
+                    В программе участвуют 50+ лицензированных клиник по всей России — от многопрофильных центров до специализированных онкологических и кардиологических учреждений. Все клиники проходят проверку качества перед включением в программу.
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="how-to-send" className="border-2 rounded-xl px-6 data-[state=open]:border-primary/30 transition-colors">
+                  <AccordionTrigger className="text-left text-base font-semibold hover:no-underline py-5">
+                    Как отправить пациента?
+                  </AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground leading-relaxed pb-5">
+                    Два способа: через Telegram-бот (команда «Отправить пациента») или через личный кабинет на сайте. Укажите ФИО, дату рождения и контактные данные пациента. Координатор свяжется с пациентом для бесплатной консультации и записи в клинику.
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="safety" className="border-2 rounded-xl px-6 data-[state=open]:border-primary/30 transition-colors">
+                  <AccordionTrigger className="text-left text-base font-semibold hover:no-underline py-5">
+                    Безопасно ли это? Насколько всё легально?
+                  </AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground leading-relaxed pb-5">
+                    Полностью легально. Все выплаты проходят через официальный агентский договор. Вы работаете как самозанятый или физическое лицо с соблюдением налогового законодательства. Подписание акта выполненных работ производится через простую электронную подпись (ПЭП).
+                  </AccordionContent>
+                </AccordionItem>
+
+                <AccordionItem value="referral" className="border-2 rounded-xl px-6 data-[state=open]:border-primary/30 transition-colors">
+                  <AccordionTrigger className="text-left text-base font-semibold hover:no-underline py-5">
+                    Могу ли я пригласить коллег?
+                  </AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground leading-relaxed pb-5">
+                    Да! За каждого приглашенного агента, который зарегистрируется по вашей реферальной ссылке, вы получите бонус 1 000 руб. Бонус начисляется после того, как приглашенный агент направит определенное количество пациентов.
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </motion.div>
+
+            <motion.div variants={fadeUp} custom={2} className="text-center mt-10">
+              <Link href="/knowledge-base" className="inline-flex items-center gap-2 text-primary hover:text-primary/80 font-semibold transition-colors group">
+                Подробнее в Базе знаний
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </Link>
+            </motion.div>
+          </AnimatedSection>
+        </div>
+      </section>
+
       {/* ============== FINAL CTA ============== */}
       <section className="py-32 bg-gradient-to-br from-[#1E293B] to-[#334155] text-white relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full">
@@ -932,6 +1039,7 @@ export default function Home() {
                 <li><a href="#how-it-works" className="hover:text-foreground transition-colors">Как работает</a></li>
                 <li><Link href="/clinics" className="hover:text-foreground transition-colors">Клиники</Link></li>
                 <li><a href="#benefits" className="hover:text-foreground transition-colors">Преимущества</a></li>
+                <li><a href="#faq" className="hover:text-foreground transition-colors">Вопросы</a></li>
               </ul>
             </div>
             <div>
