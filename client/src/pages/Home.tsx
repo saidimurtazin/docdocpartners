@@ -223,8 +223,8 @@ export default function Home() {
 
   // Parallax for hero
   const { scrollY } = useScroll();
-  const heroY = useTransform(scrollY, [0, 600], [0, 150]);
-  const heroOpacity = useTransform(scrollY, [0, 400], [1, 0]);
+  const heroY = useTransform(scrollY, [0, 800], [0, 100]);
+  const heroOpacity = useTransform(scrollY, [0, 700], [1, 0]);
 
   return (
     <>
