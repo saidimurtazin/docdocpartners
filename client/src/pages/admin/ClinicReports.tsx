@@ -16,7 +16,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import {
   Loader2, Search, ChevronLeft, ChevronRight, Mail, CheckCircle, XCircle,
-  Link2, Pencil, ChevronDown, ChevronUp, RefreshCw, Eye,
+  Link2, Pencil, ChevronDown, ChevronUp, RefreshCw, Eye, AlertTriangle,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
@@ -37,7 +37,7 @@ export default function AdminClinicReports() {
   // Dialogs
   const [rejectDialog, setRejectDialog] = useState<{ id: number } | null>(null);
   const [rejectNotes, setRejectNotes] = useState("");
-  const [approveDialog, setApproveDialog] = useState<{ id: number; referralId: number | null; treatmentAmount: number; clinicName?: string } | null>(null);
+  const [approveDialog, setApproveDialog] = useState<{ id: number; referralId: number | null; treatmentAmount: number; clinicName?: string; alternatives?: Array<{ referralId: number; score: number; patientName: string; clinic: string | null }> | null } | null>(null);
   const [approveReferralId, setApproveReferralId] = useState("");
   const [approveTreatmentAmount, setApproveTreatmentAmount] = useState("");
   const [approveNotes, setApproveNotes] = useState("");
@@ -71,6 +71,15 @@ export default function AdminClinicReports() {
   const reports = listData?.reports || [];
   const total = listData?.total || 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  // Parse alternative matches from JSON string
+  const parseAlternatives = (raw: string | null | undefined): Array<{ referralId: number; score: number; patientName: string; clinic: string | null }> | null => {
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) && parsed.length > 1 ? parsed : null;
+    } catch { return null; }
+  };
 
   const handleSearchChange = (v: string) => { setSearch(v); setPage(1); };
   const handleFilterChange = (v: string) => { setStatusFilter(v); setPage(1); };
@@ -115,7 +124,8 @@ export default function AdminClinicReports() {
   };
 
   const openApproveDialog = (report: any) => {
-    setApproveDialog({ id: report.id, referralId: report.referralId, treatmentAmount: report.treatmentAmount || 0, clinicName: report.clinicName });
+    const alts = parseAlternatives(report.alternativeMatches);
+    setApproveDialog({ id: report.id, referralId: report.referralId, treatmentAmount: report.treatmentAmount || 0, clinicName: report.clinicName, alternatives: alts });
     setApproveReferralId(report.referralId ? String(report.referralId) : "");
     setApproveTreatmentAmount(report.treatmentAmount ? String(report.treatmentAmount / 100) : "");
     setApproveNotes("");
@@ -292,10 +302,25 @@ export default function AdminClinicReports() {
                           <TableCell>{getConfidenceBadge(report.aiConfidence || 0)}</TableCell>
                           <TableCell>
                             {report.referralId ? (
-                              <Badge variant="outline" className="text-blue-600">
-                                <Link2 className="w-3 h-3 mr-1" />
-                                #{report.referralId}
-                              </Badge>
+                              <div className="flex items-center gap-1">
+                                <Badge variant="outline" className="text-blue-600">
+                                  <Link2 className="w-3 h-3 mr-1" />
+                                  #{report.referralId}
+                                </Badge>
+                                {parseAlternatives(report.alternativeMatches) && (
+                                  <div className="relative group">
+                                    <AlertTriangle className="w-4 h-4 text-amber-500 cursor-help" />
+                                    <div className="absolute hidden group-hover:block z-20 bg-popover border rounded-md p-2 text-xs whitespace-nowrap left-0 top-6 shadow-lg">
+                                      <p className="font-medium text-amber-700 mb-1">Возможные тёзки</p>
+                                      {parseAlternatives(report.alternativeMatches)!.map((alt) => (
+                                        <p key={alt.referralId} className={alt.referralId === report.referralId ? "font-semibold" : "text-muted-foreground"}>
+                                          #{alt.referralId} {alt.patientName} ({alt.score}%)
+                                        </p>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                             ) : (
                               <span className="text-muted-foreground text-xs">нет</span>
                             )}
@@ -401,11 +426,57 @@ export default function AdminClinicReports() {
 
       {/* Approve Dialog */}
       <Dialog open={approveDialog !== null} onOpenChange={() => setApproveDialog(null)}>
-        <DialogContent>
+        <DialogContent className={approveDialog?.alternatives ? "max-w-2xl" : ""}>
           <DialogHeader>
             <DialogTitle>Одобрить отчёт</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Namesake warning with alternatives */}
+            {approveDialog?.alternatives && approveDialog.alternatives.length > 1 && (
+              <div className="border-l-4 border-amber-400 bg-amber-50 dark:bg-amber-950/20 p-3 rounded-r-md">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-sm text-amber-800 dark:text-amber-200">
+                      Обнаружены похожие рекомендации ({approveDialog.alternatives.length})
+                    </p>
+                    <p className="text-xs text-amber-700 dark:text-amber-300 mb-3">
+                      Проверьте, что выбрана правильная рекомендация:
+                    </p>
+                    <div className="space-y-1.5">
+                      {approveDialog.alternatives.map((alt) => (
+                        <div
+                          key={alt.referralId}
+                          className={`border rounded-md p-2 text-sm cursor-pointer transition-colors ${
+                            approveReferralId === String(alt.referralId)
+                              ? "bg-blue-100 dark:bg-blue-950 border-blue-400"
+                              : "bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800"
+                          }`}
+                          onClick={() => setApproveReferralId(String(alt.referralId))}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="font-medium">#{alt.referralId}</span>
+                              <span className="ml-2">{alt.patientName}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="text-xs">{alt.score}%</Badge>
+                              {approveReferralId === String(alt.referralId) && (
+                                <CheckCircle className="w-4 h-4 text-blue-600" />
+                              )}
+                            </div>
+                          </div>
+                          {alt.clinic && (
+                            <div className="text-xs text-muted-foreground mt-0.5">{alt.clinic}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div>
               <label className="text-sm font-medium">ID рекомендации (привязка)</label>
               <Input
