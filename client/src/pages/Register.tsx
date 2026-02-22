@@ -51,8 +51,11 @@ export default function Register() {
   const [contractAccepted, setContractAccepted] = useState(false);
   const [registered, setRegistered] = useState(false);
 
+  const [phoneError, setPhoneError] = useState("");
+
   const requestOtp = trpc.auth.requestRegistrationOtp.useMutation();
   const verifyOtp = trpc.auth.verifyRegistrationOtp.useMutation();
+  const checkPhone = trpc.auth.checkPhone.useMutation();
   const registerMutation = trpc.auth.register.useMutation();
   const clinicsQuery = trpc.public.clinics.useQuery(undefined, { enabled: step === 6 });
 
@@ -131,8 +134,22 @@ export default function Register() {
     }
   };
 
-  const goNext = () => {
-    if (step < TOTAL_STEPS && canGoNext()) setStep(step + 1);
+  const goNext = async () => {
+    if (step >= TOTAL_STEPS || !canGoNext()) return;
+
+    // На шаге 3 — проверяем уникальность телефона на сервере
+    if (step === 3) {
+      setPhoneError("");
+      try {
+        await checkPhone.mutateAsync({ phone: phone.trim() });
+        setStep(step + 1);
+      } catch (error: any) {
+        setPhoneError(error.message || "Ошибка проверки телефона");
+      }
+      return;
+    }
+
+    setStep(step + 1);
   };
 
   const goBack = () => {
@@ -315,11 +332,16 @@ export default function Register() {
                   type="tel"
                   placeholder="+79001234567"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={(e) => { setPhone(e.target.value); setPhoneError(""); }}
                   onKeyDown={(e) => { if (e.key === "Enter" && canGoNext()) goNext(); }}
                   autoFocus
+                  className={phoneError ? "border-red-500" : ""}
                 />
-                <p className="text-xs text-muted-foreground">Международный формат с кодом страны</p>
+                {phoneError ? (
+                  <p className="text-xs text-red-500">{phoneError}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Международный формат с кодом страны</p>
+                )}
               </div>
             )}
 
@@ -524,8 +546,12 @@ export default function Register() {
                     </Button>
                   </>
                 ) : (
-                  <Button onClick={goNext} disabled={!canGoNext()} className="w-full">
-                    Далее <ArrowRight className="w-4 h-4 ml-1" />
+                  <Button onClick={goNext} disabled={!canGoNext() || checkPhone.isPending} className="w-full">
+                    {checkPhone.isPending ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Проверка...</>
+                    ) : (
+                      <>Далее <ArrowRight className="w-4 h-4 ml-1" /></>
+                    )}
                   </Button>
                 )}
               </div>

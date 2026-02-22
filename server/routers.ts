@@ -630,6 +630,24 @@ export const appRouter = router({
         return { success: true, registrationToken: regToken };
       }),
 
+    checkPhone: publicProcedure
+      .input(z.object({ phone: z.string().min(5).max(20) }))
+      .mutation(async ({ input }) => {
+        const { validatePhoneAdvanced } = await import("./validation");
+        const phoneCheck = validatePhoneAdvanced(input.phone);
+        if (!phoneCheck.valid) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: phoneCheck.error || "Неверный номер телефона" });
+        }
+        const existing = await db.getAgentByPhone(phoneCheck.normalized || input.phone);
+        if (existing) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Этот номер телефона уже зарегистрирован.",
+          });
+        }
+        return { available: true, normalized: phoneCheck.normalized || input.phone };
+      }),
+
     register: publicProcedure
       .input(z.object({
         registrationToken: z.string(),
