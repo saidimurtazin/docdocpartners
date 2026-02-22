@@ -5,10 +5,19 @@ import { getDb } from "./db";
 import { referrals, clinics } from "../drizzle/schema";
 import { desc } from "drizzle-orm";
 
+export interface AlternativeMatch {
+  referralId: number;
+  score: number;
+  patientName: string;
+  clinic: string | null;
+}
+
 export interface MatchResult {
   referralId: number | null;
   clinicId: number | null;
   matchConfidence: number; // 0-100
+  hasAmbiguousMatch: boolean;
+  alternativeMatches: AlternativeMatch[] | null;
 }
 
 /**
@@ -218,7 +227,7 @@ export async function findMatchingReferral(
   visitDate: string | null,
   knownClinicId?: number | null
 ): Promise<MatchResult> {
-  const result: MatchResult = { referralId: null, clinicId: null, matchConfidence: 0 };
+  const result: MatchResult = { referralId: null, clinicId: null, matchConfidence: 0, hasAmbiguousMatch: false, alternativeMatches: null };
 
   if (!patientName) return result;
 
@@ -255,9 +264,8 @@ export async function findMatchingReferral(
     }
   }
 
-  // Match patient name to referrals
-  let bestScore = 0;
-  let bestReferralId: number | null = null;
+  // Score all candidates
+  const scoredCandidates: Array<{ referralId: number; score: number; patientName: string; clinic: string | null }> = [];
 
   for (const ref of candidates) {
     let score = compareNames(patientName, ref.patientFullName);
@@ -284,17 +292,37 @@ export async function findMatchingReferral(
       }
     }
 
-    if (score > bestScore) {
-      bestScore = score;
-      bestReferralId = ref.id;
+    if (score > 0) {
+      scoredCandidates.push({
+        referralId: ref.id,
+        score,
+        patientName: ref.patientFullName,
+        clinic: ref.clinic,
+      });
     }
   }
 
+  // Sort by score descending
+  scoredCandidates.sort((a, b) => b.score - a.score);
+
+  const best = scoredCandidates[0];
+  const secondBest = scoredCandidates[1];
+
   // Only link to referral if match confidence is strong enough (≥70)
-  if (bestScore >= 70) {
-    result.referralId = bestReferralId;
+  if (best && best.score >= 70) {
+    result.referralId = best.referralId;
+    result.matchConfidence = best.score;
+
+    // Detect ambiguous match: second candidate is close to best AND also above threshold
+    if (secondBest && secondBest.score >= 70 && (best.score - secondBest.score) <= 15) {
+      result.hasAmbiguousMatch = true;
+      result.alternativeMatches = scoredCandidates
+        .filter(c => c.score >= 70)
+        .slice(0, 5);
+    }
+  } else if (best) {
+    result.matchConfidence = best.score;
   }
-  result.matchConfidence = bestScore;
 
   return result;
 }

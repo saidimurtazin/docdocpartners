@@ -145,6 +145,7 @@ export async function processNewClinicEmails(): Promise<ProcessResult> {
             status,
             aiConfidence: patient.confidence,
             matchConfidence: finalMatchConfidence,
+            alternativeMatches: match.alternativeMatches ? JSON.stringify(match.alternativeMatches) : null,
           });
 
           result.created++;

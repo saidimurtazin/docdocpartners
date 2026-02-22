@@ -262,6 +262,7 @@ export const clinicReports = mysqlTable("clinic_reports", {
   status: mysqlEnum("status", ["pending_review", "auto_matched", "approved", "rejected"]).default("pending_review").notNull(),
   aiConfidence: int("aiConfidence").default(0), // 0-100
   matchConfidence: int("matchConfidence").default(0), // 0-100
+  alternativeMatches: text("alternativeMatches"), // JSON: [{referralId, score, patientName, clinic}] — тёзки/неоднозначные совпадения
 
   // Рецензирование
   reviewedBy: int("reviewedBy"),
