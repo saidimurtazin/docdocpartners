@@ -1,7 +1,7 @@
 import { AGENT_COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, agentProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, agentProcedure, clinicProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
 import { z } from "zod";
 import * as db from "./db";
@@ -162,7 +162,7 @@ async function recalculateMonthlyCommissions(agentId: number, treatmentMonth: st
 }
 
 /** Staff roles that can access admin panel */
-const STAFF_ROLES = ["admin", "support", "accountant"] as const;
+const STAFF_ROLES = ["admin", "support", "accountant", "clinic"] as const;
 type StaffRole = typeof STAFF_ROLES[number];
 
 /** Check if user has one of the required roles. Throws FORBIDDEN if not. */
@@ -221,9 +221,9 @@ export const appRouter = router({
       if (opts.ctx.session) {
         const { session } = opts.ctx;
 
-        // Handle staff session (admin/support/accountant)
-        const staffRoles = ["admin", "support", "accountant"];
-        if (staffRoles.includes(session.role) && session.userId) {
+        // Handle staff/clinic session (admin/support/accountant/clinic)
+        const userRoles = ["admin", "support", "accountant", "clinic"];
+        if (userRoles.includes(session.role) && session.userId) {
           const staffUser = await db.getUserById(session.userId);
           if (staffUser) {
             return {
@@ -233,6 +233,8 @@ export const appRouter = router({
               email: staffUser.email,
               role: staffUser.role,
               userId: staffUser.id,
+              clinicId: staffUser.clinicId,
+              position: staffUser.position,
             };
           }
         }
@@ -536,7 +538,7 @@ export const appRouter = router({
           .where(
             and(
               eq(usersTable.email, input.email),
-              sql`${usersTable.role} IN ('admin', 'support', 'accountant')`
+              sql`${usersTable.role} IN ('admin', 'support', 'accountant', 'clinic')`
             )
           )
           .limit(1);
@@ -1802,6 +1804,39 @@ DocPartner — B2B-платформа агентских рекомендаци�
         }),
     }),
 
+    // CLINIC USERS (admin only)
+    clinicUsers: router({
+      list: protectedProcedure.query(async ({ ctx }) => {
+        checkRole(ctx, "admin");
+        return db.getAllClinicUsers();
+      }),
+      create: protectedProcedure
+        .input(z.object({
+          name: z.string().min(2),
+          email: z.string().email(),
+          phone: z.string().optional(),
+          position: z.string().optional(),
+          clinicId: z.number(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          checkRole(ctx, "admin");
+          // Check email not taken
+          const existing = await db.getUserByEmail(input.email);
+          if (existing) {
+            throw new TRPCError({ code: "CONFLICT", message: "Пользователь с таким email уже существует" });
+          }
+          const id = await db.createClinicUser(input);
+          return { success: true, id };
+        }),
+      delete: protectedProcedure
+        .input(z.object({ id: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          checkRole(ctx, "admin");
+          await db.deleteClinicUser(input.id);
+          return { success: true };
+        }),
+    }),
+
     // TASKS (admin + support)
     tasks: router({
       list: protectedProcedure
@@ -1896,6 +1931,144 @@ DocPartner — B2B-платформа агентских рекомендаци�
     stats: publicProcedure.query(async () => {
       return db.getPublicStats();
     }),
+  }),
+
+  // ===================== CLINIC DASHBOARD =====================
+  clinic: router({
+    // Get clinic info for the logged-in user
+    stats: clinicProcedure.query(async ({ ctx }) => {
+      const clinic = await db.getClinicById(ctx.clinicId);
+      if (!clinic) throw new TRPCError({ code: "NOT_FOUND", message: "Клиника не найдена" });
+
+      const clinicName = clinic.name;
+      const allReferrals = await db.getReferralsByClinicName(clinicName);
+
+      const total = allReferrals.length;
+      const treated = allReferrals.filter(r => ["visited", "paid"].includes(r.status)).length;
+      const conversionRate = total > 0 ? Math.round((treated / total) * 100) : 0;
+      const totalTreatmentAmount = allReferrals
+        .filter(r => ["visited", "paid"].includes(r.status))
+        .reduce((sum, r) => sum + (r.treatmentAmount || 0), 0);
+
+      return { clinicName, total, treated, conversionRate, totalTreatmentAmount };
+    }),
+
+    referrals: clinicProcedure
+      .input(z.object({
+        page: z.number().default(1),
+        perPage: z.number().default(20),
+        status: z.string().optional(),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const clinic = await db.getClinicById(ctx.clinicId);
+        if (!clinic) throw new TRPCError({ code: "NOT_FOUND", message: "Клиника не найдена" });
+
+        const allReferrals = await db.getReferralsByClinicName(clinic.name, {
+          status: input.status,
+          startDate: input.startDate,
+          endDate: input.endDate,
+        });
+
+        const total = allReferrals.length;
+        const offset = (input.page - 1) * input.perPage;
+        const items = allReferrals.slice(offset, offset + input.perPage);
+
+        return { items, total, page: input.page, perPage: input.perPage };
+      }),
+
+    confirmTreatment: clinicProcedure
+      .input(z.object({
+        referralId: z.number(),
+        visitDate: z.string(),
+        treatmentAmount: z.number(), // kopecks
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const clinic = await db.getClinicById(ctx.clinicId);
+        if (!clinic) throw new TRPCError({ code: "NOT_FOUND", message: "Клиника не найдена" });
+
+        // Verify referral belongs to this clinic
+        const referral = await db.getReferralById(input.referralId);
+        if (!referral || referral.clinic !== clinic.name) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Направление не найдено" });
+        }
+
+        // Update referral
+        const treatmentMonth = input.visitDate.substring(0, 7); // YYYY-MM
+        await db.updateReferral(input.referralId, {
+          status: "visited",
+          treatmentAmount: input.treatmentAmount,
+          treatmentMonth,
+        });
+
+        return { success: true };
+      }),
+
+    exportReferrals: clinicProcedure
+      .input(z.object({
+        status: z.string().optional(),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      }).optional())
+      .mutation(async ({ ctx, input }) => {
+        const clinic = await db.getClinicById(ctx.clinicId);
+        if (!clinic) throw new TRPCError({ code: "NOT_FOUND", message: "Клиника не найдена" });
+
+        const { exportClinicReferralsToExcel } = await import("./export");
+        const buffer = await exportClinicReferralsToExcel(clinic.name, input);
+        const base64 = buffer.toString("base64");
+        const filename = `referrals_${clinic.name.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.xlsx`;
+        return { base64, filename };
+      }),
+
+    downloadTemplate: clinicProcedure.mutation(async () => {
+      const { generateClinicUploadTemplate } = await import("./clinic-upload");
+      const buffer = await generateClinicUploadTemplate();
+      return { base64: buffer.toString("base64"), filename: "template_treated_patients.xlsx" };
+    }),
+
+    uploadTreated: clinicProcedure
+      .input(z.object({
+        base64: z.string(),
+        filename: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const clinic = await db.getClinicById(ctx.clinicId);
+        if (!clinic) throw new TRPCError({ code: "NOT_FOUND", message: "Клиника не найдена" });
+
+        const { parseClinicUploadExcel } = await import("./clinic-upload");
+        return parseClinicUploadExcel(input.base64, clinic.name);
+      }),
+
+    confirmUpload: clinicProcedure
+      .input(z.object({
+        items: z.array(z.object({
+          referralId: z.number(),
+          visitDate: z.string(),
+          treatmentAmount: z.number(),
+        })),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const clinic = await db.getClinicById(ctx.clinicId);
+        if (!clinic) throw new TRPCError({ code: "NOT_FOUND", message: "Клиника не найдена" });
+
+        let updatedCount = 0;
+        for (const item of input.items) {
+          const referral = await db.getReferralById(item.referralId);
+          if (referral && referral.clinic === clinic.name) {
+            const treatmentMonth = item.visitDate.substring(0, 7);
+            await db.updateReferral(item.referralId, {
+              status: "visited",
+              treatmentAmount: item.treatmentAmount,
+              treatmentMonth,
+            });
+            updatedCount++;
+          }
+        }
+
+        return { success: true, updatedCount };
+      }),
   }),
 
   // BOT API - Limited public endpoints for client integration

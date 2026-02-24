@@ -33,6 +33,9 @@ import AgentReferrals from "./pages/AgentReferrals";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Documents from "./pages/Documents";
+import ClinicDashboard from "./pages/clinic/Dashboard";
+import ClinicReferrals from "./pages/clinic/Referrals";
+import ClinicUpload from "./pages/clinic/Upload";
 
 const STAFF_ROLES = ["admin", "support", "accountant"];
 
@@ -49,6 +52,14 @@ function RequireAdmin({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return <LoadingScreen />;
   if (!user || !STAFF_ROLES.includes(user.role)) return <Redirect to="/admin/login" />;
+  return <>{children}</>;
+}
+
+/** Route guard: requires clinic auth */
+function RequireClinic({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (!user || user.role !== "clinic") return <Redirect to="/login" />;
   return <>{children}</>;
 }
 
@@ -85,6 +96,11 @@ function Router() {
       <Route path={"/admin/staff"}>{() => <RequireAdmin><AdminStaff /></RequireAdmin>}</Route>
       <Route path={"/admin/tasks"}>{() => <RequireAdmin><AdminTasks /></RequireAdmin>}</Route>
       <Route path={"/admin/notifications"}>{() => <RequireAdmin><AdminNotifications /></RequireAdmin>}</Route>
+
+      {/* Clinic dashboard routes — protected by RequireClinic */}
+      <Route path={"/clinic"}>{() => <RequireClinic><ClinicDashboard /></RequireClinic>}</Route>
+      <Route path={"/clinic/referrals"}>{() => <RequireClinic><ClinicReferrals /></RequireClinic>}</Route>
+      <Route path={"/clinic/upload"}>{() => <RequireClinic><ClinicUpload /></RequireClinic>}</Route>
 
       {/* Public routes */}
       <Route path={"/"} component={Home} />

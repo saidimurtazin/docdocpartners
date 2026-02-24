@@ -45,6 +45,25 @@ export const agentProcedure = t.procedure.use(
   }),
 );
 
+// Requires authenticated clinic user (checks ctx.user.role === "clinic")
+export const clinicProcedure = t.procedure.use(
+  t.middleware(async opts => {
+    const { ctx, next } = opts;
+
+    if (!ctx.user || ctx.user.role !== "clinic" || !ctx.user.clinicId) {
+      throw new TRPCError({ code: "UNAUTHORIZED", message: "Войдите как клиника" });
+    }
+
+    return next({
+      ctx: {
+        ...ctx,
+        user: ctx.user,
+        clinicId: ctx.user.clinicId,
+      },
+    });
+  }),
+);
+
 export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;

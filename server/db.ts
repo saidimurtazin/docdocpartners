@@ -327,6 +327,42 @@ export async function getReferralsByAgentId(agentId: number) {
     .orderBy(desc(referrals.createdAt));
 }
 
+export async function getReferralsByClinicName(clinicName: string, opts?: {
+  status?: string;
+  startDate?: string;
+  endDate?: string;
+}) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [eq(referrals.clinic, clinicName)];
+  if (opts?.status) {
+    conditions.push(eq(referrals.status, opts.status as any));
+  }
+  if (opts?.startDate) {
+    conditions.push(sql`${referrals.createdAt} >= ${opts.startDate}`);
+  }
+  if (opts?.endDate) {
+    conditions.push(sql`${referrals.createdAt} <= ${opts.endDate} + INTERVAL 1 DAY`);
+  }
+  return db.select().from(referrals)
+    .where(and(...conditions))
+    .orderBy(desc(referrals.createdAt));
+}
+
+export async function updateReferral(id: number, data: {
+  status?: string;
+  treatmentAmount?: number;
+  treatmentMonth?: string;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  const updateData: Record<string, unknown> = {};
+  if (data.status !== undefined) updateData.status = data.status;
+  if (data.treatmentAmount !== undefined) updateData.treatmentAmount = data.treatmentAmount;
+  if (data.treatmentMonth !== undefined) updateData.treatmentMonth = data.treatmentMonth;
+  await db.update(referrals).set(updateData).where(eq(referrals.id, id));
+}
+
 export async function createReferral(data: any) {
   const db = await getDb();
   if (!db) return 0;
@@ -1651,6 +1687,58 @@ export async function deleteStaffUser(id: number) {
   // Revoke all active sessions before deleting
   await revokeAllSessionsByUserId(id);
   await db.delete(users).where(eq(users.id, id));
+}
+
+// ==================== CLINIC USERS ====================
+
+export async function getAllClinicUsers() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: users.id,
+    name: users.name,
+    email: users.email,
+    phone: users.phone,
+    position: users.position,
+    clinicId: users.clinicId,
+    clinicName: clinics.name,
+    createdAt: users.createdAt,
+  })
+    .from(users)
+    .leftJoin(clinics, eq(users.clinicId, clinics.id))
+    .where(eq(users.role, "clinic"))
+    .orderBy(desc(users.createdAt));
+}
+
+export async function createClinicUser(data: {
+  name: string;
+  email: string;
+  phone?: string;
+  position?: string;
+  clinicId: number;
+}) {
+  const db = await getDb();
+  if (!db) return 0;
+  const openId = `clinic_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const [result] = await db.insert(users).values({
+    openId,
+    name: data.name,
+    email: data.email,
+    phone: data.phone || null,
+    position: data.position || null,
+    clinicId: data.clinicId,
+    role: "clinic",
+    loginMethod: "email_otp",
+  });
+  return result.insertId;
+}
+
+export async function deleteClinicUser(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  // Revoke all active sessions before deleting
+  await revokeAllSessionsByUserId(id);
+  await db.delete(users).where(and(eq(users.id, id), eq(users.role, "clinic")));
 }
 
 // ==================== TASKS ====================
