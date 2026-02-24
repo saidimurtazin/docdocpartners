@@ -16,14 +16,20 @@ export const users = mysqlTable("users", {
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin", "support", "accountant"]).default("user").notNull(),
+  role: mysqlEnum("role", ["user", "admin", "support", "accountant", "clinic"]).default("user").notNull(),
   phone: varchar("phone", { length: 50 }),
   /** Telegram ID for OTP delivery (optional, for admins who want to use Email/OTP login) */
   telegramId: varchar("telegramId", { length: 64 }),
+  /** FK to clinics.id — only for clinic role users */
+  clinicId: int("clinicId"),
+  /** Job position / должность — only for clinic role users */
+  position: varchar("position", { length: 255 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-});
+}, (table) => [
+  index("users_clinic_id_idx").on(table.clinicId),
+]);
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;

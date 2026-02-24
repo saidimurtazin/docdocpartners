@@ -19,7 +19,7 @@ export interface AgentSession {
 }
 
 export interface SessionInfo {
-  role: "admin" | "support" | "accountant" | "agent";
+  role: "admin" | "support" | "accountant" | "agent" | "clinic";
   userId?: number;
   agentId?: number;
   email?: string;
@@ -95,7 +95,7 @@ export async function verifyAgentSessionFromRequest(req: Request): Promise<Sessi
 
     // Return SessionInfo structure
     return {
-      role: (payload.role as "admin" | "agent") || "agent",
+      role: (payload.role as "admin" | "agent" | "clinic") || "agent",
       userId: payload.userId as number | undefined,
       agentId: payload.agentId as number | undefined,
       email: payload.email as string | undefined,

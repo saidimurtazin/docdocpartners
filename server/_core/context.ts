@@ -49,7 +49,7 @@ export async function createContext(
       }
     }
     // If session has staff role (admin/support/accountant), load user from database
-    const staffRoles = ["admin", "support", "accountant"];
+    const staffRoles = ["admin", "support", "accountant", "clinic"];
     if (session?.role && staffRoles.includes(session.role) && session.userId) {
       const { getUserById } = await import("../db");
       const staffUser = await getUserById(session.userId);

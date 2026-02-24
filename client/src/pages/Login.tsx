@@ -3,13 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Shield, Users, ArrowLeft, Loader2, Mail, Send } from "lucide-react";
+import { Shield, Users, Building2, ArrowLeft, Loader2, Mail, Send } from "lucide-react";
 import { Link } from "wouter";
 import Logo from "@/components/Logo";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
-type LoginMode = "select" | "admin" | "agent-channel" | "agent-email" | "agent-telegram";
+type LoginMode = "select" | "admin" | "clinic" | "agent-channel" | "agent-email" | "agent-telegram";
 
 export default function Login() {
   const [mode, setMode] = useState<LoginMode>("select");
@@ -49,7 +49,9 @@ export default function Login() {
   const handleVerifyOtp = async () => {
     try {
       const result = await verifyOtp.mutateAsync({ email, code: otpCode });
-      const redirectPath = result?.role === "admin" ? "/admin" : "/dashboard";
+      const redirectPath = result?.role === "admin" ? "/admin"
+        : result?.role === "clinic" ? "/clinic"
+        : "/dashboard";
       window.location.replace(redirectPath);
     } catch (error: any) {
       toast.error("Ошибка", {
@@ -79,7 +81,7 @@ export default function Login() {
     <Card>
       <CardHeader>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={mode === "admin" ? resetForm : goToChannelSelect}>
+          <Button variant="ghost" size="icon" onClick={mode === "admin" || mode === "clinic" ? resetForm : goToChannelSelect}>
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
@@ -193,6 +195,18 @@ export default function Login() {
               </Button>
 
               <Button
+                onClick={() => setMode("clinic")}
+                variant="outline"
+                className="w-full h-auto py-6 flex-col gap-3"
+              >
+                <Building2 className="w-8 h-8 text-primary" />
+                <div>
+                  <div className="font-semibold text-lg">Клиника</div>
+                  <div className="text-sm text-muted-foreground">Личный кабинет клиники</div>
+                </div>
+              </Button>
+
+              <Button
                 onClick={() => setMode("agent-channel")}
                 variant="outline"
                 className="w-full h-auto py-6 flex-col gap-3"
@@ -272,6 +286,7 @@ export default function Login() {
         )}
 
         {mode === "admin" && renderOtpForm("Вход администратора", "Введите email для получения кода", "email")}
+        {mode === "clinic" && renderOtpForm("Вход клиники", "Введите email, указанный администратором", "email")}
         {mode === "agent-email" && renderOtpForm("Вход агента", "Введите email, указанный при регистрации", "email")}
         {mode === "agent-telegram" && renderOtpForm("Вход агента", "Введите email, код придёт в Telegram", "telegram")}
       </div>

@@ -1,46 +1,26 @@
 import { Link, useLocation } from "wouter";
 import {
-  Home, Users, FileText, Wallet, Building2, LogOut, Menu, X,
-  BarChart3, Mail, Settings, ClipboardList, UserCog, Bell
+  Home, BarChart3, FileText, Upload, LogOut, Menu, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
 import Logo from "@/components/Logo";
-import { ReactNode, useState, useMemo } from "react";
+import { ReactNode, useState } from "react";
 
-interface AdminLayoutWrapperProps {
+interface ClinicLayoutWrapperProps {
   children: ReactNode;
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  admin: "Администратор",
-  support: "Поддержка",
-  accountant: "Бухгалтер",
-};
-
-export default function AdminLayoutWrapper({ children }: AdminLayoutWrapperProps) {
+export default function ClinicLayoutWrapper({ children }: ClinicLayoutWrapperProps) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const allMenuItems = [
-    { path: "/admin", label: "Дашборд", icon: BarChart3, roles: ["admin"] },
-    { path: "/admin/agents", label: "Агенты", icon: Users, roles: ["admin", "support"] },
-    { path: "/admin/referrals", label: "Рекомендации", icon: FileText, roles: ["admin", "support"] },
-    { path: "/admin/payments", label: "Выплаты", icon: Wallet, roles: ["admin", "accountant"] },
-    { path: "/admin/clinics", label: "Клиники", icon: Building2, roles: ["admin"] },
-    { path: "/admin/clinic-reports", label: "Отчёты клиник", icon: Mail, roles: ["admin", "support"] },
-    { path: "/admin/tasks", label: "Задачи", icon: ClipboardList, roles: ["admin", "support"] },
-    { path: "/admin/notifications", label: "Уведомления", icon: Bell, roles: ["admin"] },
-    { path: "/admin/staff", label: "Пользователи", icon: UserCog, roles: ["admin"] },
-    { path: "/admin/settings", label: "Настройки", icon: Settings, roles: ["admin"] },
+  const menuItems = [
+    { path: "/clinic", label: "Дашборд", icon: BarChart3 },
+    { path: "/clinic/referrals", label: "Реестр направлений", icon: FileText },
+    { path: "/clinic/upload", label: "Загрузка отчёта", icon: Upload },
   ];
-
-  const menuItems = useMemo(() => {
-    const role = user?.role;
-    if (!role) return [];
-    return allMenuItems.filter(item => item.roles.includes(role));
-  }, [user?.role]);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -61,9 +41,9 @@ export default function AdminLayoutWrapper({ children }: AdminLayoutWrapperProps
       `}>
         {/* Logo */}
         <div className="p-6 border-b border-border flex items-center justify-between">
-          <Link href="/admin">
+          <Link href="/clinic">
             <div className="cursor-pointer hover:opacity-80 transition-opacity">
-              <Logo size={36} textSuffix="Admin" />
+              <Logo size={36} textSuffix="Клиника" />
             </div>
           </Link>
           <Button
@@ -78,9 +58,12 @@ export default function AdminLayoutWrapper({ children }: AdminLayoutWrapperProps
         {/* User Info */}
         <div className="p-4 border-b border-border">
           <div className="text-xs text-muted-foreground uppercase tracking-wider">
-            {ROLE_LABELS[user?.role ?? ""] || "Сотрудник"}
+            Клиника
           </div>
           <div className="font-semibold mt-1 text-sm">{user?.name || "Загрузка..."}</div>
+          {(user as any)?.position && (
+            <div className="text-xs text-muted-foreground mt-0.5">{(user as any).position}</div>
+          )}
         </div>
 
         {/* Navigation */}
@@ -136,7 +119,7 @@ export default function AdminLayoutWrapper({ children }: AdminLayoutWrapperProps
           <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
             <Menu className="w-5 h-5" />
           </Button>
-          <span className="font-semibold text-sm">DocPartner Admin</span>
+          <span className="font-semibold text-sm">Doc Partner Клиника</span>
         </div>
 
         <main className="flex-1 overflow-auto">

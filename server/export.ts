@@ -476,3 +476,56 @@ export async function exportSignedActsRegistryToExcel(filters: {
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);
 }
+
+/**
+ * Export clinic referrals to Excel (without patient phone/email for privacy)
+ */
+export async function exportClinicReferralsToExcel(clinicName: string, filters?: {
+  status?: string;
+  startDate?: string;
+  endDate?: string;
+}): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Направления');
+
+  worksheet.columns = [
+    { header: 'ID', key: 'id', width: 10 },
+    { header: 'ФИО пациента', key: 'patientFullName', width: 30 },
+    { header: 'Дата рождения', key: 'patientBirthdate', width: 15 },
+    { header: 'Дата направления', key: 'createdAt', width: 20 },
+    { header: 'Статус', key: 'status', width: 15 },
+    { header: 'Сумма лечения (руб)', key: 'treatmentAmount', width: 18 },
+  ];
+
+  // Style header row
+  worksheet.getRow(1).font = { color: { argb: 'FFFFFFFF' }, bold: true };
+  worksheet.getRow(1).fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FF10b981' }
+  };
+
+  const STATUS_LABELS: Record<string, string> = {
+    new: 'Новый', in_progress: 'В работе', contacted: 'Связались',
+    scheduled: 'Записан', visited: 'Пролечен', paid: 'Оплачен',
+    duplicate: 'Дубликат', no_answer: 'Нет ответа', cancelled: 'Отменён',
+  };
+
+  const allReferrals = await db.getReferralsByClinicName(clinicName, filters);
+
+  for (const r of allReferrals) {
+    worksheet.addRow({
+      id: r.id,
+      patientFullName: r.patientFullName,
+      patientBirthdate: r.patientBirthdate,
+      createdAt: r.createdAt ? new Date(r.createdAt).toLocaleDateString('ru-RU') : '',
+      status: STATUS_LABELS[r.status] || r.status,
+      treatmentAmount: r.treatmentAmount ? r.treatmentAmount / 100 : 0,
+    });
+  }
+
+  worksheet.getColumn('treatmentAmount').numFmt = '#,##0.00';
+
+  const exportBuffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(exportBuffer);
+}
