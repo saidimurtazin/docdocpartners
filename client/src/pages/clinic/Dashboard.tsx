@@ -1,6 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -12,6 +13,7 @@ import {
 import { Loader2, Users, CheckCircle, TrendingUp, Banknote } from "lucide-react";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
+import { toast } from "sonner";
 import ClinicLayoutWrapper from "@/components/ClinicLayoutWrapper";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -44,9 +46,16 @@ function formatAmount(kopecks: number): string {
 
 export default function ClinicDashboard() {
   const { data: stats, isLoading: statsLoading } = trpc.clinic.stats.useQuery();
-  const { data: recentReferrals, isLoading: referralsLoading } = trpc.clinic.referrals.useQuery({
+  const { data: recentReferrals, isLoading: referralsLoading, refetch } = trpc.clinic.referrals.useQuery({
     page: 1,
-    perPage: 10,
+    perPage: 20,
+  });
+  const confirmReferral = trpc.clinic.confirmReferral.useMutation({
+    onSuccess: () => {
+      toast.success("Пациент записан в вашу клинику");
+      refetch();
+    },
+    onError: (err) => toast.error(err.message),
   });
 
   const isLoading = statsLoading || referralsLoading;
@@ -125,29 +134,58 @@ export default function ClinicDashboard() {
                         <TableHead>Статус</TableHead>
                         <TableHead>Дата направления</TableHead>
                         <TableHead>Сумма лечения</TableHead>
+                        <TableHead>Действия</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {recentReferrals?.items?.map((r) => (
-                        <TableRow key={r.id}>
-                          <TableCell className="font-medium">{r.patientFullName}</TableCell>
-                          <TableCell>{r.patientBirthdate || "—"}</TableCell>
-                          <TableCell>
-                            <Badge variant={STATUS_VARIANTS[r.status] || "outline"}>
-                              {STATUS_LABELS[r.status] || r.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {r.createdAt ? format(new Date(r.createdAt), "dd.MM.yyyy", { locale: ru }) : "—"}
-                          </TableCell>
-                          <TableCell>
-                            {r.treatmentAmount ? formatAmount(r.treatmentAmount) : "—"}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {recentReferrals?.items?.map((r: any) => {
+                        const isBookedElsewhere = r.clinicStatus === "booked_elsewhere";
+                        return (
+                          <TableRow key={r.id} className={isBookedElsewhere ? "opacity-60" : ""}>
+                            <TableCell className="font-medium">{r.patientFullName}</TableCell>
+                            <TableCell>{r.patientBirthdate || "—"}</TableCell>
+                            <TableCell>
+                              {isBookedElsewhere ? (
+                                <Badge variant="outline" className="bg-gray-100 text-gray-600 border-gray-300">
+                                  Записался в другую клинику
+                                </Badge>
+                              ) : (
+                                <Badge variant={STATUS_VARIANTS[r.status] || "outline"}>
+                                  {STATUS_LABELS[r.status] || r.status}
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {r.createdAt ? format(new Date(r.createdAt), "dd.MM.yyyy", { locale: ru }) : "—"}
+                            </TableCell>
+                            <TableCell>
+                              {r.treatmentAmount ? formatAmount(r.treatmentAmount) : "—"}
+                            </TableCell>
+                            <TableCell>
+                              {!isBookedElsewhere && !r.bookedClinicId && ["new", "in_progress", "contacted"].includes(r.status) && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    if (confirm("Подтвердить запись пациента в вашу клинику?")) {
+                                      confirmReferral.mutate({ referralId: r.id });
+                                    }
+                                  }}
+                                  disabled={confirmReferral.isPending}
+                                >
+                                  Записать к нам
+                                </Button>
+                              )}
+                              {r.bookedClinicId && !isBookedElsewhere && (
+                                <span className="text-xs text-green-600">Записан к вам</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                       {(!recentReferrals?.items || recentReferrals.items.length === 0) && (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                          <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                             Нет направлений
                           </TableCell>
                         </TableRow>

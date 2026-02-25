@@ -11,16 +11,33 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2, Upload as UploadIcon, Download, FileSpreadsheet, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { Loader2, Upload as UploadIcon, Download, FileSpreadsheet, FileText, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import ClinicLayoutWrapper from "@/components/ClinicLayoutWrapper";
 
 type UploadPreview = {
+  type?: "excel" | "ai";
   matched: { rowIndex: number; patientName: string; birthdate: string; visitDate: string; amount: number; referralId: number }[];
   notFound: { rowIndex: number; patientName: string; birthdate: string; reason: string }[];
   alreadyTreated: { rowIndex: number; patientName: string; birthdate: string; referralId: number }[];
   errors: { rowIndex: number; message: string }[];
 };
+
+// Supported file extensions
+const ACCEPTED_EXTENSIONS = [".xlsx", ".xls", ".pdf", ".png", ".jpg", ".jpeg", ".webp", ".docx", ".doc"];
+const ACCEPTED_MIME_TYPES = [
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+  "application/pdf",
+  "image/png", "image/jpeg", "image/webp",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/msword",
+];
+
+function isAcceptedFile(filename: string): boolean {
+  const ext = "." + filename.split(".").pop()?.toLowerCase();
+  return ACCEPTED_EXTENSIONS.includes(ext);
+}
 
 export default function ClinicUpload() {
   const [file, setFile] = useState<File | null>(null);
@@ -28,10 +45,24 @@ export default function ClinicUpload() {
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Excel upload (existing)
   const uploadTreated = trpc.clinic.uploadTreated.useMutation({
     onSuccess: (data) => {
-      setPreview(data as any);
+      setPreview({ type: "excel", ...(data as any) });
       toast.success("Файл обработан. Проверьте результаты.");
+    },
+    onError: (err) => toast.error(`Ошибка: ${err.message}`),
+  });
+
+  // AI upload (new — any format)
+  const uploadReport = trpc.clinic.uploadReport.useMutation({
+    onSuccess: (data: any) => {
+      setPreview(data);
+      if (data.type === "ai") {
+        toast.success("AI обработал файл. Проверьте результаты.");
+      } else {
+        toast.success("Файл обработан. Проверьте результаты.");
+      }
     },
     onError: (err) => toast.error(`Ошибка: ${err.message}`),
   });
@@ -66,27 +97,42 @@ export default function ClinicUpload() {
     onError: (err) => toast.error(`Ошибка: ${err.message}`),
   });
 
+  const isUploading = uploadTreated.isPending || uploadReport.isPending;
+
   const handleFile = useCallback(async (selectedFile: File) => {
     setFile(selectedFile);
     setPreview(null);
 
-    // Read file as base64
+    const ext = selectedFile.name.split(".").pop()?.toLowerCase() || "";
+    const isExcel = ["xlsx", "xls"].includes(ext);
+
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = (reader.result as string).split(",")[1];
-      uploadTreated.mutate({ base64, filename: selectedFile.name });
+
+      if (isExcel) {
+        // Use existing Excel parser
+        uploadTreated.mutate({ base64, filename: selectedFile.name });
+      } else {
+        // Use AI parser for all other formats
+        uploadReport.mutate({
+          base64,
+          filename: selectedFile.name,
+          contentType: selectedFile.type || "application/octet-stream",
+        });
+      }
     };
     reader.readAsDataURL(selectedFile);
-  }, [uploadTreated]);
+  }, [uploadTreated, uploadReport]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
     const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile && (droppedFile.name.endsWith(".xlsx") || droppedFile.name.endsWith(".xls"))) {
+    if (droppedFile && isAcceptedFile(droppedFile.name)) {
       handleFile(droppedFile);
     } else {
-      toast.error("Поддерживаются только файлы .xlsx и .xls");
+      toast.error("Неподдерживаемый формат файла");
     }
   }, [handleFile]);
 
@@ -107,7 +153,7 @@ export default function ClinicUpload() {
         <div>
           <h1 className="text-2xl font-bold">Загрузка отчёта</h1>
           <p className="text-muted-foreground mt-1">
-            Загрузите Excel-файл с пролеченными пациентами
+            Загрузите отчёт о пролеченных пациентах в любом формате
           </p>
         </div>
 
@@ -148,20 +194,28 @@ export default function ClinicUpload() {
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
               >
-                {uploadTreated.isPending ? (
+                {isUploading ? (
                   <div className="flex flex-col items-center gap-3">
                     <Loader2 className="w-10 h-10 animate-spin text-primary" />
-                    <p className="text-sm text-muted-foreground">Обработка файла...</p>
+                    <p className="text-sm text-muted-foreground">
+                      {uploadReport.isPending ? "AI анализирует файл..." : "Обработка файла..."}
+                    </p>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-3">
-                    <FileSpreadsheet className="w-10 h-10 text-muted-foreground" />
+                    <div className="flex gap-2">
+                      <FileSpreadsheet className="w-8 h-8 text-muted-foreground" />
+                      <FileText className="w-8 h-8 text-muted-foreground" />
+                    </div>
                     <div>
                       <p className="font-medium">
                         {file ? file.name : "Перетащите файл сюда или нажмите для выбора"}
                       </p>
                       <p className="text-sm text-muted-foreground mt-1">
-                        Поддерживаются файлы .xlsx и .xls
+                        Excel (.xlsx, .xls), PDF, изображения (.png, .jpg), Word (.docx, .doc)
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        AI автоматически определит данные о пациентах из файла
                       </p>
                     </div>
                   </div>
@@ -169,7 +223,7 @@ export default function ClinicUpload() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".xlsx,.xls"
+                  accept={ACCEPTED_EXTENSIONS.join(",")}
                   className="hidden"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
@@ -184,6 +238,14 @@ export default function ClinicUpload() {
         {/* Preview results */}
         {preview && (
           <>
+            {/* AI badge */}
+            {preview.type === "ai" && (
+              <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 p-3 rounded-md border border-blue-200">
+                <span className="font-medium">AI-анализ:</span>
+                <span>Данные извлечены искусственным интеллектом. Проверьте корректность перед подтверждением.</span>
+              </div>
+            )}
+
             {/* Summary */}
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <Card>
@@ -229,7 +291,7 @@ export default function ClinicUpload() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Строка</TableHead>
+                          <TableHead>#</TableHead>
                           <TableHead>ФИО</TableHead>
                           <TableHead>Дата рождения</TableHead>
                           <TableHead>Дата визита</TableHead>
@@ -243,7 +305,7 @@ export default function ClinicUpload() {
                             <TableCell className="font-medium">{m.patientName}</TableCell>
                             <TableCell>{m.birthdate}</TableCell>
                             <TableCell>{m.visitDate}</TableCell>
-                            <TableCell>{(m.amount / 100).toLocaleString("ru-RU")} \u20BD</TableCell>
+                            <TableCell>{(m.amount / 100).toLocaleString("ru-RU")} {"\u20BD"}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -266,7 +328,7 @@ export default function ClinicUpload() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Строка</TableHead>
+                          <TableHead>#</TableHead>
                           <TableHead>ФИО</TableHead>
                           <TableHead>Дата рождения</TableHead>
                           <TableHead>Причина</TableHead>
@@ -297,7 +359,7 @@ export default function ClinicUpload() {
                 <CardContent>
                   <ul className="space-y-1 text-sm">
                     {preview.errors.map((e, i) => (
-                      <li key={i} className="text-muted-foreground">Строка {e.rowIndex}: {e.message}</li>
+                      <li key={i} className="text-muted-foreground">#{e.rowIndex}: {e.message}</li>
                     ))}
                   </ul>
                 </CardContent>

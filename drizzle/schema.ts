@@ -117,6 +117,9 @@ export const referrals = mysqlTable("referrals", {
   commissionAmount: int("commissionAmount").default(0), // вознаграждение агенту в копейках
   treatmentMonth: varchar("treatmentMonth", { length: 7 }), // "YYYY-MM" — месяц лечения для расчёта тиров
   contactConsent: boolean("contactConsent"), // согласие пациента на связь от DocDoc
+  targetClinicIds: text("targetClinicIds"), // JSON array of clinic IDs, null = любая клиника
+  bookedClinicId: int("bookedClinicId"), // FK clinics.id — какая клиника фактически записала пациента
+  bookedByPartner: mysqlEnum("bookedByPartner", ["yes", "no"]).default("no"), // запись от doc partner
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

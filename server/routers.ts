@@ -1210,7 +1210,8 @@ DocPartner — B2B-платформа агентских рекомендаци�
       updateStatus: protectedProcedure
         .input(z.object({
           id: z.number(),
-          status: z.enum(["new", "in_progress", "contacted", "scheduled", "visited", "paid", "duplicate", "no_answer", "cancelled"])
+          status: z.enum(["new", "in_progress", "contacted", "scheduled", "visited", "paid", "duplicate", "no_answer", "cancelled"]),
+          bookedClinicId: z.number().optional(), // клиника, куда записан пациент (при статусе "записан")
         }))
         .mutation(async ({ ctx, input }) => {
           checkRole(ctx, "admin", "support");
@@ -1221,7 +1222,16 @@ DocPartner — B2B-платформа агентских рекомендаци�
           const oldStatus = referral.status;
 
           await db.updateReferralStatus(input.id, input.status);
-          console.log(`[AuditLog] Referral status changed: referral=${input.id} "${referral.patientFullName}" ${oldStatus}→${input.status} by user=${ctx.user.id} (${ctx.user.email})`);
+
+          // If admin sets "scheduled" with a clinic, record the booking
+          if (input.bookedClinicId && input.status === "scheduled") {
+            await db.updateReferral(input.id, {
+              bookedClinicId: input.bookedClinicId,
+              bookedByPartner: "no", // booked by admin, not by partner clinic
+            });
+          }
+
+          console.log(`[AuditLog] Referral status changed: referral=${input.id} "${referral.patientFullName}" ${oldStatus}→${input.status} by user=${ctx.user.id} (${ctx.user.email})${input.bookedClinicId ? ` bookedClinic=${input.bookedClinicId}` : ""}`);
 
           // Send Telegram notification to agent about status change
           if (oldStatus !== input.status) {
@@ -1254,7 +1264,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           return { success: true };
         }),
       updateAmounts: protectedProcedure
-        .input(z.object({ 
+        .input(z.object({
           id: z.number(),
           treatmentAmount: z.number().min(0),
           commissionAmount: z.number().min(0)
@@ -1999,7 +2009,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
       if (!clinic) throw new TRPCError({ code: "NOT_FOUND", message: "Клиника не найдена" });
 
       const clinicName = clinic.name;
-      const allReferrals = await db.getReferralsByClinicName(clinicName);
+      const allReferrals = await db.getReferralsByTargetClinicId(ctx.clinicId, clinicName);
 
       const total = allReferrals.length;
       const treated = allReferrals.filter(r => ["visited", "paid"].includes(r.status)).length;
@@ -2023,17 +2033,60 @@ DocPartner — B2B-платформа агентских рекомендаци�
         const clinic = await db.getClinicById(ctx.clinicId);
         if (!clinic) throw new TRPCError({ code: "NOT_FOUND", message: "Клиника не найдена" });
 
-        const allReferrals = await db.getReferralsByClinicName(clinic.name, {
+        const allReferrals = await db.getReferralsByTargetClinicId(ctx.clinicId, clinic.name, {
           status: input.status,
           startDate: input.startDate,
           endDate: input.endDate,
         });
 
+        // Enrich each referral with cross-clinic status for this clinic
         const total = allReferrals.length;
         const offset = (input.page - 1) * input.perPage;
-        const items = allReferrals.slice(offset, offset + input.perPage);
+        const items = allReferrals.slice(offset, offset + input.perPage).map(r => {
+          // If another clinic already booked this patient
+          const bookedElsewhere = r.bookedClinicId && r.bookedClinicId !== ctx.clinicId;
+          return {
+            ...r,
+            clinicStatus: bookedElsewhere ? "booked_elsewhere" as const : r.status,
+          };
+        });
 
         return { items, total, page: input.page, perPage: input.perPage };
+      }),
+
+    // Clinic confirms/accepts a referral — books the patient
+    confirmReferral: clinicProcedure
+      .input(z.object({
+        referralId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const clinic = await db.getClinicById(ctx.clinicId);
+        if (!clinic) throw new TRPCError({ code: "NOT_FOUND", message: "Клиника не найдена" });
+
+        const referral = await db.getReferralById(input.referralId);
+        if (!referral) throw new TRPCError({ code: "NOT_FOUND", message: "Направление не найдено" });
+
+        // Verify this clinic is targeted (or referral is for any clinic)
+        const targetIds = referral.targetClinicIds ? JSON.parse(referral.targetClinicIds) as number[] : null;
+        const isTargeted = !targetIds || targetIds.includes(ctx.clinicId) || referral.clinic === clinic.name;
+        if (!isTargeted) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Направление не относится к вашей клинике" });
+        }
+
+        // Check if already booked by another clinic
+        if (referral.bookedClinicId && referral.bookedClinicId !== ctx.clinicId) {
+          throw new TRPCError({ code: "CONFLICT", message: "Пациент уже записан в другую клинику" });
+        }
+
+        // Book the patient at this clinic
+        await db.updateReferral(input.referralId, {
+          bookedClinicId: ctx.clinicId,
+          bookedByPartner: "yes",
+          status: "scheduled",
+        });
+
+        console.log(`[Clinic] Referral ${input.referralId} confirmed by clinic ${clinic.name} (id=${ctx.clinicId})`);
+        return { success: true };
       }),
 
     confirmTreatment: clinicProcedure
@@ -2046,10 +2099,14 @@ DocPartner — B2B-платформа агентских рекомендаци�
         const clinic = await db.getClinicById(ctx.clinicId);
         if (!clinic) throw new TRPCError({ code: "NOT_FOUND", message: "Клиника не найдена" });
 
-        // Verify referral belongs to this clinic
+        // Verify referral belongs to this clinic (by target or by name)
         const referral = await db.getReferralById(input.referralId);
-        if (!referral || referral.clinic !== clinic.name) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "Направление не найдено" });
+        if (!referral) throw new TRPCError({ code: "NOT_FOUND", message: "Направление не найдено" });
+
+        const targetIds = referral.targetClinicIds ? JSON.parse(referral.targetClinicIds) as number[] : null;
+        const isTargeted = !targetIds || targetIds.includes(ctx.clinicId) || referral.clinic === clinic.name;
+        if (!isTargeted) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Направление не относится к вашей клинике" });
         }
 
         // Update referral
@@ -2058,7 +2115,19 @@ DocPartner — B2B-платформа агентских рекомендаци�
           status: "visited",
           treatmentAmount: input.treatmentAmount,
           treatmentMonth,
+          bookedClinicId: ctx.clinicId,
+          bookedByPartner: "yes",
         });
+
+        // Calculate and set commission
+        let commissionRate = clinic.commissionRate || 10;
+        const tierRate = await getAgentEffectiveCommissionRate(referral.agentId, treatmentMonth);
+        if (tierRate !== null) commissionRate = tierRate;
+        const commission = Math.round(input.treatmentAmount * commissionRate / 100);
+        await db.updateReferralAmounts(input.referralId, input.treatmentAmount, commission);
+
+        // Recalculate monthly commissions (tier may have changed)
+        await recalculateMonthlyCommissions(referral.agentId, treatmentMonth);
 
         return { success: true };
       }),
@@ -2114,18 +2183,151 @@ DocPartner — B2B-платформа агентских рекомендаци�
         let updatedCount = 0;
         for (const item of input.items) {
           const referral = await db.getReferralById(item.referralId);
-          if (referral && referral.clinic === clinic.name) {
-            const treatmentMonth = item.visitDate.substring(0, 7);
-            await db.updateReferral(item.referralId, {
-              status: "visited",
-              treatmentAmount: item.treatmentAmount,
-              treatmentMonth,
-            });
-            updatedCount++;
+          if (!referral) continue;
+
+          // Check targeting: either old-style clinic name match or targetClinicIds
+          const targetIds = referral.targetClinicIds ? JSON.parse(referral.targetClinicIds) as number[] : null;
+          const isTargeted = !targetIds || targetIds.includes(ctx.clinicId) || referral.clinic === clinic.name;
+          if (!isTargeted) continue;
+
+          const treatmentMonth = item.visitDate.substring(0, 7);
+          await db.updateReferral(item.referralId, {
+            status: "visited",
+            treatmentAmount: item.treatmentAmount,
+            treatmentMonth,
+            bookedClinicId: ctx.clinicId,
+            bookedByPartner: "yes",
+          });
+
+          // Calculate and set commission (FIX: was missing before!)
+          let commissionRate = clinic.commissionRate || 10;
+          const tierRate = await getAgentEffectiveCommissionRate(referral.agentId, treatmentMonth);
+          if (tierRate !== null) commissionRate = tierRate;
+          const commission = Math.round(item.treatmentAmount * commissionRate / 100);
+          await db.updateReferralAmounts(item.referralId, item.treatmentAmount, commission);
+
+          updatedCount++;
+        }
+
+        // Recalculate monthly commissions for all affected agents/months
+        if (updatedCount > 0) {
+          const agentMonths = new Set<string>();
+          for (const item of input.items) {
+            const referral = await db.getReferralById(item.referralId);
+            if (referral) {
+              const treatmentMonth = item.visitDate.substring(0, 7);
+              agentMonths.add(`${referral.agentId}:${treatmentMonth}`);
+            }
+          }
+          for (const key of agentMonths) {
+            const [agentId, month] = key.split(":");
+            await recalculateMonthlyCommissions(parseInt(agentId), month);
           }
         }
 
         return { success: true, updatedCount };
+      }),
+
+    // Upload report in any format (PDF, image, Excel, Word) — AI parses and matches
+    uploadReport: clinicProcedure
+      .input(z.object({
+        base64: z.string(),
+        filename: z.string(),
+        contentType: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const clinic = await db.getClinicById(ctx.clinicId);
+        if (!clinic) throw new TRPCError({ code: "NOT_FOUND", message: "Клиника не найдена" });
+
+        // Check if it's an Excel file — use existing Excel parser
+        const ext = input.filename.split(".").pop()?.toLowerCase() || "";
+        if (["xlsx", "xls"].includes(ext)) {
+          const { parseClinicUploadExcel } = await import("./clinic-upload");
+          return { type: "excel" as const, ...(await parseClinicUploadExcel(input.base64, clinic.name)) };
+        }
+
+        // For all other formats (PDF, images, Word, etc.) — use AI parser
+        const { parseClinicEmail } = await import("./clinic-report-parser");
+        const buffer = Buffer.from(input.base64, "base64");
+
+        const attachments = [{
+          filename: input.filename,
+          contentType: input.contentType,
+          content: buffer,
+          size: buffer.length,
+        }];
+
+        const patients = await parseClinicEmail(
+          `Загруженный отчёт от клиники ${clinic.name}`,
+          clinic.email || "clinic@upload",
+          `Отчёт: ${input.filename}`,
+          attachments,
+        );
+
+        // Filter out failed parses
+        const validPatients = patients.filter(p => p.patientName && p.patientName !== "__AI_PARSE_FAILED__");
+        if (validPatients.length === 0) {
+          return {
+            type: "ai" as const,
+            matched: [],
+            notFound: [],
+            alreadyTreated: [],
+            errors: [{ rowIndex: 0, message: "AI не смог извлечь данные о пациентах из файла" }],
+          };
+        }
+
+        // Match extracted patients with referrals
+        const allReferrals = await db.getReferralsByTargetClinicId(ctx.clinicId, clinic.name);
+        const matched: { rowIndex: number; patientName: string; birthdate: string; visitDate: string; amount: number; referralId: number }[] = [];
+        const notFound: { rowIndex: number; patientName: string; birthdate: string; reason: string }[] = [];
+        const alreadyTreated: { rowIndex: number; patientName: string; birthdate: string; referralId: number }[] = [];
+
+        for (let i = 0; i < validPatients.length; i++) {
+          const p = validPatients[i];
+          const nameNorm = (p.patientName || "").toLowerCase().replace(/\s+/g, " ").trim();
+
+          // Fuzzy match by patient name
+          const match = allReferrals.find(r => {
+            const refName = (r.patientFullName || "").toLowerCase().replace(/\s+/g, " ").trim();
+            // Exact match or Levenshtein-like comparison
+            if (refName === nameNorm) return true;
+            // Try matching ignoring name order (Last First Middle vs First Middle Last)
+            const refParts = refName.split(" ").sort();
+            const nameParts = nameNorm.split(" ").sort();
+            return refParts.length === nameParts.length && refParts.every((p, i) => p === nameParts[i]);
+          });
+
+          if (!match) {
+            notFound.push({
+              rowIndex: i + 1,
+              patientName: p.patientName || "",
+              birthdate: "",
+              reason: `Не найдено в системе (AI confidence: ${p.confidence}%)`,
+            });
+            continue;
+          }
+
+          if (["visited", "paid"].includes(match.status)) {
+            alreadyTreated.push({
+              rowIndex: i + 1,
+              patientName: p.patientName || "",
+              birthdate: match.patientBirthdate || "",
+              referralId: match.id,
+            });
+            continue;
+          }
+
+          matched.push({
+            rowIndex: i + 1,
+            patientName: p.patientName || "",
+            birthdate: match.patientBirthdate || "",
+            visitDate: p.visitDate || new Date().toISOString().split("T")[0],
+            amount: p.treatmentAmount ? Math.round(p.treatmentAmount * 100) : 0, // rubles → kopecks
+            referralId: match.id,
+          });
+        }
+
+        return { type: "ai" as const, matched, notFound, alreadyTreated, errors: [] as { rowIndex: number; message: string }[] };
       }),
   }),
 
@@ -2325,6 +2527,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
         patientPhone: z.string().optional(),
         patientEmail: z.string().email("Некорректный email").optional().or(z.literal("")),
         clinic: z.string().optional(),
+        targetClinicIds: z.array(z.number()).optional(), // массив ID клиник, куда отправить рекомендацию
         notes: z.string().max(500, "Примечание не должно превышать 500 символов").optional(),
       }))
       .mutation(async ({ input, ctx }) => {
@@ -2346,6 +2549,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           patientPhone: input.patientPhone || undefined,
           patientEmail: input.patientEmail || undefined,
           clinic: input.clinic || undefined,
+          targetClinicIds: input.targetClinicIds?.length ? JSON.stringify(input.targetClinicIds) : undefined,
           notes: input.notes?.trim() || undefined,
         });
 

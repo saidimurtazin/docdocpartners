@@ -349,10 +349,53 @@ export async function getReferralsByClinicName(clinicName: string, opts?: {
     .orderBy(desc(referrals.createdAt));
 }
 
+/**
+ * Get referrals targeted to a specific clinic by clinicId.
+ * Returns referrals where:
+ * - targetClinicIds contains this clinicId, OR
+ * - targetClinicIds is NULL (any clinic) AND clinic name matches, OR
+ * - clinic name matches (backward compat)
+ */
+export async function getReferralsByTargetClinicId(clinicId: number, clinicName: string, opts?: {
+  status?: string;
+  startDate?: string;
+  endDate?: string;
+}) {
+  const db = await getDb();
+  if (!db) return [];
+
+  // Build WHERE: (targetClinicIds contains clinicId) OR (targetClinicIds IS NULL AND clinic = clinicName)
+  const clinicIdStr = String(clinicId);
+  const conditions: any[] = [];
+
+  // Main filter: targeted to this clinic OR old-style clinic name match
+  const clinicFilter = sql`(
+    JSON_CONTAINS(${referrals.targetClinicIds}, ${clinicIdStr}, '$')
+    OR (${referrals.targetClinicIds} IS NULL AND ${referrals.clinic} = ${clinicName})
+  )`;
+  conditions.push(clinicFilter);
+
+  if (opts?.status) {
+    conditions.push(eq(referrals.status, opts.status as any));
+  }
+  if (opts?.startDate) {
+    conditions.push(sql`${referrals.createdAt} >= ${opts.startDate}`);
+  }
+  if (opts?.endDate) {
+    conditions.push(sql`${referrals.createdAt} <= ${opts.endDate} + INTERVAL 1 DAY`);
+  }
+  return db.select().from(referrals)
+    .where(and(...conditions))
+    .orderBy(desc(referrals.createdAt));
+}
+
 export async function updateReferral(id: number, data: {
   status?: string;
   treatmentAmount?: number;
   treatmentMonth?: string;
+  bookedClinicId?: number | null;
+  bookedByPartner?: "yes" | "no";
+  targetClinicIds?: string | null;
 }) {
   const db = await getDb();
   if (!db) return;
@@ -360,6 +403,9 @@ export async function updateReferral(id: number, data: {
   if (data.status !== undefined) updateData.status = data.status;
   if (data.treatmentAmount !== undefined) updateData.treatmentAmount = data.treatmentAmount;
   if (data.treatmentMonth !== undefined) updateData.treatmentMonth = data.treatmentMonth;
+  if (data.bookedClinicId !== undefined) updateData.bookedClinicId = data.bookedClinicId;
+  if (data.bookedByPartner !== undefined) updateData.bookedByPartner = data.bookedByPartner;
+  if (data.targetClinicIds !== undefined) updateData.targetClinicIds = data.targetClinicIds;
   await db.update(referrals).set(updateData).where(eq(referrals.id, id));
 }
 

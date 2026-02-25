@@ -37,6 +37,9 @@ export default function AdminReferrals() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [visibleCount, setVisibleCount] = useState(LOAD_MORE_STEP);
+  // State for "scheduled" status — selecting which clinic to book
+  const [bookingReferralId, setBookingReferralId] = useState<number | null>(null);
+  const [bookingClinicId, setBookingClinicId] = useState<string>("");
 
   const { data: referrals, isLoading, refetch } = trpc.admin.referrals.list.useQuery();
   const { data: clinicsList } = trpc.admin.clinics.list.useQuery();
@@ -126,7 +129,42 @@ export default function AdminReferrals() {
   type ReferralStatus = "new" | "in_progress" | "contacted" | "scheduled" | "visited" | "paid" | "duplicate" | "no_answer" | "cancelled";
 
   const handleStatusChange = async (id: number, status: ReferralStatus) => {
+    if (status === "scheduled") {
+      // Show clinic selection before changing to "scheduled"
+      setBookingReferralId(id);
+      setBookingClinicId("");
+      return;
+    }
     await updateStatus.mutateAsync({ id, status });
+  };
+
+  const handleConfirmBooking = async () => {
+    if (!bookingReferralId) return;
+    await updateStatus.mutateAsync({
+      id: bookingReferralId,
+      status: "scheduled",
+      bookedClinicId: bookingClinicId ? parseInt(bookingClinicId) : undefined,
+    });
+    setBookingReferralId(null);
+    setBookingClinicId("");
+  };
+
+  // Helper: get clinic names from targetClinicIds JSON
+  const getTargetClinicNames = (ref: any): string => {
+    if (!ref.targetClinicIds) return ref.clinic || "любая";
+    try {
+      const ids = JSON.parse(ref.targetClinicIds) as number[];
+      if (ids.length === 0) return "любая";
+      return ids.map(id => clinicsList?.find((c: any) => c.id === id)?.name || `#${id}`).join(", ");
+    } catch {
+      return ref.clinic || "—";
+    }
+  };
+
+  // Helper: get booked clinic name
+  const getBookedClinicName = (ref: any): string | null => {
+    if (!ref.bookedClinicId) return null;
+    return clinicsList?.find((c: any) => c.id === ref.bookedClinicId)?.name || `#${ref.bookedClinicId}`;
   };
 
   // Get clinic commission rate by name (fallback 10%)
@@ -213,7 +251,8 @@ export default function AdminReferrals() {
                     <TableHead>Дата рождения</TableHead>
                     <TableHead>Телефон</TableHead>
                     <TableHead>Связь DocDoc</TableHead>
-                    <TableHead>Клиника</TableHead>
+                    <TableHead>Клиники направления</TableHead>
+                    <TableHead>Запись от Doc Partner</TableHead>
                     <TableHead>Примечание врача</TableHead>
                     <TableHead>Статус</TableHead>
                     <TableHead>Сумма лечения</TableHead>
@@ -237,7 +276,21 @@ export default function AdminReferrals() {
                           <Badge variant="destructive">❌ Нет</Badge>
                         ) : "—"}
                       </TableCell>
-                      <TableCell>{referral.clinic || "—"}</TableCell>
+                      <TableCell>
+                        <span className="text-sm">{getTargetClinicNames(referral)}</span>
+                      </TableCell>
+                      <TableCell>
+                        {referral.bookedClinicId ? (
+                          <div>
+                            <Badge variant="default" className="bg-purple-600 text-xs">
+                              {getBookedClinicName(referral)}
+                            </Badge>
+                            {referral.bookedByPartner === "yes" && (
+                              <span className="text-xs text-green-600 block mt-1">от клиники</span>
+                            )}
+                          </div>
+                        ) : "—"}
+                      </TableCell>
                       <TableCell>
                         {referral.notes ? (
                           <span className="text-sm text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-200 inline-block max-w-[200px] truncate" title={referral.notes}>
@@ -306,6 +359,36 @@ export default function AdminReferrals() {
                 </TableBody>
               </Table>
             </div>
+
+            {/* Booking clinic selection modal */}
+            {bookingReferralId && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+                  <h3 className="text-lg font-semibold mb-4">Записать в клинику</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Выберите клинику, в которую записан пациент. Можно пропустить.
+                  </p>
+                  <select
+                    value={bookingClinicId}
+                    onChange={(e) => setBookingClinicId(e.target.value)}
+                    className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm mb-4"
+                  >
+                    <option value="">— Не указана —</option>
+                    {clinicsList?.map((c: any) => (
+                      <option key={c.id} value={String(c.id)}>{c.name}</option>
+                    ))}
+                  </select>
+                  <div className="flex gap-3 justify-end">
+                    <Button variant="outline" size="sm" onClick={() => { setBookingReferralId(null); setBookingClinicId(""); }}>
+                      Отмена
+                    </Button>
+                    <Button size="sm" onClick={handleConfirmBooking} disabled={updateStatus.isPending}>
+                      {updateStatus.isPending ? "Сохранение..." : "Записать"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Show more */}
             {visibleCount < filtered.length && (

@@ -35,6 +35,7 @@ export default function AgentReferrals() {
     clinic: "",
     notes: "",
   });
+  const [selectedClinicIds, setSelectedClinicIds] = useState<number[]>([]);
   const [formError, setFormError] = useState("");
 
   const statusLabels: Record<string, string> = {
@@ -87,7 +88,16 @@ export default function AgentReferrals() {
       clinic: "",
       notes: "",
     });
+    setSelectedClinicIds([]);
     setFormError("");
+  };
+
+  const toggleClinicSelection = (clinicId: number) => {
+    setSelectedClinicIds(prev =>
+      prev.includes(clinicId)
+        ? prev.filter(id => id !== clinicId)
+        : [...prev, clinicId]
+    );
   };
 
   const handleCreateReferral = async () => {
@@ -133,6 +143,7 @@ export default function AgentReferrals() {
         patientPhone: formData.patientPhone.trim() || undefined,
         patientEmail: formData.patientEmail.trim() || undefined,
         clinic: formData.clinic || undefined,
+        targetClinicIds: selectedClinicIds.length > 0 ? selectedClinicIds : undefined,
         notes: formData.notes.trim() || undefined,
       });
       alert("Рекомендация успешно создана!");
@@ -236,20 +247,55 @@ export default function AgentReferrals() {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="clinic">Клиника</Label>
-                      <select
-                        id="clinic"
-                        value={formData.clinic}
-                        onChange={(e) => setFormData({ ...formData, clinic: e.target.value })}
-                        className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm"
-                      >
-                        <option value="">Не указана</option>
+                      <Label>Клиники для направления</Label>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Выберите клиники, в которые хотите направить пациента. Можно пропустить — тогда рекомендация будет доступна всем клиникам.
+                      </p>
+                      <div className="border border-input rounded-md p-3 max-h-48 overflow-y-auto space-y-2">
                         {clinicsList?.map((clinic: any) => (
-                          <option key={clinic.id} value={clinic.name}>
-                            {clinic.name}
-                          </option>
+                          <label
+                            key={clinic.id}
+                            className={`flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors ${
+                              selectedClinicIds.includes(clinic.id)
+                                ? "bg-primary/10 border border-primary/30"
+                                : "hover:bg-accent/50"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedClinicIds.includes(clinic.id)}
+                              onChange={() => toggleClinicSelection(clinic.id)}
+                              className="rounded border-input"
+                            />
+                            <span className="text-sm">{clinic.name}</span>
+                            {clinic.city && (
+                              <span className="text-xs text-muted-foreground">({clinic.city})</span>
+                            )}
+                          </label>
                         ))}
-                      </select>
+                        {(!clinicsList || clinicsList.length === 0) && (
+                          <p className="text-sm text-muted-foreground text-center py-2">Нет доступных клиник</p>
+                        )}
+                      </div>
+                      {selectedClinicIds.length > 0 && (
+                        <div className="flex items-center justify-between mt-2">
+                          <p className="text-xs text-muted-foreground">
+                            Выбрано: {selectedClinicIds.length}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedClinicIds([])}
+                            className="text-xs text-primary hover:underline"
+                          >
+                            Сбросить
+                          </button>
+                        </div>
+                      )}
+                      {selectedClinicIds.length === 0 && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          Не выбраны — рекомендация будет доступна для всех клиник (любая)
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="notes">Примечание</Label>
@@ -368,8 +414,20 @@ export default function AgentReferrals() {
                           {referral.patientPhone && <div>Tel: {referral.patientPhone}</div>}
                           {referral.patientBirthdate && <div>Д.р.: {referral.patientBirthdate}</div>}
                           <div>Создано: {formatDate(referral.createdAt)}</div>
-                          {referral.clinic && (
+                          {referral.targetClinicIds ? (
+                            <div>
+                              Клиники:{" "}
+                              {(() => {
+                                try {
+                                  const ids = JSON.parse(referral.targetClinicIds) as number[];
+                                  return ids.map(id => clinicsList?.find((c: any) => c.id === id)?.name || `#${id}`).join(", ");
+                                } catch { return referral.clinic || "—"; }
+                              })()}
+                            </div>
+                          ) : referral.clinic ? (
                             <div>Клиника: {referral.clinic}</div>
+                          ) : (
+                            <div className="text-amber-600">Клиника: любая</div>
                           )}
                         </div>
                       </div>
