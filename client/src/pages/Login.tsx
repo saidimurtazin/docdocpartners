@@ -20,9 +20,15 @@ export default function Login() {
   const requestOtp = trpc.auth.requestOtp.useMutation();
   const verifyOtp = trpc.auth.verifyOtp.useMutation();
 
+  const getLoginAs = (): "admin" | "clinic" | "agent" => {
+    if (mode === "admin") return "admin";
+    if (mode === "clinic") return "clinic";
+    return "agent";
+  };
+
   const handleRequestOtp = async (channel: "email" | "telegram" = "email") => {
     try {
-      await requestOtp.mutateAsync({ email, channel });
+      await requestOtp.mutateAsync({ email, channel, loginAs: getLoginAs() });
       setOtpSent(true);
       toast.success("Код отправлен", {
         description: channel === "telegram"
@@ -30,25 +36,15 @@ export default function Login() {
           : "Проверьте вашу почту для получения кода",
       });
     } catch (error: any) {
-      if (error.message?.includes("not found") || error.message?.includes("не найден")) {
-        toast.error("Пользователь не найден", {
-          description: "Зарегистрируйтесь на сайте или через Telegram-бот",
-        });
-      } else if (error.message?.includes("Telegram не привязан")) {
-        toast.error("Telegram не привязан", {
-          description: "К вашему аккаунту не привязан Telegram. Используйте вход через Email.",
-        });
-      } else {
-        toast.error("Ошибка", {
-          description: error.message || "Не удалось отправить код",
-        });
-      }
+      toast.error("Ошибка", {
+        description: error.message || "Не удалось отправить код",
+      });
     }
   };
 
   const handleVerifyOtp = async () => {
     try {
-      const result = await verifyOtp.mutateAsync({ email, code: otpCode });
+      const result = await verifyOtp.mutateAsync({ email, code: otpCode, loginAs: getLoginAs() });
       const redirectPath = result?.role === "admin" ? "/admin"
         : result?.role === "clinic" ? "/clinic"
         : "/dashboard";
