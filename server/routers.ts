@@ -286,12 +286,51 @@ export const appRouter = router({
       .input(z.object({
         email: z.string().email(),
         channel: z.enum(["email", "telegram"]).optional().default("email"),
+        loginAs: z.enum(["admin", "clinic", "agent"]).optional(),
       }))
       .mutation(async ({ input }) => {
         // Rate limit OTP requests
         checkOtpRateLimit(input.email);
 
-        // PRIORITY 1: Check if user is staff (admin/support/accountant)
+        // Validate role matches loginAs mode BEFORE sending OTP
+        if (input.loginAs) {
+          const staffUser = await db.getUserByEmail(input.email);
+          const agent = await db.getAgentByEmail(input.email);
+
+          if (input.loginAs === "clinic") {
+            if (!staffUser || staffUser.role !== "clinic") {
+              throw new TRPCError({
+                code: "NOT_FOUND",
+                message: "Этот email не зарегистрирован как клиника. Обратитесь к администратору.",
+              });
+            }
+          } else if (input.loginAs === "admin") {
+            const adminRoles = ["admin", "support", "accountant"];
+            if (!staffUser || !adminRoles.includes(staffUser.role)) {
+              throw new TRPCError({
+                code: "NOT_FOUND",
+                message: "Этот email не зарегистрирован как администратор.",
+              });
+            }
+          } else if (input.loginAs === "agent") {
+            if (!agent) {
+              throw new TRPCError({
+                code: "NOT_FOUND",
+                message: "Этот email не зарегистрирован как агент. Зарегистрируйтесь на сайте или в Telegram-боте.",
+              });
+            }
+            if (agent.status !== "active") {
+              throw new TRPCError({
+                code: "FORBIDDEN",
+                message: agent.status === "pending"
+                  ? "Ваш аккаунт ещё не активирован администратором."
+                  : "Ваш аккаунт заблокирован. Обратитесь в поддержку.",
+              });
+            }
+          }
+        }
+
+        // PRIORITY 1: Check if user is staff (admin/support/accountant/clinic)
         const staffUser = await db.getUserByEmail(input.email);
 
         if (staffUser && STAFF_ROLES.includes(staffUser.role as StaffRole)) {
@@ -468,7 +507,8 @@ export const appRouter = router({
     verifyOtp: publicProcedure
       .input(z.object({
         email: z.string().email(),
-        code: z.string().regex(/^\d{6}$/, "OTP must be 6 digits")
+        code: z.string().regex(/^\d{6}$/, "OTP must be 6 digits"),
+        loginAs: z.enum(["admin", "clinic", "agent"]).optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         // Rate limit OTP verification attempts
@@ -531,7 +571,7 @@ export const appRouter = router({
         // Clear rate limit on successful verification
         clearOtpVerifyLimit(input.email);
 
-        // Check if user is staff (admin/support/accountant)
+        // Check if user is staff (admin/support/accountant/clinic)
         const [staffUser] = await dbInstance
           .select()
           .from(usersTable)
@@ -544,6 +584,16 @@ export const appRouter = router({
           .limit(1);
 
         if (staffUser) {
+          // Validate loginAs matches actual role
+          if (input.loginAs === "clinic" && staffUser.role !== "clinic") {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Этот email не зарегистрирован как клиника." });
+          }
+          if (input.loginAs === "admin" && !["admin", "support", "accountant"].includes(staffUser.role)) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Этот email не зарегистрирован как администратор." });
+          }
+          if (input.loginAs === "agent") {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Этот email не зарегистрирован как агент." });
+          }
           // Create staff session token with actual role
           const secret = getJwtSecret();
           const token = await new SignJWT({
@@ -591,6 +641,14 @@ export const appRouter = router({
               email: staffUser.email,
             }
           };
+        }
+
+        // Validate loginAs — if user selected clinic/admin mode but email is only an agent
+        if (input.loginAs === "clinic") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Этот email не зарегистрирован как клиника. Обратитесь к администратору." });
+        }
+        if (input.loginAs === "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Этот email не зарегистрирован как администратор." });
         }
 
         // Find agent
