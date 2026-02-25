@@ -18,7 +18,7 @@ const bot = new Telegraf(ENV.telegramBotToken);
 
 // Session interface
 interface SessionData {
-  registrationStep?: 'fullName' | 'email' | 'phone' | 'role' | 'specialization' | 'city' | 'excluded_clinics' | 'contract' | 'patient_name' | 'patient_birthdate' | 'patient_phone' | 'patient_notes' | 'patient_contact_consent' | 'patient_consent' | 'payout_inn' | 'payout_self_employed' | 'payout_method' | 'payout_card_number' | 'payout_bank_name' | 'payout_bank_account' | 'payout_bank_bik' | 'link_email' | 'link_otp' | 'link_phone';
+  registrationStep?: 'fullName' | 'email' | 'phone' | 'role' | 'specialization' | 'city' | 'excluded_clinics' | 'contract' | 'patient_name' | 'patient_birthdate' | 'patient_phone' | 'patient_notes' | 'patient_contact_consent' | 'patient_clinic_select' | 'patient_consent' | 'payout_inn' | 'payout_self_employed' | 'payout_method' | 'payout_card_number' | 'payout_bank_name' | 'payout_bank_account' | 'payout_bank_bik' | 'link_email' | 'link_otp' | 'link_phone';
   tempData?: {
     fullName?: string;
     email?: string;
@@ -33,6 +33,7 @@ interface SessionData {
     patientPhone?: string;
     contactConsent?: boolean;
     patientNotes?: string;
+    targetClinicIds?: number[];
     referredBy?: string;
     // Account linking
     linkAgentId?: number;
@@ -2123,6 +2124,63 @@ bot.action('patient_notes_skip', async (ctx) => {
   );
 });
 
+// Helper: build clinic selection keyboard
+async function buildClinicSelectionKeyboard(selectedIds: number[]) {
+  const db = await getDb();
+  if (!db) return { keyboard: Markup.inlineKeyboard([[Markup.button.callback('⏭ Пропустить (любая клиника)', 'clinic_select_skip')]]), clinics: [] };
+
+  const allClinics = await db.select({ id: schema.clinics.id, name: schema.clinics.name })
+    .from(schema.clinics)
+    .where(eq(schema.clinics.isActive, "yes"))
+    .orderBy(schema.clinics.name);
+
+  const buttons = allClinics.map(c => {
+    const isSelected = selectedIds.includes(c.id);
+    return [Markup.button.callback(
+      `${isSelected ? '✅' : '⬜'} ${c.name}`,
+      `clinic_toggle_${c.id}`
+    )];
+  });
+
+  buttons.push([Markup.button.callback('⏭ Пропустить (любая клиника)', 'clinic_select_skip')]);
+  if (selectedIds.length > 0) {
+    buttons.push([Markup.button.callback(`✅ Готово (${selectedIds.length} выбрано)`, 'clinic_select_done')]);
+  }
+
+  return { keyboard: Markup.inlineKeyboard(buttons), clinics: allClinics };
+}
+
+// Helper: show patient confirmation preview
+function buildPatientPreview(session: SessionData, clinicNames: string[]) {
+  const d = session.tempData!;
+  let text = '📋 <b>Проверьте данные пациента:</b>\n\n' +
+    `👤 <b>ФИО:</b> ${escapeHtml(d.patientName || '')}\n` +
+    `🎂 <b>Дата рождения:</b> ${escapeHtml(d.patientBirthdate || '')}\n` +
+    `📞 <b>Телефон:</b> ${escapeHtml(d.patientPhone || '')}\n` +
+    (d.patientNotes ? `📝 <b>Примечание:</b> ${escapeHtml(d.patientNotes)}\n` : '') +
+    `📲 <b>Связь DocDoc:</b> ${d.contactConsent ? '✅ Да, хочет' : '❌ Нет'}\n` +
+    `🏥 <b>Клиники:</b> ${clinicNames.length > 0 ? clinicNames.join(', ') : 'Любая'}`;
+  return text;
+}
+
+// Helper: go to clinic selection step
+async function goToClinicSelect(ctx: any, session: SessionData, editMessage: boolean) {
+  session.registrationStep = 'patient_clinic_select';
+  if (!session.tempData!.targetClinicIds) session.tempData!.targetClinicIds = [];
+
+  const { keyboard } = await buildClinicSelectionKeyboard(session.tempData!.targetClinicIds!);
+  const msg = '🏥 <b>Выбор клиник</b>\n\n' +
+    'Выберите клиники, в которые направить пациента.\n' +
+    'Нажмите на клинику для выбора/отмены.\n\n' +
+    '💡 Можно выбрать несколько или пропустить (любая клиника):';
+
+  if (editMessage) {
+    await ctx.editMessageText(msg, { parse_mode: 'HTML', ...keyboard });
+  } else {
+    await ctx.reply(msg, { parse_mode: 'HTML', ...keyboard });
+  }
+}
+
 // Handle contact consent (wants DocDoc to call)
 bot.action('contact_consent_yes', async (ctx) => {
   const userId = ctx.from?.id;
@@ -2133,24 +2191,8 @@ bot.action('contact_consent_yes', async (ctx) => {
   if (!session.tempData) { await ctx.answerCbQuery(); await ctx.editMessageText('❌ Сессия истекла. Начните заново: /patient'); sessions.delete(userId); return; }
 
   session.tempData.contactConsent = true;
-  session.registrationStep = 'patient_consent';
   await ctx.answerCbQuery();
-
-  // Show preview with confirm/redo buttons
-  const confirmKeyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('✅ Всё верно', 'patient_consent_yes')],
-    [Markup.button.callback('❌ Сделать запись заново', 'patient_redo')]
-  ]);
-
-  await ctx.editMessageText(
-    '📋 <b>Проверьте данные пациента:</b>\n\n' +
-    `👤 <b>ФИО:</b> ${escapeHtml(session.tempData.patientName || '')}\n` +
-    `🎂 <b>Дата рождения:</b> ${escapeHtml(session.tempData.patientBirthdate || '')}\n` +
-    `📞 <b>Телефон:</b> ${escapeHtml(session.tempData.patientPhone || '')}\n` +
-    (session.tempData.patientNotes ? `📝 <b>Примечание:</b> ${escapeHtml(session.tempData.patientNotes)}\n` : '') +
-    `📲 <b>Связь DocDoc:</b> ✅ Да, хочет`,
-    { parse_mode: 'HTML', ...confirmKeyboard }
-  );
+  await goToClinicSelect(ctx, session, true);
 });
 
 bot.action('contact_consent_no', async (ctx) => {
@@ -2162,22 +2204,94 @@ bot.action('contact_consent_no', async (ctx) => {
   if (!session.tempData) { await ctx.answerCbQuery(); await ctx.editMessageText('❌ Сессия истекла. Начните заново: /patient'); sessions.delete(userId); return; }
 
   session.tempData.contactConsent = false;
+  await ctx.answerCbQuery();
+  await goToClinicSelect(ctx, session, true);
+});
+
+// Handle clinic toggle (multi-select)
+bot.action(/^clinic_toggle_(\d+)$/, async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+
+  const session = getSession(userId);
+  if (!session.tempData) { await ctx.answerCbQuery(); await ctx.editMessageText('❌ Сессия истекла. Начните заново: /patient'); sessions.delete(userId); return; }
+
+  const clinicId = parseInt(ctx.match[1]);
+  if (!session.tempData.targetClinicIds) session.tempData.targetClinicIds = [];
+
+  const idx = session.tempData.targetClinicIds.indexOf(clinicId);
+  if (idx >= 0) {
+    session.tempData.targetClinicIds.splice(idx, 1);
+  } else {
+    session.tempData.targetClinicIds.push(clinicId);
+  }
+
+  await ctx.answerCbQuery();
+  const { keyboard } = await buildClinicSelectionKeyboard(session.tempData.targetClinicIds);
+
+  const msg = '🏥 <b>Выбор клиник</b>\n\n' +
+    'Выберите клиники, в которые направить пациента.\n' +
+    'Нажмите на клинику для выбора/отмены.\n\n' +
+    '💡 Можно выбрать несколько или пропустить (любая клиника):';
+
+  await ctx.editMessageText(msg, { parse_mode: 'HTML', ...keyboard });
+});
+
+// Handle clinic select skip (any clinic)
+bot.action('clinic_select_skip', async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+  if (isCallbackSpamming(userId)) { await ctx.answerCbQuery(); return; }
+
+  const session = getSession(userId);
+  if (!session.tempData) { await ctx.answerCbQuery(); await ctx.editMessageText('❌ Сессия истекла. Начните заново: /patient'); sessions.delete(userId); return; }
+
+  session.tempData.targetClinicIds = [];
   session.registrationStep = 'patient_consent';
   await ctx.answerCbQuery();
 
-  // Show preview with confirm/redo buttons
   const confirmKeyboard = Markup.inlineKeyboard([
     [Markup.button.callback('✅ Всё верно', 'patient_consent_yes')],
     [Markup.button.callback('❌ Сделать запись заново', 'patient_redo')]
   ]);
 
   await ctx.editMessageText(
-    '📋 <b>Проверьте данные пациента:</b>\n\n' +
-    `👤 <b>ФИО:</b> ${escapeHtml(session.tempData.patientName || '')}\n` +
-    `🎂 <b>Дата рождения:</b> ${escapeHtml(session.tempData.patientBirthdate || '')}\n` +
-    `📞 <b>Телефон:</b> ${escapeHtml(session.tempData.patientPhone || '')}\n` +
-    (session.tempData.patientNotes ? `📝 <b>Примечание:</b> ${escapeHtml(session.tempData.patientNotes)}\n` : '') +
-    `📲 <b>Связь DocDoc:</b> ❌ Нет`,
+    buildPatientPreview(session, []),
+    { parse_mode: 'HTML', ...confirmKeyboard }
+  );
+});
+
+// Handle clinic select done (clinics chosen)
+bot.action('clinic_select_done', async (ctx) => {
+  const userId = ctx.from?.id;
+  if (!userId) return;
+  if (isCallbackSpamming(userId)) { await ctx.answerCbQuery(); return; }
+
+  const session = getSession(userId);
+  if (!session.tempData || !session.tempData.targetClinicIds?.length) { await ctx.answerCbQuery(); return; }
+
+  session.registrationStep = 'patient_consent';
+  await ctx.answerCbQuery();
+
+  // Resolve clinic names
+  const db = await getDb();
+  let clinicNames: string[] = [];
+  if (db) {
+    const allClinics = await db.select({ id: schema.clinics.id, name: schema.clinics.name })
+      .from(schema.clinics)
+      .where(eq(schema.clinics.isActive, "yes"));
+    clinicNames = session.tempData.targetClinicIds
+      .map(id => allClinics.find(c => c.id === id)?.name)
+      .filter(Boolean) as string[];
+  }
+
+  const confirmKeyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('✅ Всё верно', 'patient_consent_yes')],
+    [Markup.button.callback('❌ Сделать запись заново', 'patient_redo')]
+  ]);
+
+  await ctx.editMessageText(
+    buildPatientPreview(session, clinicNames),
     { parse_mode: 'HTML', ...confirmKeyboard }
   );
 });
@@ -2221,8 +2335,21 @@ bot.action('patient_consent_yes', async (ctx) => {
       patientPhone: data.patientPhone,
       contactConsent: data.contactConsent ?? null,
       notes: data.patientNotes || null,
+      targetClinicIds: data.targetClinicIds?.length ? JSON.stringify(data.targetClinicIds) : null,
       status: 'new'
     });
+
+    // Resolve clinic names for success message
+    let clinicLabel = 'Любая';
+    if (data.targetClinicIds?.length) {
+      const allClinics = await db.select({ id: schema.clinics.id, name: schema.clinics.name })
+        .from(schema.clinics)
+        .where(eq(schema.clinics.isActive, "yes"));
+      const names = data.targetClinicIds
+        .map(id => allClinics.find(c => c.id === id)?.name)
+        .filter(Boolean);
+      if (names.length > 0) clinicLabel = names.join(', ');
+    }
 
     // Clear session before messages (prevents double-submit)
     sessions.delete(userId);
@@ -2233,7 +2360,8 @@ bot.action('patient_consent_yes', async (ctx) => {
       `🎂 <b>Дата рождения:</b> ${escapeHtml(data.patientBirthdate)}\n` +
       `📞 <b>Телефон:</b> ${escapeHtml(data.patientPhone)}\n` +
       (data.patientNotes ? `📝 <b>Примечание:</b> ${escapeHtml(data.patientNotes)}\n` : '') +
-      `📲 <b>Связь DocDoc:</b> ${data.contactConsent ? '✅ Да' : '❌ Нет'}\n\n` +
+      `📲 <b>Связь DocDoc:</b> ${data.contactConsent ? '✅ Да' : '❌ Нет'}\n` +
+      `🏥 <b>Клиники:</b> ${clinicLabel}\n\n` +
       (data.contactConsent
         ? '✅ Наш сервис бесплатно свяжется с пациентом, поможет записаться и проконсультирует\n'
         : '✅ Данные пациента переданы\n') +
