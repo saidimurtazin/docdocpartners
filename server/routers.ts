@@ -2228,7 +2228,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
         return { success: true, updatedCount };
       }),
 
-    // Upload report in any format (PDF, image, Excel, Word) — AI parses and matches
+    // Upload report in any format (PDF, image, Excel, Word) — AI parses and fuzzy matches
     uploadReport: clinicProcedure
       .input(z.object({
         base64: z.string(),
@@ -2239,14 +2239,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
         const clinic = await db.getClinicById(ctx.clinicId);
         if (!clinic) throw new TRPCError({ code: "NOT_FOUND", message: "Клиника не найдена" });
 
-        // Check if it's an Excel file — use existing Excel parser
-        const ext = input.filename.split(".").pop()?.toLowerCase() || "";
-        if (["xlsx", "xls"].includes(ext)) {
-          const { parseClinicUploadExcel } = await import("./clinic-upload");
-          return { type: "excel" as const, ...(await parseClinicUploadExcel(input.base64, clinic.name)) };
-        }
-
-        // For all other formats (PDF, images, Word, etc.) — use AI parser
+        // ALL formats go through AI parser (Gemini) — including Excel
         const { parseClinicEmail } = await import("./clinic-report-parser");
         const buffer = Buffer.from(input.base64, "base64");
 
@@ -2272,58 +2265,65 @@ DocPartner — B2B-платформа агентских рекомендаци�
             matched: [],
             notFound: [],
             alreadyTreated: [],
-            errors: [{ rowIndex: 0, message: "AI не смог извлечь данные о пациентах из файла" }],
+            errors: [{ rowIndex: 0, message: "AI не смог извлечь данные о пациентах из файла. Попробуйте другой формат." }],
           };
         }
 
-        // Match extracted patients with referrals
-        const allReferrals = await db.getReferralsByTargetClinicId(ctx.clinicId, clinic.name);
-        const matched: { rowIndex: number; patientName: string; birthdate: string; visitDate: string; amount: number; referralId: number }[] = [];
+        // Use advanced fuzzy matcher (Levenshtein + date boost + clinic boost)
+        const { findMatchingReferral } = await import("./referral-matcher");
+
+        const matched: { rowIndex: number; patientName: string; birthdate: string; visitDate: string; amount: number; referralId: number; confidence: number }[] = [];
         const notFound: { rowIndex: number; patientName: string; birthdate: string; reason: string }[] = [];
         const alreadyTreated: { rowIndex: number; patientName: string; birthdate: string; referralId: number }[] = [];
 
         for (let i = 0; i < validPatients.length; i++) {
           const p = validPatients[i];
-          const nameNorm = (p.patientName || "").toLowerCase().replace(/\s+/g, " ").trim();
+          if (!p.patientName) continue;
 
-          // Fuzzy match by patient name
-          const match = allReferrals.find(r => {
-            const refName = (r.patientFullName || "").toLowerCase().replace(/\s+/g, " ").trim();
-            // Exact match or Levenshtein-like comparison
-            if (refName === nameNorm) return true;
-            // Try matching ignoring name order (Last First Middle vs First Middle Last)
-            const refParts = refName.split(" ").sort();
-            const nameParts = nameNorm.split(" ").sort();
-            return refParts.length === nameParts.length && refParts.every((p, i) => p === nameParts[i]);
-          });
+          const matchResult = await findMatchingReferral(
+            p.patientName,
+            clinic.name,
+            p.visitDate || null,
+            ctx.clinicId,
+          );
 
-          if (!match) {
+          if (!matchResult.referralId || matchResult.matchConfidence < 70) {
             notFound.push({
               rowIndex: i + 1,
-              patientName: p.patientName || "",
+              patientName: p.patientName,
               birthdate: "",
-              reason: `Не найдено в системе (AI confidence: ${p.confidence}%)`,
+              reason: matchResult.matchConfidence > 0
+                ? `Низкая уверенность совпадения: ${matchResult.matchConfidence}%`
+                : "Не найдено в системе",
             });
             continue;
           }
 
-          if (["visited", "paid"].includes(match.status)) {
+          // Check if already treated
+          const referral = await db.getReferralById(matchResult.referralId);
+          if (!referral) {
+            notFound.push({ rowIndex: i + 1, patientName: p.patientName, birthdate: "", reason: "Рекомендация не найдена" });
+            continue;
+          }
+
+          if (["visited", "paid"].includes(referral.status)) {
             alreadyTreated.push({
               rowIndex: i + 1,
-              patientName: p.patientName || "",
-              birthdate: match.patientBirthdate || "",
-              referralId: match.id,
+              patientName: p.patientName,
+              birthdate: referral.patientBirthdate || "",
+              referralId: referral.id,
             });
             continue;
           }
 
           matched.push({
             rowIndex: i + 1,
-            patientName: p.patientName || "",
-            birthdate: match.patientBirthdate || "",
+            patientName: p.patientName,
+            birthdate: referral.patientBirthdate || "",
             visitDate: p.visitDate || new Date().toISOString().split("T")[0],
-            amount: p.treatmentAmount ? Math.round(p.treatmentAmount * 100) : 0, // rubles → kopecks
-            referralId: match.id,
+            amount: p.treatmentAmount ? Math.round(p.treatmentAmount * 100) : 0,
+            referralId: referral.id,
+            confidence: matchResult.matchConfidence,
           });
         }
 

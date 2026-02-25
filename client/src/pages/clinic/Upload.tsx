@@ -17,7 +17,7 @@ import ClinicLayoutWrapper from "@/components/ClinicLayoutWrapper";
 
 type UploadPreview = {
   type?: "excel" | "ai";
-  matched: { rowIndex: number; patientName: string; birthdate: string; visitDate: string; amount: number; referralId: number }[];
+  matched: { rowIndex: number; patientName: string; birthdate: string; visitDate: string; amount: number; referralId: number; confidence?: number }[];
   notFound: { rowIndex: number; patientName: string; birthdate: string; reason: string }[];
   alreadyTreated: { rowIndex: number; patientName: string; birthdate: string; referralId: number }[];
   errors: { rowIndex: number; message: string }[];
@@ -45,24 +45,11 @@ export default function ClinicUpload() {
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Excel upload (existing)
-  const uploadTreated = trpc.clinic.uploadTreated.useMutation({
-    onSuccess: (data) => {
-      setPreview({ type: "excel", ...(data as any) });
-      toast.success("Файл обработан. Проверьте результаты.");
-    },
-    onError: (err) => toast.error(`Ошибка: ${err.message}`),
-  });
-
-  // AI upload (new — any format)
+  // AI upload — all formats go through Gemini AI + fuzzy matching
   const uploadReport = trpc.clinic.uploadReport.useMutation({
     onSuccess: (data: any) => {
       setPreview(data);
-      if (data.type === "ai") {
-        toast.success("AI обработал файл. Проверьте результаты.");
-      } else {
-        toast.success("Файл обработан. Проверьте результаты.");
-      }
+      toast.success("AI обработал файл. Проверьте результаты.");
     },
     onError: (err) => toast.error(`Ошибка: ${err.message}`),
   });
@@ -97,33 +84,24 @@ export default function ClinicUpload() {
     onError: (err) => toast.error(`Ошибка: ${err.message}`),
   });
 
-  const isUploading = uploadTreated.isPending || uploadReport.isPending;
+  const isUploading = uploadReport.isPending;
 
   const handleFile = useCallback(async (selectedFile: File) => {
     setFile(selectedFile);
     setPreview(null);
 
-    const ext = selectedFile.name.split(".").pop()?.toLowerCase() || "";
-    const isExcel = ["xlsx", "xls"].includes(ext);
-
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = (reader.result as string).split(",")[1];
-
-      if (isExcel) {
-        // Use existing Excel parser
-        uploadTreated.mutate({ base64, filename: selectedFile.name });
-      } else {
-        // Use AI parser for all other formats
-        uploadReport.mutate({
-          base64,
-          filename: selectedFile.name,
-          contentType: selectedFile.type || "application/octet-stream",
-        });
-      }
+      // All formats go through AI parser + fuzzy matching
+      uploadReport.mutate({
+        base64,
+        filename: selectedFile.name,
+        contentType: selectedFile.type || "application/octet-stream",
+      });
     };
     reader.readAsDataURL(selectedFile);
-  }, [uploadTreated, uploadReport]);
+  }, [uploadReport]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -198,7 +176,7 @@ export default function ClinicUpload() {
                   <div className="flex flex-col items-center gap-3">
                     <Loader2 className="w-10 h-10 animate-spin text-primary" />
                     <p className="text-sm text-muted-foreground">
-                      {uploadReport.isPending ? "AI анализирует файл..." : "Обработка файла..."}
+                      AI анализирует файл и ищет совпадения...
                     </p>
                   </div>
                 ) : (
@@ -239,12 +217,10 @@ export default function ClinicUpload() {
         {preview && (
           <>
             {/* AI badge */}
-            {preview.type === "ai" && (
-              <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 p-3 rounded-md border border-blue-200">
-                <span className="font-medium">AI-анализ:</span>
-                <span>Данные извлечены искусственным интеллектом. Проверьте корректность перед подтверждением.</span>
-              </div>
-            )}
+            <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 p-3 rounded-md border border-blue-200">
+              <span className="font-medium">🤖 AI-анализ:</span>
+              <span>Данные извлечены и сопоставлены искусственным интеллектом. Проверьте корректность перед подтверждением.</span>
+            </div>
 
             {/* Summary */}
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -292,10 +268,11 @@ export default function ClinicUpload() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>#</TableHead>
-                          <TableHead>ФИО</TableHead>
-                          <TableHead>Дата рождения</TableHead>
+                          <TableHead>ФИО (из файла)</TableHead>
+                          <TableHead>Найден в системе</TableHead>
                           <TableHead>Дата визита</TableHead>
                           <TableHead>Сумма (руб)</TableHead>
+                          <TableHead>Совпадение</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -303,9 +280,20 @@ export default function ClinicUpload() {
                           <TableRow key={i}>
                             <TableCell>{m.rowIndex}</TableCell>
                             <TableCell className="font-medium">{m.patientName}</TableCell>
-                            <TableCell>{m.birthdate}</TableCell>
+                            <TableCell>
+                              <span className="text-sm">{m.birthdate ? `${m.birthdate}` : "—"}</span>
+                            </TableCell>
                             <TableCell>{m.visitDate}</TableCell>
-                            <TableCell>{(m.amount / 100).toLocaleString("ru-RU")} {"\u20BD"}</TableCell>
+                            <TableCell>{m.amount ? `${(m.amount / 100).toLocaleString("ru-RU")} \u20BD` : "—"}</TableCell>
+                            <TableCell>
+                              {m.confidence ? (
+                                <Badge variant={m.confidence >= 90 ? "default" : "outline"} className={m.confidence >= 90 ? "bg-green-500" : m.confidence >= 80 ? "bg-yellow-500 text-white" : "bg-orange-500 text-white"}>
+                                  {m.confidence}%
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline">✓</Badge>
+                              )}
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
