@@ -2425,7 +2425,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
         : 0;
 
       // Bonus info
-      const paidReferralCount = referrals.filter(r => r.status === "paid").length;
+      const paidReferralCount = referrals.filter(r => r.status === "paid" || r.status === "visited").length;
       const [pendingPaymentsSum, completedPaymentsSum] = await Promise.all([
         db.getAgentPendingPaymentsSum(ctx.agentId),
         db.getAgentCompletedPaymentsSum(ctx.agentId),
