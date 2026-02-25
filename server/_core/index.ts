@@ -83,13 +83,22 @@ async function startServer() {
   // Trust proxy (Railway runs behind a reverse proxy)
   app.set("trust proxy", 1);
 
-  // Rate limiter for OTP endpoints: 5 requests / 15 min per IP
+  // Rate limiter for OTP endpoints: 10 requests / 15 min per IP
   const otpLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 5,
+    max: 10,
     standardHeaders: true,
     legacyHeaders: false,
-    message: { error: "Слишком много запросов. Попробуйте через 15 минут." },
+    handler: (_req, res) => {
+      // Return tRPC-compatible error format so the client can parse it
+      res.status(429).json({
+        error: {
+          message: "Слишком много запросов. Попробуйте через 15 минут.",
+          code: -32603,
+          data: { code: "TOO_MANY_REQUESTS", httpStatus: 429 },
+        },
+      });
+    },
   });
 
   // Apply OTP rate limiter to auth endpoints before tRPC
