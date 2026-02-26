@@ -2540,9 +2540,19 @@ DocPartner — B2B-платформа агентских рекомендаци�
       ];
     }),
 
-    referrals: agentProcedure.query(async ({ ctx }) => {
-      return db.getReferralsByAgentId(ctx.agentId);
-    }),
+    referrals: agentProcedure
+      .input(z.object({
+        page: z.number().min(1).optional(),
+        pageSize: z.number().min(1).max(100).optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        if (input?.page && input?.pageSize) {
+          return db.getReferralsByAgentIdPaginated(ctx.agentId, input.page, input.pageSize);
+        }
+        // Backwards compatible: return flat array when no pagination params
+        const items = await db.getReferralsByAgentId(ctx.agentId);
+        return items;
+      }),
 
     createReferral: agentProcedure
       .input(z.object({
@@ -2645,9 +2655,18 @@ DocPartner — B2B-платформа агентских рекомендаци�
         return { success: true };
       }),
 
-    payments: agentProcedure.query(async ({ ctx }) => {
-      return db.getPaymentsByAgentId(ctx.agentId);
-    }),
+    payments: agentProcedure
+      .input(z.object({
+        page: z.number().min(1).optional(),
+        pageSize: z.number().min(1).max(100).optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        if (input?.page && input?.pageSize) {
+          return db.getPaymentsByAgentIdPaginated(ctx.agentId, input.page, input.pageSize);
+        }
+        const items = await db.getPaymentsByAgentId(ctx.agentId);
+        return items;
+      }),
 
     updatePersonalInfo: agentProcedure
       .input(z.object({

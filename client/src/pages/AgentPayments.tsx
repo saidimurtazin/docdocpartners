@@ -3,16 +3,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Wallet, Send, CheckCircle2, Clock, XCircle, FileText, FileSignature, Banknote, Download, Zap, Gift, Users, Copy, Lock, Unlock, Link2, TrendingUp, Building2, User, Calculator, Info } from "lucide-react";
+import { Wallet, Send, CheckCircle2, Clock, XCircle, FileText, FileSignature, Banknote, Download, Zap, Gift, Users, Copy, Lock, Unlock, Link2, TrendingUp, Building2, User, Calculator, Info, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import DashboardLayoutWrapper from "@/components/DashboardLayoutWrapper";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import ActSigningDialog from "@/components/ActSigningDialog";
 import { toast } from "sonner";
 
+const PAGE_SIZE = 15;
+
 export default function AgentPayments() {
   useRequireAuth();
-  const { data: payments, isLoading: paymentsLoading, refetch } = trpc.dashboard.payments.useQuery();
+
+  const [page, setPage] = useState(1);
+  const { data, isLoading: paymentsLoading, refetch } = trpc.dashboard.payments.useQuery(
+    { page, pageSize: PAGE_SIZE }
+  );
   const { data: stats } = trpc.dashboard.stats.useQuery();
   const requestPayment = trpc.dashboard.requestPayment.useMutation();
 
@@ -30,6 +36,11 @@ export default function AgentPayments() {
       // "unknown" → stays null, forcing selection
     }
   }, [stats?.isSelfEmployed]);
+
+  // Extract items and total from paginated response
+  const payments = data && 'items' in data ? data.items : (data as any[] || []);
+  const totalCount = data && 'total' in data ? data.total : payments.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   // Tax preview calculation (client-side, same logic as server)
   const taxPreview = useMemo(() => {
@@ -94,6 +105,7 @@ export default function AgentPayments() {
       });
       await refetch();
       setAmount("");
+      setPage(1); // Go back to first page to see the new payment
       if (result.jumpSubmitted) {
         toast.success("Заявка на выплату создана", {
           description: "Отправлена на обработку. Вы получите уведомление в Telegram.",
@@ -504,7 +516,9 @@ export default function AgentPayments() {
           {/* Payment History */}
           <Card className="border-2">
             <CardHeader>
-              <CardTitle>История выплат</CardTitle>
+              <CardTitle>
+                История выплат {totalCount > 0 && <span className="text-muted-foreground font-normal text-base ml-2">({totalCount})</span>}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {!payments || payments.length === 0 ? (
@@ -611,6 +625,37 @@ export default function AgentPayments() {
                       </div>
                     );
                   })}
+
+                  {/* Pagination Controls */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between pt-4 border-t mt-4">
+                      <div className="text-sm text-muted-foreground">
+                        Страница {page} из {totalPages}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPage(p => Math.max(1, p - 1))}
+                          disabled={page <= 1}
+                          className="gap-1"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                          Назад
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                          disabled={page >= totalPages}
+                          className="gap-1"
+                        >
+                          Вперёд
+                          <ChevronRight className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>

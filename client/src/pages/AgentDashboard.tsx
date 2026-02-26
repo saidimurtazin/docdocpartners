@@ -16,7 +16,9 @@ export default function AgentDashboard() {
   const { data: stats, isLoading: statsLoading } = trpc.dashboard.stats.useQuery();
   const { data: monthlyData, isLoading: monthlyLoading } = trpc.dashboard.monthlyEarnings.useQuery();
   const { data: statusData, isLoading: statusLoading } = trpc.dashboard.referralsByStatus.useQuery();
-  const { data: referrals, isLoading: referralsLoading, refetch: refetchReferrals } = trpc.dashboard.referrals.useQuery();
+  const { data: referralsData, isLoading: referralsLoading, refetch: refetchReferrals } = trpc.dashboard.referrals.useQuery(
+    { page: 1, pageSize: 5 }
+  );
 
   const [, navigate] = useLocation();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -68,7 +70,8 @@ export default function AgentDashboard() {
     );
   }
 
-  const recentReferrals = referrals?.slice(0, 5) || [];
+  // Extract items from paginated response
+  const recentReferrals = referralsData && 'items' in referralsData ? referralsData.items : (referralsData as any[] || []);
 
   // Filter out zero-count statuses for the chart
   const chartStatusData = (statusData || []).filter((d: any) => d.count > 0);

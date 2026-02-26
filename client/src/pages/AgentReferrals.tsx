@@ -1,6 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Search, Plus } from "lucide-react";
+import { Users, Search, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState, useEffect } from "react";
 import DashboardLayoutWrapper from "@/components/DashboardLayoutWrapper";
 import { Input } from "@/components/ui/input";
@@ -17,14 +17,20 @@ import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { useSearch } from "wouter";
 import { referralStatusLabels, referralStatusColors, formatCurrency, formatDateRu } from "@/lib/referral-utils";
 
+const PAGE_SIZE = 20;
+
 export default function AgentReferrals() {
   useRequireAuth();
-  const { data: referrals, isLoading, refetch } = trpc.dashboard.referrals.useQuery();
-  const { data: clinicsList } = trpc.dashboard.clinics.useQuery();
 
+  const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  const { data, isLoading, refetch } = trpc.dashboard.referrals.useQuery(
+    { page, pageSize: PAGE_SIZE }
+  );
+  const { data: clinicsList } = trpc.dashboard.clinics.useQuery();
 
   // Read clinicId from URL params (from AgentClinics "Направить пациента" button)
   const search = useSearch();
@@ -37,6 +43,16 @@ export default function AgentReferrals() {
       setDialogOpen(true);
     }
   }, [preselectedClinicId]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, statusFilter]);
+
+  // Extract items and total from paginated response
+  const referrals = data && 'items' in data ? data.items : (data as any[] || []);
+  const totalCount = data && 'total' in data ? data.total : referrals.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   if (isLoading) {
     return (
@@ -51,13 +67,14 @@ export default function AgentReferrals() {
     );
   }
 
-  // Filter referrals
-  const filteredReferrals = referrals?.filter((ref: any) => {
-    const matchesSearch = ref.patientFullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (ref.patientPhone && ref.patientPhone.includes(searchTerm));
+  // Client-side filtering (search and status filter apply on the current page data)
+  const filteredReferrals = referrals.filter((ref: any) => {
+    const matchesSearch = !searchTerm ||
+      ref.patientFullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (ref.patientPhone && ref.patientPhone.includes(searchTerm));
     const matchesStatus = statusFilter === "all" || ref.status === statusFilter;
     return matchesSearch && matchesStatus;
-  }) || [];
+  });
 
   return (
     <DashboardLayoutWrapper>
@@ -127,7 +144,7 @@ export default function AgentReferrals() {
           <Card className="border-2">
             <CardHeader>
               <CardTitle>
-                Всего рекомендаций: {filteredReferrals.length}
+                Всего рекомендаций: {totalCount}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -199,6 +216,37 @@ export default function AgentReferrals() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between pt-6 border-t mt-6">
+                  <div className="text-sm text-muted-foreground">
+                    Страница {page} из {totalPages}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(p => Math.max(1, p - 1))}
+                      disabled={page <= 1}
+                      className="gap-1"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      Назад
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                      disabled={page >= totalPages}
+                      className="gap-1"
+                    >
+                      Вперёд
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               )}
             </CardContent>

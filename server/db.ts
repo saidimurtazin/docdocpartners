@@ -348,6 +348,22 @@ export async function getReferralsByAgentId(agentId: number) {
     .orderBy(desc(referrals.createdAt));
 }
 
+export async function getReferralsByAgentIdPaginated(agentId: number, page: number, pageSize: number) {
+  const db = await getDb();
+  if (!db) return { items: [], total: 0 };
+  const offset = (page - 1) * pageSize;
+  const [items, countResult] = await Promise.all([
+    db.select().from(referrals)
+      .where(eq(referrals.agentId, agentId))
+      .orderBy(desc(referrals.createdAt))
+      .limit(pageSize)
+      .offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(referrals)
+      .where(eq(referrals.agentId, agentId)),
+  ]);
+  return { items, total: countResult[0].count };
+}
+
 export async function getReferralsByClinicName(clinicName: string, opts?: {
   status?: string;
   startDate?: string;
@@ -600,6 +616,22 @@ export async function getPaymentsByAgentId(agentId: number) {
   return db.select().from(payments)
     .where(eq(payments.agentId, agentId))
     .orderBy(desc(payments.createdAt));
+}
+
+export async function getPaymentsByAgentIdPaginated(agentId: number, page: number, pageSize: number) {
+  const db = await getDb();
+  if (!db) return { items: [], total: 0 };
+  const offset = (page - 1) * pageSize;
+  const [items, countResult] = await Promise.all([
+    db.select().from(payments)
+      .where(eq(payments.agentId, agentId))
+      .orderBy(desc(payments.createdAt))
+      .limit(pageSize)
+      .offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(payments)
+      .where(eq(payments.agentId, agentId)),
+  ]);
+  return { items, total: countResult[0].count };
 }
 
 export async function createPayment(data: any) {
