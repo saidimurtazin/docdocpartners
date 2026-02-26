@@ -2114,7 +2114,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
         }
 
         // Update referral
-        const treatmentMonth = input.visitDate.substring(0, 7); // YYYY-MM
+        const treatmentMonth = parseTreatmentMonth(input.visitDate) || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
         await db.updateReferral(input.referralId, {
           status: "visited",
           treatmentAmount: input.treatmentAmount,
@@ -2169,7 +2169,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
         if (!clinic) throw new TRPCError({ code: "NOT_FOUND", message: "Клиника не найдена" });
 
         const { parseClinicUploadExcel } = await import("./clinic-upload");
-        return parseClinicUploadExcel(input.base64, clinic.name);
+        return parseClinicUploadExcel(input.base64, clinic.name, ctx.clinicId);
       }),
 
     confirmUpload: clinicProcedure
@@ -2194,7 +2194,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           const isTargeted = !targetIds || targetIds.includes(ctx.clinicId) || referral.clinic === clinic.name;
           if (!isTargeted) continue;
 
-          const treatmentMonth = item.visitDate.substring(0, 7);
+          const treatmentMonth = parseTreatmentMonth(item.visitDate) || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
           await db.updateReferral(item.referralId, {
             status: "visited",
             treatmentAmount: item.treatmentAmount,
@@ -2219,7 +2219,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           for (const item of input.items) {
             const referral = await db.getReferralById(item.referralId);
             if (referral) {
-              const treatmentMonth = item.visitDate.substring(0, 7);
+              const treatmentMonth = parseTreatmentMonth(item.visitDate) || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
               agentMonths.add(`${referral.agentId}:${treatmentMonth}`);
             }
           }
@@ -2341,19 +2341,33 @@ DocPartner — B2B-платформа агентских рекомендаци�
   bot: router({
     // Get agent by telegram ID (used by AgentCabinet.tsx)
     // Returns only safe fields — never expose financial/banking data via public endpoint
+    // TODO: validate Telegram WebApp initData for proper auth
     getAgent: publicProcedure
       .input(z.object({ telegramId: z.string() }))
       .query(async ({ input }) => {
         const agent = await db.getAgentByTelegramId(input.telegramId);
         if (!agent) return { agent: null };
         const totalReferrals = await db.getAgentReferralCount(agent.id);
+
+        // Mask PII: public endpoint should not expose full email/phone
+        const maskEmail = (e: string | null) => {
+          if (!e) return null;
+          const [local, domain] = e.split("@");
+          if (!domain) return "***";
+          return `${local.slice(0, 3)}***@${domain}`;
+        };
+        const maskPhone = (p: string | null) => {
+          if (!p) return null;
+          return `***${p.slice(-4)}`;
+        };
+
         return {
           agent: {
             id: agent.id,
             telegramId: agent.telegramId,
             fullName: agent.fullName,
-            email: agent.email,
-            phone: agent.phone,
+            email: maskEmail(agent.email),
+            phone: maskPhone(agent.phone),
             role: agent.role,
             city: agent.city,
             specialization: agent.specialization,
@@ -2453,7 +2467,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
 
       return {
         totalEarnings: agent.totalEarnings ?? 0,
-        availableBalance: Math.max(0, (agent.totalEarnings ?? 0) - completedPaymentsSum - pendingPaymentsSum),
+        availableBalance: Math.max(0, (agent.totalEarnings ?? 0) - (completedPaymentsSum ?? 0) - (pendingPaymentsSum ?? 0)),
         completedPaymentsSum,
         activeReferrals: activeReferrals.length,
         conversionRate,

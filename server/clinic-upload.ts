@@ -43,7 +43,7 @@ export async function generateClinicUploadTemplate(): Promise<Buffer> {
 /**
  * Parse uploaded Excel from clinic and match with referrals
  */
-export async function parseClinicUploadExcel(base64: string, clinicName: string) {
+export async function parseClinicUploadExcel(base64: string, clinicName: string, clinicId?: number) {
   const workbook = new ExcelJS.Workbook();
   const buffer = Buffer.from(base64, 'base64');
   await workbook.xlsx.load(buffer);
@@ -58,8 +58,10 @@ export async function parseClinicUploadExcel(base64: string, clinicName: string)
   const alreadyTreated: { rowIndex: number; patientName: string; birthdate: string; referralId: number }[] = [];
   const errors: { rowIndex: number; message: string }[] = [];
 
-  // Get all referrals for this clinic
-  const allReferrals = await db.getReferralsByClinicName(clinicName);
+  // Get all referrals targeted to this clinic (by ID + name fallback)
+  const allReferrals = clinicId
+    ? await db.getReferralsByTargetClinicId(clinicId, clinicName)
+    : await db.getReferralsByClinicName(clinicName);
 
   // Process rows (skip header)
   worksheet.eachRow((row, rowNumber) => {

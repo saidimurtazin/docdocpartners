@@ -35,8 +35,7 @@ export async function generateAct(paymentId: number): Promise<{ actId: number; a
   if (payment.status !== "pending" && payment.status !== "failed") throw new Error(`Payment ${paymentId} is not in pending/failed status (current: ${payment.status})`);
 
   // Load agent
-  const allAgents = await db.getAllAgents();
-  const agent = allAgents.find(a => a.id === payment.agentId);
+  const agent = await db.getAgentById(payment.agentId);
   if (!agent) throw new Error(`Agent ${payment.agentId} not found`);
 
   // Validate requisites
@@ -139,8 +138,7 @@ export async function sendActSigningOtp(actId: number): Promise<{ sentVia: "tele
     throw new Error(`Act ${actId} cannot receive OTP (status: ${act.status})`);
   }
 
-  const allAgents = await db.getAllAgents();
-  const agent = allAgents.find(a => a.id === act.agentId);
+  const agent = await db.getAgentById(act.agentId);
   if (!agent) throw new Error(`Agent ${act.agentId} not found`);
 
   const code = generateOtp();
