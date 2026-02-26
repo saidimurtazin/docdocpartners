@@ -299,6 +299,27 @@ export async function getReferralsCount(): Promise<number> {
   return result.count;
 }
 
+/**
+ * Check for duplicate referral: same agent + patient name + birthdate, created in the last 30 days, not cancelled.
+ */
+export async function findRecentDuplicateReferral(agentId: number, patientFullName: string, patientBirthdate: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const [existing] = await db.select({ id: referrals.id }).from(referrals)
+    .where(and(
+      eq(referrals.agentId, agentId),
+      eq(referrals.patientFullName, patientFullName),
+      eq(referrals.patientBirthdate, patientBirthdate),
+      sql`${referrals.status} != 'cancelled'`,
+      sql`${referrals.createdAt} >= ${thirtyDaysAgo}`,
+    ))
+    .limit(1);
+  return existing || null;
+}
+
 export async function searchReferrals(search?: string, limit = 20) {
   const db = await getDb();
   if (!db) return [];
@@ -1632,11 +1653,11 @@ export async function unlockBonusToEarnings(agentId: number, threshold?: number)
     const agentRow = (lockResult as any)[0]?.[0];
     if (!agentRow || !agentRow.bonusPoints || agentRow.bonusPoints <= 0) return 0;
 
-    // Check paid referral count within the transaction
+    // Check paid/visited referral count within the transaction (consistent with getAgentPaidReferralCount)
     const [countResult] = await tx.select({
       count: sql<number>`count(*)`
     }).from(referrals)
-      .where(and(eq(referrals.agentId, agentId), eq(referrals.status, "paid")));
+      .where(and(eq(referrals.agentId, agentId), sql`${referrals.status} IN ('visited', 'paid')`));
 
     if (countResult.count < bonusThreshold) return 0;
 
@@ -1662,28 +1683,30 @@ export async function hardDeleteAgent(agentId: number) {
   const [agent] = await db.select().from(agents).where(eq(agents.id, agentId)).limit(1);
   if (!agent) return { deleted: false, reason: "Agent not found" };
 
-  // Delete related records in dependency order
-  // 1. Payment acts (references payments & agents)
-  await db.delete(paymentActs).where(eq(paymentActs.agentId, agentId));
-  // 2. Payments
-  await db.delete(payments).where(eq(payments.agentId, agentId));
-  // 3. Tasks linked to this agent
-  await db.delete(tasks).where(eq(tasks.agentId, agentId));
-  // 4. Clinic reports linked to referrals of this agent
-  const agentReferrals = await db.select({ id: referrals.id }).from(referrals).where(eq(referrals.agentId, agentId));
-  for (const ref of agentReferrals) {
-    await db.delete(clinicReports).where(eq(clinicReports.referralId, ref.id));
-  }
-  // 5. Referrals
-  await db.delete(referrals).where(eq(referrals.agentId, agentId));
-  // 6. Sessions
-  await db.delete(sessions).where(eq(sessions.agentId, agentId));
-  // 7. OTP codes for agent's email
-  if (agent.email) {
-    await db.delete(otpCodes).where(eq(otpCodes.email, agent.email));
-  }
-  // 8. Agent itself
-  await db.delete(agents).where(eq(agents.id, agentId));
+  // Wrap all cascading deletes in a transaction for atomicity
+  await db.transaction(async (tx) => {
+    // 1. Payment acts (references payments & agents)
+    await tx.delete(paymentActs).where(eq(paymentActs.agentId, agentId));
+    // 2. Payments
+    await tx.delete(payments).where(eq(payments.agentId, agentId));
+    // 3. Tasks linked to this agent
+    await tx.delete(tasks).where(eq(tasks.agentId, agentId));
+    // 4. Clinic reports linked to referrals of this agent
+    const agentReferrals = await tx.select({ id: referrals.id }).from(referrals).where(eq(referrals.agentId, agentId));
+    for (const ref of agentReferrals) {
+      await tx.delete(clinicReports).where(eq(clinicReports.referralId, ref.id));
+    }
+    // 5. Referrals
+    await tx.delete(referrals).where(eq(referrals.agentId, agentId));
+    // 6. Sessions
+    await tx.delete(sessions).where(eq(sessions.agentId, agentId));
+    // 7. OTP codes for agent's email
+    if (agent.email) {
+      await tx.delete(otpCodes).where(eq(otpCodes.email, agent.email));
+    }
+    // 8. Agent itself
+    await tx.delete(agents).where(eq(agents.id, agentId));
+  });
 
   return { deleted: true, agentName: agent.fullName, agentId: agent.id };
 }

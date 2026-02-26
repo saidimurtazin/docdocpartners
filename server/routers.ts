@@ -338,7 +338,7 @@ export const appRouter = router({
           // Generate OTP for staff
           const crypto = await import("crypto");
           const code = crypto.randomInt(100000, 1000000).toString();
-          const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+          const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes (matches Telegram message text)
           if (process.env.NODE_ENV !== "production") console.log('[RequestOTP] Staff code generated for', input.email);
 
           // Save OTP to database
@@ -727,6 +727,8 @@ export const appRouter = router({
     requestRegistrationOtp: publicProcedure
       .input(z.object({ email: z.string().email() }))
       .mutation(async ({ input }) => {
+        checkOtpRateLimit(input.email);
+
         // Check email not already registered as agent
         const existingAgent = await db.getAgentByEmail(input.email);
         if (existingAgent) {
@@ -2185,9 +2187,12 @@ DocPartner — B2B-платформа агентских рекомендаци�
         if (!clinic) throw new TRPCError({ code: "NOT_FOUND", message: "Клиника не найдена" });
 
         let updatedCount = 0;
+        const referralCache = new Map<number, any>();
+
         for (const item of input.items) {
           const referral = await db.getReferralById(item.referralId);
           if (!referral) continue;
+          referralCache.set(item.referralId, referral);
 
           // Check targeting: either old-style clinic name match or targetClinicIds
           const targetIds = referral.targetClinicIds ? JSON.parse(referral.targetClinicIds) as number[] : null;
@@ -2203,7 +2208,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
             bookedByPartner: "yes",
           });
 
-          // Calculate and set commission (FIX: was missing before!)
+          // Calculate and set commission
           let commissionRate = clinic.commissionRate || 10;
           const tierRate = await getAgentEffectiveCommissionRate(referral.agentId, treatmentMonth);
           if (tierRate !== null) commissionRate = tierRate;
@@ -2213,11 +2218,11 @@ DocPartner — B2B-платформа агентских рекомендаци�
           updatedCount++;
         }
 
-        // Recalculate monthly commissions for all affected agents/months
+        // Recalculate monthly commissions for all affected agents/months (reuse cached referrals)
         if (updatedCount > 0) {
           const agentMonths = new Set<string>();
           for (const item of input.items) {
-            const referral = await db.getReferralById(item.referralId);
+            const referral = referralCache.get(item.referralId);
             if (referral) {
               const treatmentMonth = parseTreatmentMonth(item.visitDate) || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
               agentMonths.add(`${referral.agentId}:${treatmentMonth}`);
@@ -2382,6 +2387,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
       }),
 
     // Get agent statistics (used by AgentCabinet.tsx)
+    // TODO: validate Telegram WebApp initData for proper auth (telegramId is hard to guess but not secret)
     getAgentStatistics: publicProcedure
       .input(z.object({ telegramId: z.string() }))
       .query(async ({ input }) => {
@@ -2560,6 +2566,12 @@ DocPartner — B2B-платформа агентских рекомендаци�
           throw new TRPCError({ code: "BAD_REQUEST", message: "Укажите ФИО пациента (Фамилия Имя Отчество — 3 слова)" });
         }
 
+        // Check for duplicate referral (same patient name + birthdate by this agent, created recently)
+        const existing = await db.findRecentDuplicateReferral(ctx.agentId, input.patientFullName.trim(), input.patientBirthdate);
+        if (existing) {
+          throw new TRPCError({ code: "CONFLICT", message: "Рекомендация для этого пациента уже существует." });
+        }
+
         const referralId = await db.createReferral({
           agentId: ctx.agentId,
           patientFullName: input.patientFullName.trim(),
@@ -2576,7 +2588,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
         try {
           const { sendReferralNotification } = await import("./email");
           await sendReferralNotification({
-            to: "said.murtazin@mail.ru",
+            to: process.env.REFERRAL_NOTIFICATION_EMAIL || "said.murtazin@mail.ru",
             referralId,
             agentName: agent.fullName,
             patientName: input.patientFullName,
@@ -2647,6 +2659,20 @@ DocPartner — B2B-платформа агентских рекомендаци�
         role: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
+        // Check email uniqueness
+        if (input.email) {
+          const existing = await db.getAgentByEmail(input.email);
+          if (existing && existing.id !== ctx.agentId) {
+            throw new TRPCError({ code: "CONFLICT", message: "Этот email уже используется другим агентом." });
+          }
+        }
+        // Check phone uniqueness
+        if (input.phone) {
+          const existing = await db.getAgentByPhone(input.phone);
+          if (existing && existing.id !== ctx.agentId) {
+            throw new TRPCError({ code: "CONFLICT", message: "Этот телефон уже используется другим агентом." });
+          }
+        }
         await db.updateAgentPersonalInfo(ctx.agentId, input);
         return { success: true };
       }),

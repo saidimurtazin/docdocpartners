@@ -3,7 +3,12 @@
  */
 import { getDb } from "./db";
 import { referrals, clinics } from "../drizzle/schema";
-import { desc } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
+
+// Cache clinics list (changes rarely, avoids repeated DB queries in batch processing)
+let _clinicsCache: (typeof clinics.$inferSelect)[] | null = null;
+let _clinicsCacheTime = 0;
+const CLINICS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export interface AlternativeMatch {
   referralId: number;
@@ -234,11 +239,15 @@ export async function findMatchingReferral(
   const db = await getDb();
   if (!db) return result;
 
-  // Get recent referrals (last 6 months)
+  // Get recent referrals (last 6 months) with date filter and limit
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
   const allReferrals = await db
     .select()
     .from(referrals)
-    .orderBy(desc(referrals.createdAt));
+    .where(sql`${referrals.createdAt} >= ${sixMonthsAgo}`)
+    .orderBy(desc(referrals.createdAt))
+    .limit(5000);
 
   // Filter to relevant statuses (not cancelled, not paid already)
   const candidates = allReferrals.filter(r =>
@@ -249,7 +258,12 @@ export async function findMatchingReferral(
   if (knownClinicId) {
     result.clinicId = knownClinicId;
   } else if (clinicName) {
-    const allClinics = await db.select().from(clinics);
+    // Use cached clinics list to avoid repeated queries in batch processing
+    if (!_clinicsCache || Date.now() - _clinicsCacheTime > CLINICS_CACHE_TTL) {
+      _clinicsCache = await db.select().from(clinics);
+      _clinicsCacheTime = Date.now();
+    }
+    const allClinics = _clinicsCache;
     let bestClinicScore = 0;
     for (const clinic of allClinics) {
       const score = compareClinicNames(clinicName, clinic.name);
