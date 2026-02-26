@@ -21,6 +21,7 @@ import { trpc } from "@/lib/trpc";
 
 export default function KnowledgeBase() {
   const { data: clinics, isLoading: clinicsLoading } = trpc.public.clinics.useQuery();
+  const { data: rates } = trpc.public.commissionRates.useQuery();
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -89,7 +90,7 @@ export default function KnowledgeBase() {
                     <div>
                       <h4 className="font-semibold mb-1">Фиксированная ставка</h4>
                       <p className="text-sm text-muted-foreground">
-                        7% от суммы лечения, 10% при объёме &gt;1 млн ₽/месяц
+                        от {rates?.baseRate || 7}% от суммы лечения{rates?.premiumRate ? `, ${rates.premiumRate}% при объёме >${(rates.premiumThresholdRub || 0).toLocaleString('ru-RU')} ₽/месяц` : ''}
                       </p>
                     </div>
                   </div>
@@ -399,24 +400,26 @@ export default function KnowledgeBase() {
                 <div className="grid md:grid-cols-3 gap-4">
                   <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
                     <h4 className="font-semibold mb-2 text-green-700 dark:text-green-400">Самозанятый</h4>
-                    <div className="text-2xl font-bold mb-1">7%</div>
+                    <div className="text-2xl font-bold mb-1">{rates?.baseRate || 7}%</div>
                     <p className="text-sm text-muted-foreground mb-3">от стоимости лечения</p>
                     <p className="text-xs text-muted-foreground">Налог 6% от выплаты платите сами</p>
                   </div>
 
                   <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
                     <h4 className="font-semibold mb-2 text-yellow-700 dark:text-yellow-400">Не самозанятый</h4>
-                    <div className="text-2xl font-bold mb-1">~4%</div>
+                    <div className="text-2xl font-bold mb-1">~{Math.round((rates?.baseRate || 7) * 0.57)}%</div>
                     <p className="text-sm text-muted-foreground mb-3">после вычетов</p>
                     <p className="text-xs text-muted-foreground">Уже за вычетом НДФЛ 13% и соц. отчислений 30%</p>
                   </div>
 
+                  {rates?.premiumRate && (
                   <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
-                    <h4 className="font-semibold mb-2 text-primary">Бонус &gt;1M ₽/мес</h4>
-                    <div className="text-2xl font-bold mb-1">10%</div>
+                    <h4 className="font-semibold mb-2 text-primary">Бонус &gt;{(rates.premiumThresholdRub || 0).toLocaleString('ru-RU')} ₽/мес</h4>
+                    <div className="text-2xl font-bold mb-1">{rates.premiumRate}%</div>
                     <p className="text-sm text-muted-foreground mb-3">от стоимости лечения</p>
-                    <p className="text-xs text-muted-foreground">Для самозанятых</p>
+                    <p className="text-xs text-muted-foreground">При достижении объёма</p>
                   </div>
+                  )}
                 </div>
 
                 <div className="p-4 rounded-lg border">

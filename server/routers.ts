@@ -99,8 +99,8 @@ async function getAgentEffectiveCommissionRate(agentId: number, treatmentMonth: 
     }
   }
 
-  // No tier matched — don't override, use per-clinic rate
-  return null;
+  // No tier matched above — use lowest tier (base rate) as fallback
+  return sorted[sorted.length - 1]?.commissionRate || null;
 }
 
 /**
@@ -1999,6 +1999,9 @@ DocPartner — B2B-платформа агентских рекомендаци�
     }),
     stats: publicProcedure.query(async () => {
       return db.getPublicStats();
+    }),
+    commissionRates: publicProcedure.query(async () => {
+      return db.getCommissionRates();
     }),
   }),
 

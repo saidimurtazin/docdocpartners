@@ -1556,6 +1556,33 @@ export async function addBonusPoints(agentId: number, amountKopecks: number): Pr
 }
 
 /**
+ * Получить ставки комиссии из настроек (agentCommissionTiers).
+ * Возвращает базовую (минимальный тир) и премиальную (максимальный тир) ставки.
+ */
+export async function getCommissionRates(): Promise<{
+  baseRate: number;
+  premiumRate: number | null;
+  premiumThresholdRub: number | null;
+}> {
+  const tiersJson = await getAppSetting("agentCommissionTiers");
+  if (!tiersJson) return { baseRate: 10, premiumRate: null, premiumThresholdRub: null };
+
+  try {
+    const tiers: { minMonthlyRevenue: number; commissionRate: number }[] = JSON.parse(tiersJson);
+    if (tiers.length === 0) return { baseRate: 10, premiumRate: null, premiumThresholdRub: null };
+
+    const sorted = [...tiers].sort((a, b) => a.minMonthlyRevenue - b.minMonthlyRevenue);
+    const baseRate = sorted[0].commissionRate;
+    const premiumRate = sorted.length > 1 ? sorted[sorted.length - 1].commissionRate : null;
+    const premiumThresholdRub = sorted.length > 1 ? Math.round(sorted[sorted.length - 1].minMonthlyRevenue / 100) : null;
+
+    return { baseRate, premiumRate, premiumThresholdRub };
+  } catch {
+    return { baseRate: 10, premiumRate: null, premiumThresholdRub: null };
+  }
+}
+
+/**
  * Общее количество рекомендаций агента
  */
 export async function getAgentReferralCount(agentId: number): Promise<number> {

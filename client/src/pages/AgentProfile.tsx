@@ -11,6 +11,7 @@ import { useRequireAuth } from "@/hooks/useRequireAuth";
 export default function AgentProfile() {
   useRequireAuth();
   const { data: profile, isLoading, refetch } = trpc.dashboard.profile.useQuery();
+  const { data: rates } = trpc.public.commissionRates.useQuery();
   const updateProfile = trpc.dashboard.updateProfile.useMutation();
   const updatePersonalInfo = trpc.dashboard.updatePersonalInfo.useMutation();
 
@@ -321,7 +322,7 @@ export default function AgentProfile() {
                 <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-4">
                   <h4 className="font-semibold text-green-800 mb-2">Почему стоит стать самозанятым?</h4>
                   <ul className="text-sm space-y-1 text-green-700">
-                    <li>&#x2022; Вознаграждение <b>10%</b> вместо 7%</li>
+                    <li>&#x2022; Вознаграждение <b>{rates?.premiumRate || 10}%</b> вместо {rates?.baseRate || 7}%</li>
                     <li>&#x2022; Налог всего <b>6%</b> (платится автоматически)</li>
                     <li>&#x2022; Регистрация за <b>10 минут</b> в приложении</li>
                     <li>&#x2022; Никакой отчётности — всё делает приложение</li>

@@ -80,6 +80,7 @@ export default function Register() {
 
   const [phoneError, setPhoneError] = useState("");
 
+  const { data: rates } = trpc.public.commissionRates.useQuery();
   const requestOtp = trpc.auth.requestRegistrationOtp.useMutation();
   const verifyOtp = trpc.auth.verifyRegistrationOtp.useMutation();
   const checkPhone = trpc.auth.checkPhone.useMutation();
@@ -604,7 +605,7 @@ export default function Register() {
                 <div className="border rounded-lg p-4 space-y-3">
                   <h4 className="font-medium">Условия работы:</h4>
                   <ul className="text-sm text-muted-foreground space-y-1 list-disc pl-4">
-                    <li>Комиссия: от 7% от суммы лечения</li>
+                    <li>Комиссия: от {rates?.baseRate || 7}% от суммы лечения</li>
                     <li>Минимальная выплата: 1 000 руб.</li>
                     <li>Срок выплаты: 3-5 рабочих дней</li>
                     <li>Самозанятые: 6% НПД (оплачиваете самостоятельно)</li>
