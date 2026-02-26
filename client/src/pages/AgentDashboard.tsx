@@ -166,18 +166,26 @@ export default function AgentDashboard() {
   const recentReferrals = referrals?.slice(0, 5) || [];
 
   const statusColors: Record<string, string> = {
-    pending: '#f59e0b',
+    new: '#f59e0b',
+    in_progress: '#f97316',
     contacted: '#3b82f6',
     scheduled: '#8b5cf6',
-    completed: '#10b981',
+    booked: '#6366f1',
+    booked_elsewhere: '#a855f7',
+    visited: '#10b981',
+    paid: '#059669',
     cancelled: '#ef4444',
   };
 
   const statusLabels: Record<string, string> = {
-    pending: 'Ожидание',
+    new: 'Новый',
+    in_progress: 'В работе',
     contacted: 'Контакт',
     scheduled: 'Записан',
-    completed: 'Завершено',
+    booked: 'Забронирован',
+    booked_elsewhere: 'В другой клинике',
+    visited: 'Приём состоялся',
+    paid: 'Оплачено',
     cancelled: 'Отменено',
   };
 

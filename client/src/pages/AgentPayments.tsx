@@ -597,9 +597,9 @@ export default function AgentPayments() {
                               Обратитесь в поддержку
                             </span>
                           )}
-                          {payment.processedAt && (
+                          {payment.completedAt && (
                             <div className="text-xs text-muted-foreground">
-                              Обработано: {formatDate(payment.processedAt)}
+                              Обработано: {formatDate(payment.completedAt)}
                             </div>
                           )}
                         </div>

@@ -544,8 +544,11 @@ bot.on(message('text'), async (ctx) => {
         return;
       }
 
-      const { getAgentCompletedPaymentsSum } = await import('./db');
-      const paidOutSum = await getAgentCompletedPaymentsSum(agent.id);
+      const { getAgentCompletedPaymentsSum, getAgentReferralCount } = await import('./db');
+      const [paidOutSum, referralCount] = await Promise.all([
+        getAgentCompletedPaymentsSum(agent.id),
+        getAgentReferralCount(agent.id),
+      ]);
       const earnedRub = ((agent.totalEarnings || 0) / 100).toLocaleString('ru-RU');
       const paidOutRub = (paidOutSum / 100).toLocaleString('ru-RU');
       const bonusRub = ((agent.bonusPoints || 0) / 100).toLocaleString('ru-RU');
@@ -553,7 +556,7 @@ bot.on(message('text'), async (ctx) => {
       const webReferralLink = `https://doc-partner.ru/register?ref=${agent.id}`;
 
       let message = '📊 <b>Моя статистика</b>\n\n';
-      message += `👥 Отправлено пациентов: <b>${agent.totalReferrals || 0}</b>\n`;
+      message += `👥 Отправлено пациентов: <b>${referralCount}</b>\n`;
       message += `💰 Заработано: <b>${earnedRub} ₽</b>\n`;
       message += `✅ Выплачено: <b>${paidOutRub} ₽</b>\n`;
       if ((agent.bonusPoints || 0) > 0) {
@@ -2937,16 +2940,19 @@ bot.action('cmd_stats', async (ctx) => {
       return;
     }
 
-    const { getAgentCompletedPaymentsSum } = await import('./db');
-    const paidOutSum = await getAgentCompletedPaymentsSum(agent.id);
+    const { getAgentCompletedPaymentsSum, getAgentReferralCount } = await import('./db');
+    const [paidOutSum, referralCount] = await Promise.all([
+      getAgentCompletedPaymentsSum(agent.id),
+      getAgentReferralCount(agent.id),
+    ]);
     const earnedRub = ((agent.totalEarnings || 0) / 100).toLocaleString('ru-RU');
     const paidOutRub = (paidOutSum / 100).toLocaleString('ru-RU');
     const bonusRub = ((agent.bonusPoints || 0) / 100).toLocaleString('ru-RU');
     const referralLink = `https://t.me/docpartnerbot?start=ref_${agent.id}`;
-      const webReferralLink = `https://doc-partner.ru/register?ref=${agent.id}`;
+    const webReferralLink = `https://doc-partner.ru/register?ref=${agent.id}`;
 
     let message = '📊 <b>Моя статистика</b>\n\n';
-    message += `👥 Отправлено пациентов: <b>${agent.totalReferrals || 0}</b>\n`;
+    message += `👥 Отправлено пациентов: <b>${referralCount}</b>\n`;
     message += `💰 Заработано: <b>${earnedRub} ₽</b>\n`;
     message += `✅ Выплачено: <b>${paidOutRub} ₽</b>\n`;
     if ((agent.bonusPoints || 0) > 0) {
@@ -3789,8 +3795,11 @@ bot.command('stats', async (ctx) => {
       return;
     }
 
-    const { getAgentCompletedPaymentsSum: getCompletedSum } = await import('./db');
-    const paidOutSum = await getCompletedSum(agent.id);
+    const { getAgentCompletedPaymentsSum: getCompletedSum, getAgentReferralCount } = await import('./db');
+    const [paidOutSum, totalReferralCount] = await Promise.all([
+      getCompletedSum(agent.id),
+      getAgentReferralCount(agent.id),
+    ]);
     const earnedRub = ((agent.totalEarnings || 0) / 100).toLocaleString('ru-RU');
     const paidOutRub = (paidOutSum / 100).toLocaleString('ru-RU');
     const bonusRub = ((agent.bonusPoints || 0) / 100).toLocaleString('ru-RU');
@@ -3798,7 +3807,7 @@ bot.command('stats', async (ctx) => {
       const webReferralLink = `https://doc-partner.ru/register?ref=${agent.id}`;
 
     let message = '📊 <b>Моя статистика</b>\n\n';
-    message += `👥 Отправлено пациентов: <b>${agent.totalReferrals || 0}</b>\n`;
+    message += `👥 Отправлено пациентов: <b>${totalReferralCount}</b>\n`;
     message += `💰 Заработано: <b>${earnedRub} ₽</b>\n`;
     message += `✅ Выплачено: <b>${paidOutRub} ₽</b>\n`;
     if ((agent.bonusPoints || 0) > 0) {

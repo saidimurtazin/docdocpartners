@@ -99,7 +99,8 @@ async function getAgentEffectiveCommissionRate(agentId: number, treatmentMonth: 
     }
   }
 
-  return tiers[0]?.commissionRate || null;
+  // No tier matched — don't override, use per-clinic rate
+  return null;
 }
 
 /**
@@ -2342,6 +2343,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
       .query(async ({ input }) => {
         const agent = await db.getAgentByTelegramId(input.telegramId);
         if (!agent) return { agent: null };
+        const totalReferrals = await db.getAgentReferralCount(agent.id);
         return {
           agent: {
             id: agent.id,
@@ -2355,7 +2357,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
             status: agent.status,
             referralCode: agent.referralCode,
             totalEarnings: agent.totalEarnings,
-            totalReferrals: agent.totalReferrals,
+            totalReferrals,
             isSelfEmployed: agent.isSelfEmployed,
             createdAt: agent.createdAt,
           },
@@ -2415,9 +2417,9 @@ DocPartner — B2B-платформа агентских рекомендаци�
       const completedReferrals = referrals.filter(r => r.status === "paid" || r.status === "visited");
 
       const now = new Date();
-      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       const thisMonthEarnings = referrals
-        .filter(r => new Date(r.createdAt) >= firstDayOfMonth && (r.status === "paid" || r.status === "visited"))
+        .filter(r => r.treatmentMonth === currentMonth && (r.status === "paid" || r.status === "visited"))
         .reduce((sum, r) => sum + (r.commissionAmount || 0), 0);
 
       const conversionRate = referrals.length > 0
@@ -2642,17 +2644,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
         isSelfEmployed: z.boolean(),
       }))
       .mutation(async ({ input, ctx }) => {
-        // Check for pending payment requests (deduplication)
-        const existingPayments = await db.getPaymentsByAgentId(ctx.agentId);
-        const hasPendingPayment = existingPayments.some(p => p.status === "pending" || p.status === "processing");
-        if (hasPendingPayment) {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: "У вас уже есть необработанная заявка на выплату. Дождитесь её обработки.",
-          });
-        }
-
-        // Check agent has filled requisites
+        // Check agent has filled requisites (before locking)
         const agent = await db.getAgentById(ctx.agentId);
         if (!agent?.inn) {
           throw new TRPCError({
@@ -2691,26 +2683,24 @@ DocPartner — B2B-платформа агентских рекомендаци�
         // Calculate tax breakdown
         const breakdown = calculateWithdrawalTax(input.amount, input.isSelfEmployed);
 
-        // Validate amount against available balance (earnings minus already paid and pending)
-        // Balance check uses GROSS amount (what's deducted from totalEarnings)
-        const pendingSum = await db.getAgentPendingPaymentsSum(ctx.agentId);
-        const completedSum = await db.getAgentCompletedPaymentsSum(ctx.agentId);
-        const availableBalance = (agent.totalEarnings || 0) - completedSum - pendingSum;
-        if (input.amount > availableBalance) {
+        // Use atomic lock to prevent race conditions (balance check + dedup + insert in one transaction)
+        let paymentId: number;
+        try {
+          const result = await db.createPaymentWithLock(ctx.agentId, {
+            amount: breakdown.grossAmount,
+            grossAmount: breakdown.grossAmount,
+            netAmount: breakdown.netAmount,
+            taxAmount: breakdown.taxAmount,
+            socialContributions: breakdown.socialContributions,
+            isSelfEmployedSnapshot: input.isSelfEmployed ? "yes" : "no",
+          });
+          paymentId = result.paymentId;
+        } catch (err: any) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: `Недостаточно средств. Доступно: ${(availableBalance / 100).toLocaleString("ru-RU")} ₽`,
+            message: err.message || "Ошибка при создании заявки на выплату",
           });
         }
-
-        const paymentId = await db.createPaymentRequest(ctx.agentId, {
-          amount: breakdown.grossAmount,
-          grossAmount: breakdown.grossAmount,
-          netAmount: breakdown.netAmount,
-          taxAmount: breakdown.taxAmount,
-          socialContributions: breakdown.socialContributions,
-          isSelfEmployedSnapshot: input.isSelfEmployed ? "yes" : "no",
-        });
 
         // Auto-submit to Jump Finance if configured
         let jumpResult: { success: boolean; jumpPaymentId?: string; error?: string } | null = null;
@@ -2719,7 +2709,6 @@ DocPartner — B2B-платформа агентских рекомендаци�
           jumpResult = await processJumpPayment(paymentId);
           if (!jumpResult.success) {
             console.warn(`[requestPayment] Jump auto-submit failed for payment ${paymentId}: ${jumpResult.error}`);
-            // Save error to payment notes for admin visibility
             await db.updatePaymentJumpData(paymentId, {
               jumpStatusText: `Ошибка: ${(jumpResult.error || "неизвестная").slice(0, 50)}`,
             });

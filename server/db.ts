@@ -436,25 +436,8 @@ export async function updateReferralStatus(
   // Update status
   await db.update(referrals).set({ status }).where(eq(referrals.id, id));
   
-  // Send Telegram notification if status changed
-  if (oldStatus !== status) {
-    // Get agent telegram ID
-    const agentResult = await db.select().from(agents).where(eq(agents.id, oldReferral.agentId)).limit(1);
-    const agent = agentResult[0];
-    
-    if (agent?.telegramId) {
-      const { notifyReferralStatusChange } = await import("./telegram-notifications");
-      await notifyReferralStatusChange(agent.telegramId, {
-        id: oldReferral.id,
-        patientFullName: oldReferral.patientFullName,
-        oldStatus,
-        newStatus: status,
-        clinic: oldReferral.clinic,
-        treatmentAmount: oldReferral.treatmentAmount ?? undefined,
-        commissionAmount: oldReferral.commissionAmount ?? undefined,
-      });
-    }
-  }
+  // NOTE: Telegram notification is handled by the caller (routers.ts), NOT here.
+  // This avoids double-notification when the router also sends one.
 }
 
 export async function updateReferralAmounts(id: number, treatmentAmount: number, commissionAmount: number) {
@@ -483,19 +466,11 @@ export async function updateReferralAmounts(id: number, treatmentAmount: number,
     .set({ treatmentAmount, commissionAmount })
     .where(eq(referrals.id, id));
 
-  // Update agent totalEarnings (apply delta, not absolute)
+  // Update agent totalEarnings atomically (prevents race conditions with concurrent updates)
   if (commissionDelta !== 0) {
-    const agentResult = await db.select().from(agents).where(eq(agents.id, referral.agentId)).limit(1);
-    const agent = agentResult[0];
-
-    if (agent) {
-      const currentEarnings = agent.totalEarnings || 0;
-      const newEarnings = Math.max(0, currentEarnings + commissionDelta);
-
-      await db.update(agents)
-        .set({ totalEarnings: newEarnings })
-        .where(eq(agents.id, referral.agentId));
-    }
+    await db.execute(
+      sql`UPDATE agents SET totalEarnings = GREATEST(0, COALESCE(totalEarnings, 0) + ${commissionDelta}) WHERE id = ${referral.agentId}`
+    );
   }
 }
 
@@ -1581,7 +1556,20 @@ export async function addBonusPoints(agentId: number, amountKopecks: number): Pr
 }
 
 /**
- * Количество оплаченных пациентов агента (status='paid')
+ * Общее количество рекомендаций агента
+ */
+export async function getAgentReferralCount(agentId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db.select({
+    count: sql<number>`count(*)`
+  }).from(referrals)
+    .where(eq(referrals.agentId, agentId));
+  return result.count;
+}
+
+/**
+ * Количество пролеченных/оплаченных пациентов агента (status='visited' или 'paid')
  */
 export async function getAgentPaidReferralCount(agentId: number): Promise<number> {
   const db = await getDb();
@@ -1591,7 +1579,7 @@ export async function getAgentPaidReferralCount(agentId: number): Promise<number
   }).from(referrals)
     .where(and(
       eq(referrals.agentId, agentId),
-      eq(referrals.status, "paid")
+      sql`${referrals.status} IN ('visited', 'paid')`
     ));
   return result.count;
 }
