@@ -1,160 +1,42 @@
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Search, Filter, Plus } from "lucide-react";
-import { useState } from "react";
+import { Users, Search, Plus } from "lucide-react";
+import { useState, useEffect } from "react";
 import DashboardLayoutWrapper from "@/components/DashboardLayoutWrapper";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import CreateReferralDialog from "@/components/CreateReferralDialog";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { useSearch } from "wouter";
+import { referralStatusLabels, referralStatusColors, formatCurrency, formatDateRu } from "@/lib/referral-utils";
 
 export default function AgentReferrals() {
   useRequireAuth();
   const { data: referrals, isLoading, refetch } = trpc.dashboard.referrals.useQuery();
   const { data: clinicsList } = trpc.dashboard.clinics.useQuery();
-  const createReferral = trpc.dashboard.createReferral.useMutation();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  // Form state
-  const [formData, setFormData] = useState({
-    patientFullName: "",
-    patientBirthdate: "",
-    patientCity: "",
-    patientPhone: "",
-    patientEmail: "",
-    clinic: "",
-    notes: "",
-  });
-  const [selectedClinicIds, setSelectedClinicIds] = useState<number[]>([]);
-  const [formError, setFormError] = useState("");
+  // Read clinicId from URL params (from AgentClinics "Направить пациента" button)
+  const search = useSearch();
+  const params = new URLSearchParams(search);
+  const preselectedClinicId = params.get("clinicId") ? Number(params.get("clinicId")) : undefined;
 
-  const statusLabels: Record<string, string> = {
-    new: "Новая",
-    in_progress: "В работе",
-    contacted: "Связались",
-    scheduled: "Записан",
-    visited: "Приём состоялся",
-    paid: "Оплачено",
-    duplicate: "Дубликат",
-    no_answer: "Не дозвонились",
-    cancelled: "Отменена",
-  };
-
-  const statusColors: Record<string, string> = {
-    new: "bg-amber-100 text-amber-800 border-amber-200",
-    in_progress: "bg-blue-100 text-blue-800 border-blue-200",
-    contacted: "bg-sky-100 text-sky-800 border-sky-200",
-    scheduled: "bg-purple-100 text-purple-800 border-purple-200",
-    visited: "bg-emerald-100 text-emerald-800 border-emerald-200",
-    paid: "bg-green-100 text-green-800 border-green-200",
-    duplicate: "bg-gray-100 text-gray-800 border-gray-200",
-    no_answer: "bg-orange-100 text-orange-800 border-orange-200",
-    cancelled: "bg-red-100 text-red-800 border-red-200",
-  };
-
-  const formatDate = (date: Date | string) => {
-    return new Date(date).toLocaleDateString('ru-RU', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('ru-RU', {
-      style: 'currency',
-      currency: 'RUB',
-      minimumFractionDigits: 0,
-    }).format(amount / 100); // convert from kopecks
-  };
-
-  const resetForm = () => {
-    setFormData({
-      patientFullName: "",
-      patientBirthdate: "",
-      patientCity: "",
-      patientPhone: "",
-      patientEmail: "",
-      clinic: "",
-      notes: "",
-    });
-    setSelectedClinicIds([]);
-    setFormError("");
-  };
-
-  const toggleClinicSelection = (clinicId: number) => {
-    setSelectedClinicIds(prev =>
-      prev.includes(clinicId)
-        ? prev.filter(id => id !== clinicId)
-        : [...prev, clinicId]
-    );
-  };
-
-  const handleCreateReferral = async () => {
-    setFormError("");
-
-    // Validate
-    if (!formData.patientFullName.trim()) {
-      setFormError("Укажите ФИО пациента");
-      return;
+  // Auto-open dialog when clinicId is in URL
+  useEffect(() => {
+    if (preselectedClinicId) {
+      setDialogOpen(true);
     }
-    const nameWords = formData.patientFullName.trim().split(/\s+/);
-    if (nameWords.length !== 3) {
-      setFormError("Укажите Фамилию, Имя и Отчество пациента (ровно 3 слова)");
-      return;
-    }
-    if (!formData.patientBirthdate.trim()) {
-      setFormError("Укажите дату рождения");
-      return;
-    }
-    if (!/^\d{2}\.\d{2}\.\d{4}$/.test(formData.patientBirthdate)) {
-      setFormError("Формат даты: ДД.ММ.ГГГГ (например, 15.03.1985)");
-      return;
-    }
-    // Validate date is real and patient is 0-120 years old
-    const [dd, mm, yyyy] = formData.patientBirthdate.split('.').map(Number);
-    const birthDate = new Date(yyyy, mm - 1, dd);
-    if (birthDate.getDate() !== dd || birthDate.getMonth() !== mm - 1 || birthDate.getFullYear() !== yyyy) {
-      setFormError("Указана несуществующая дата");
-      return;
-    }
-    const ageDiff = Date.now() - birthDate.getTime();
-    const ageYears = Math.floor(ageDiff / (365.25 * 24 * 60 * 60 * 1000));
-    if (ageYears < 0 || ageYears > 120) {
-      setFormError("Возраст пациента должен быть от 0 до 120 лет");
-      return;
-    }
-
-    try {
-      await createReferral.mutateAsync({
-        patientFullName: formData.patientFullName.trim(),
-        patientBirthdate: formData.patientBirthdate.trim(),
-        patientCity: formData.patientCity.trim() || undefined,
-        patientPhone: formData.patientPhone.trim() || undefined,
-        patientEmail: formData.patientEmail.trim() || undefined,
-        clinic: formData.clinic || undefined,
-        targetClinicIds: selectedClinicIds.length > 0 ? selectedClinicIds : undefined,
-        notes: formData.notes.trim() || undefined,
-      });
-      alert("Рекомендация успешно создана!");
-      resetForm();
-      setDialogOpen(false);
-      refetch();
-    } catch (error: any) {
-      const msg = error?.message || "Ошибка создания рекомендации";
-      setFormError(msg);
-    }
-  };
+  }, [preselectedClinicId]);
 
   if (isLoading) {
     return (
@@ -188,154 +70,26 @@ export default function AgentReferrals() {
                 <h1 className="text-4xl font-bold mb-2">Мои рекомендации</h1>
                 <p className="text-primary-foreground/80">Все пациенты, которых вы направили</p>
               </div>
-              <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
-                <DialogTrigger asChild>
-                  <Button variant="secondary" size="lg" className="gap-2">
-                    <Plus className="w-5 h-5" />
-                    Добавить рекомендацию
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[500px]">
-                  <DialogHeader>
-                    <DialogTitle>Новая рекомендация</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4 mt-2">
-                    <div>
-                      <Label htmlFor="patientFullName">ФИО пациента *</Label>
-                      <Input
-                        id="patientFullName"
-                        placeholder="Иванов Иван Иванович"
-                        value={formData.patientFullName}
-                        onChange={(e) => setFormData({ ...formData, patientFullName: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="patientBirthdate">Дата рождения *</Label>
-                      <Input
-                        id="patientBirthdate"
-                        placeholder="ДД.ММ.ГГГГ"
-                        value={formData.patientBirthdate}
-                        onChange={(e) => setFormData({ ...formData, patientBirthdate: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="patientCity">Город</Label>
-                      <Input
-                        id="patientCity"
-                        placeholder="Москва"
-                        value={formData.patientCity}
-                        onChange={(e) => setFormData({ ...formData, patientCity: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="patientPhone">Телефон</Label>
-                      <Input
-                        id="patientPhone"
-                        placeholder="+7 (999) 123-45-67"
-                        value={formData.patientPhone}
-                        onChange={(e) => setFormData({ ...formData, patientPhone: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="patientEmail">Email</Label>
-                      <Input
-                        id="patientEmail"
-                        type="email"
-                        placeholder="patient@email.com"
-                        value={formData.patientEmail}
-                        onChange={(e) => setFormData({ ...formData, patientEmail: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label>Клиники для направления</Label>
-                      <p className="text-xs text-muted-foreground mb-2">
-                        Выберите клиники, в которые хотите направить пациента. Можно пропустить — тогда рекомендация будет доступна всем клиникам.
-                      </p>
-                      <div className="border border-input rounded-md p-3 max-h-48 overflow-y-auto space-y-2">
-                        {clinicsList?.map((clinic: any) => (
-                          <label
-                            key={clinic.id}
-                            className={`flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors ${
-                              selectedClinicIds.includes(clinic.id)
-                                ? "bg-primary/10 border border-primary/30"
-                                : "hover:bg-accent/50"
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selectedClinicIds.includes(clinic.id)}
-                              onChange={() => toggleClinicSelection(clinic.id)}
-                              className="rounded border-input"
-                            />
-                            <span className="text-sm">{clinic.name}</span>
-                            {clinic.city && (
-                              <span className="text-xs text-muted-foreground">({clinic.city})</span>
-                            )}
-                          </label>
-                        ))}
-                        {(!clinicsList || clinicsList.length === 0) && (
-                          <p className="text-sm text-muted-foreground text-center py-2">Нет доступных клиник</p>
-                        )}
-                      </div>
-                      {selectedClinicIds.length > 0 && (
-                        <div className="flex items-center justify-between mt-2">
-                          <p className="text-xs text-muted-foreground">
-                            Выбрано: {selectedClinicIds.length}
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedClinicIds([])}
-                            className="text-xs text-primary hover:underline"
-                          >
-                            Сбросить
-                          </button>
-                        </div>
-                      )}
-                      {selectedClinicIds.length === 0 && (
-                        <p className="text-xs text-amber-600 mt-1">
-                          Не выбраны — рекомендация будет доступна для всех клиник (любая)
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <Label htmlFor="notes">Примечание</Label>
-                      <textarea
-                        id="notes"
-                        placeholder="Например: запись к конкретному врачу, важная информация о пациенте..."
-                        value={formData.notes}
-                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                        maxLength={500}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm resize-none"
-                      />
-                      {formData.notes.length > 0 && (
-                        <p className="text-xs text-muted-foreground mt-1 text-right">{formData.notes.length}/500</p>
-                      )}
-                    </div>
-
-                    {formError && (
-                      <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md border border-red-200">
-                        {formError}
-                      </div>
-                    )}
-
-                    <div className="flex justify-end gap-3 pt-2">
-                      <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm(); }}>
-                        Отмена
-                      </Button>
-                      <Button
-                        onClick={handleCreateReferral}
-                        disabled={createReferral.isPending}
-                      >
-                        {createReferral.isPending ? "Создание..." : "Создать"}
-                      </Button>
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
+              <Button
+                variant="secondary"
+                size="lg"
+                className="gap-2"
+                onClick={() => setDialogOpen(true)}
+              >
+                <Plus className="w-5 h-5" />
+                Добавить рекомендацию
+              </Button>
             </div>
           </div>
         </div>
+
+        {/* Shared Create Referral Dialog */}
+        <CreateReferralDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          onSuccess={() => refetch()}
+          initialClinicId={preselectedClinicId}
+        />
 
         <div className="container py-8 max-w-7xl">
           {/* Filters */}
@@ -353,26 +107,18 @@ export default function AgentReferrals() {
                   />
                 </div>
 
-                {/* Status Filter */}
-                <div className="relative">
-                  <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="w-full pl-10 pr-3 py-2 border border-input rounded-md bg-background"
-                  >
-                    <option value="all">Все статусы</option>
-                    <option value="new">Новая</option>
-                    <option value="in_progress">В работе</option>
-                    <option value="contacted">Связались</option>
-                    <option value="scheduled">Записан</option>
-                    <option value="visited">Приём состоялся</option>
-                    <option value="paid">Оплачено</option>
-                    <option value="duplicate">Дубликат</option>
-                    <option value="no_answer">Не дозвонились</option>
-                    <option value="cancelled">Отменена</option>
-                  </select>
-                </div>
+                {/* Status Filter — shadcn Select */}
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Все статусы" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Все статусы</SelectItem>
+                    {Object.entries(referralStatusLabels).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </CardContent>
           </Card>
@@ -396,7 +142,7 @@ export default function AgentReferrals() {
                   <p className="text-sm text-muted-foreground mt-2">
                     {searchTerm || statusFilter !== "all"
                       ? "Попробуйте изменить фильтры"
-                      : "Нажмите «Добавить рекомендацию» чтобы направить пациента"}
+                      : "Нажмите \u00abДобавить рекомендацию\u00bb чтобы направить пациента"}
                   </p>
                 </div>
               ) : (
@@ -413,7 +159,7 @@ export default function AgentReferrals() {
                         <div className="text-sm text-muted-foreground space-y-1">
                           {referral.patientPhone && <div>Tel: {referral.patientPhone}</div>}
                           {referral.patientBirthdate && <div>Д.р.: {referral.patientBirthdate}</div>}
-                          <div>Создано: {formatDate(referral.createdAt)}</div>
+                          <div>Создано: {formatDateRu(referral.createdAt)}</div>
                           {referral.targetClinicIds ? (
                             <div>
                               Клиники:{" "}
@@ -421,7 +167,7 @@ export default function AgentReferrals() {
                                 try {
                                   const ids = JSON.parse(referral.targetClinicIds) as number[];
                                   return ids.map(id => clinicsList?.find((c: any) => c.id === id)?.name || `#${id}`).join(", ");
-                                } catch { return referral.clinic || "—"; }
+                                } catch { return referral.clinic || "\u2014"; }
                               })()}
                             </div>
                           ) : referral.clinic ? (
@@ -435,10 +181,10 @@ export default function AgentReferrals() {
                       <div className="flex flex-col items-end gap-2">
                         <span
                           className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${
-                            statusColors[referral.status]
+                            referralStatusColors[referral.status] || "bg-gray-100 text-gray-800 border-gray-200"
                           }`}
                         >
-                          {statusLabels[referral.status]}
+                          {referralStatusLabels[referral.status] || referral.status}
                         </span>
                         {referral.commissionAmount > 0 && (
                           <div className="text-sm font-semibold text-primary">

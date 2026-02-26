@@ -2,21 +2,14 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { TrendingUp, Users, Percent, Activity, Banknote, Gift, Plus, MessageSquare, CreditCard, UserPlus, Send, Check, ArrowRight, X, Copy, ExternalLink } from "lucide-react";
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { TrendingUp, Users, Percent, Activity, Banknote, Gift, Plus, MessageSquare, CreditCard, UserPlus, Send, Check, ArrowRight, X, Copy } from "lucide-react";
 import DashboardLayoutWrapper from "@/components/DashboardLayoutWrapper";
+import CreateReferralDialog from "@/components/CreateReferralDialog";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
-import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useState } from "react";
+import { useLocation, Link } from "wouter";
+import { referralStatusLabels, referralStatusHexColors, formatCurrency } from "@/lib/referral-utils";
 
 export default function AgentDashboard() {
   useRequireAuth();
@@ -24,8 +17,6 @@ export default function AgentDashboard() {
   const { data: monthlyData, isLoading: monthlyLoading } = trpc.dashboard.monthlyEarnings.useQuery();
   const { data: statusData, isLoading: statusLoading } = trpc.dashboard.referralsByStatus.useQuery();
   const { data: referrals, isLoading: referralsLoading, refetch: refetchReferrals } = trpc.dashboard.referrals.useQuery();
-  const { data: clinicsList } = trpc.dashboard.clinics.useQuery();
-  const createReferral = trpc.dashboard.createReferral.useMutation();
 
   const [, navigate] = useLocation();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -33,84 +24,6 @@ export default function AgentDashboard() {
     return localStorage.getItem("onboarding_dismissed") === "true";
   });
   const [referralLinkCopied, setReferralLinkCopied] = useState(false);
-
-  // Referral form state
-  const [formData, setFormData] = useState({
-    patientFullName: "",
-    patientBirthdate: "",
-    patientCity: "",
-    patientPhone: "",
-    patientEmail: "",
-    clinic: "",
-    notes: "",
-  });
-  const [formError, setFormError] = useState("");
-
-  const resetForm = () => {
-    setFormData({
-      patientFullName: "",
-      patientBirthdate: "",
-      patientCity: "",
-      patientPhone: "",
-      patientEmail: "",
-      clinic: "",
-      notes: "",
-    });
-    setFormError("");
-  };
-
-  const handleCreateReferral = async () => {
-    setFormError("");
-
-    if (!formData.patientFullName.trim()) {
-      setFormError("Укажите ФИО пациента");
-      return;
-    }
-    const nameWords = formData.patientFullName.trim().split(/\s+/);
-    if (nameWords.length !== 3) {
-      setFormError("Укажите Фамилию, Имя и Отчество пациента (ровно 3 слова)");
-      return;
-    }
-    if (!formData.patientBirthdate.trim()) {
-      setFormError("Укажите дату рождения");
-      return;
-    }
-    if (!/^\d{2}\.\d{2}\.\d{4}$/.test(formData.patientBirthdate)) {
-      setFormError("Формат даты: ДД.ММ.ГГГГ (например, 15.03.1985)");
-      return;
-    }
-    const [dd, mm, yyyy] = formData.patientBirthdate.split('.').map(Number);
-    const birthDate = new Date(yyyy, mm - 1, dd);
-    if (birthDate.getDate() !== dd || birthDate.getMonth() !== mm - 1 || birthDate.getFullYear() !== yyyy) {
-      setFormError("Указана несуществующая дата");
-      return;
-    }
-    const ageDiff = Date.now() - birthDate.getTime();
-    const ageYears = Math.floor(ageDiff / (365.25 * 24 * 60 * 60 * 1000));
-    if (ageYears < 0 || ageYears > 120) {
-      setFormError("Возраст пациента должен быть от 0 до 120 лет");
-      return;
-    }
-
-    try {
-      await createReferral.mutateAsync({
-        patientFullName: formData.patientFullName.trim(),
-        patientBirthdate: formData.patientBirthdate.trim(),
-        patientCity: formData.patientCity.trim() || undefined,
-        patientPhone: formData.patientPhone.trim() || undefined,
-        patientEmail: formData.patientEmail.trim() || undefined,
-        clinic: formData.clinic || undefined,
-        notes: formData.notes.trim() || undefined,
-      });
-      alert("Рекомендация успешно создана!");
-      resetForm();
-      setDialogOpen(false);
-      refetchReferrals();
-    } catch (error: any) {
-      const msg = error?.message || "Ошибка создания рекомендации";
-      setFormError(msg);
-    }
-  };
 
   if (statsLoading || monthlyLoading || statusLoading || referralsLoading) {
     return (
@@ -155,39 +68,10 @@ export default function AgentDashboard() {
     );
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('ru-RU', {
-      style: 'currency',
-      currency: 'RUB',
-      minimumFractionDigits: 0,
-    }).format(amount / 100);
-  };
-
   const recentReferrals = referrals?.slice(0, 5) || [];
 
-  const statusColors: Record<string, string> = {
-    new: '#f59e0b',
-    in_progress: '#f97316',
-    contacted: '#3b82f6',
-    scheduled: '#8b5cf6',
-    booked: '#6366f1',
-    booked_elsewhere: '#a855f7',
-    visited: '#10b981',
-    paid: '#059669',
-    cancelled: '#ef4444',
-  };
-
-  const statusLabels: Record<string, string> = {
-    new: 'Новый',
-    in_progress: 'В работе',
-    contacted: 'Контакт',
-    scheduled: 'Записан',
-    booked: 'Забронирован',
-    booked_elsewhere: 'В другой клинике',
-    visited: 'Приём состоялся',
-    paid: 'Оплачено',
-    cancelled: 'Отменено',
-  };
+  // Filter out zero-count statuses for the chart
+  const chartStatusData = (statusData || []).filter((d: any) => d.count > 0);
 
   // Onboarding logic
   const firstName = stats?.agentFullName?.split(' ')[1] || stats?.agentFullName?.split(' ')[0] || '';
@@ -245,114 +129,6 @@ export default function AgentDashboard() {
     setOnboardingDismissed(true);
   };
 
-  // Create referral dialog (shared between header button and onboarding)
-  const referralDialog = (
-    <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>Новая рекомендация</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 mt-2">
-          <div>
-            <Label htmlFor="db-patientFullName">ФИО пациента *</Label>
-            <Input
-              id="db-patientFullName"
-              placeholder="Иванов Иван Иванович"
-              value={formData.patientFullName}
-              onChange={(e) => setFormData({ ...formData, patientFullName: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label htmlFor="db-patientBirthdate">Дата рождения *</Label>
-            <Input
-              id="db-patientBirthdate"
-              placeholder="ДД.ММ.ГГГГ"
-              value={formData.patientBirthdate}
-              onChange={(e) => setFormData({ ...formData, patientBirthdate: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label htmlFor="db-patientCity">Город</Label>
-            <Input
-              id="db-patientCity"
-              placeholder="Москва"
-              value={formData.patientCity}
-              onChange={(e) => setFormData({ ...formData, patientCity: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label htmlFor="db-patientPhone">Телефон</Label>
-            <Input
-              id="db-patientPhone"
-              placeholder="+7 (999) 123-45-67"
-              value={formData.patientPhone}
-              onChange={(e) => setFormData({ ...formData, patientPhone: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label htmlFor="db-patientEmail">Email</Label>
-            <Input
-              id="db-patientEmail"
-              type="email"
-              placeholder="patient@email.com"
-              value={formData.patientEmail}
-              onChange={(e) => setFormData({ ...formData, patientEmail: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label htmlFor="db-clinic">Клиника</Label>
-            <select
-              id="db-clinic"
-              value={formData.clinic}
-              onChange={(e) => setFormData({ ...formData, clinic: e.target.value })}
-              className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm"
-            >
-              <option value="">Не указана</option>
-              {clinicsList?.map((clinic: any) => (
-                <option key={clinic.id} value={clinic.name}>
-                  {clinic.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <Label htmlFor="db-notes">Примечание</Label>
-            <textarea
-              id="db-notes"
-              placeholder="Например: запись к конкретному врачу, важная информация о пациенте..."
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              maxLength={500}
-              rows={3}
-              className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm resize-none"
-            />
-            {formData.notes.length > 0 && (
-              <p className="text-xs text-muted-foreground mt-1 text-right">{formData.notes.length}/500</p>
-            )}
-          </div>
-
-          {formError && (
-            <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md border border-red-200">
-              {formError}
-            </div>
-          )}
-
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm(); }}>
-              Отмена
-            </Button>
-            <Button
-              onClick={handleCreateReferral}
-              disabled={createReferral.isPending}
-            >
-              {createReferral.isPending ? "Создание..." : "Создать"}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-
   return (
     <DashboardLayoutWrapper>
       <div className="min-h-screen bg-muted/30">
@@ -388,7 +164,12 @@ export default function AgentDashboard() {
         </Button>
       </div>
 
-      {referralDialog}
+      {/* Shared Create Referral Dialog */}
+      <CreateReferralDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onSuccess={() => refetchReferrals()}
+      />
 
       <div className="container py-8">
         {/* Onboarding Welcome */}
@@ -625,10 +406,10 @@ export default function AgentDashboard() {
                       <YAxis
                         stroke="#6b7280"
                         style={{ fontSize: '12px' }}
-                        tickFormatter={(value) => `${value.toLocaleString()} ₽`}
+                        tickFormatter={(value) => `${value.toLocaleString()} \u20BD`}
                       />
                       <Tooltip
-                        formatter={(value: number) => [`${value.toLocaleString()} ₽`, 'Заработок']}
+                        formatter={(value: number) => [`${value.toLocaleString()} \u20BD`, 'Заработок']}
                         contentStyle={{
                           backgroundColor: '#fff',
                           border: '1px solid #e5e7eb',
@@ -648,7 +429,7 @@ export default function AgentDashboard() {
                 </CardContent>
               </Card>
 
-              {/* Referrals by Status Chart */}
+              {/* Referrals by Status Chart — fixed label display */}
               <Card className="border-2">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -658,12 +439,16 @@ export default function AgentDashboard() {
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={statusData}>
+                    <BarChart data={chartStatusData} margin={{ bottom: 20 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                       <XAxis
                         dataKey="status"
                         stroke="#6b7280"
-                        style={{ fontSize: '12px' }}
+                        style={{ fontSize: '11px' }}
+                        angle={-35}
+                        textAnchor="end"
+                        interval={0}
+                        height={70}
                       />
                       <YAxis
                         stroke="#6b7280"
@@ -691,10 +476,18 @@ export default function AgentDashboard() {
             {/* Recent Referrals Table */}
             <Card className="border-2">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="w-5 h-5 text-primary" />
-                  Последние рекомендации
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="w-5 h-5 text-primary" />
+                    Последние рекомендации
+                  </CardTitle>
+                  <Link href="/dashboard/referrals">
+                    <Button variant="ghost" size="sm" className="gap-1 text-primary">
+                      Смотреть все
+                      <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </Link>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
@@ -722,22 +515,22 @@ export default function AgentDashboard() {
                             <td className="py-3 px-4 text-sm text-muted-foreground">
                               {new Date(referral.createdAt).toLocaleDateString('ru-RU')}
                             </td>
-                            <td className="py-3 px-4 text-sm">{referral.clinic || '—'}</td>
+                            <td className="py-3 px-4 text-sm">{referral.clinic || '\u2014'}</td>
                             <td className="py-3 px-4">
                               <span
                                 className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
                                 style={{
-                                  backgroundColor: `${statusColors[referral.status]}20`,
-                                  color: statusColors[referral.status],
+                                  backgroundColor: `${referralStatusHexColors[referral.status] || '#6b7280'}20`,
+                                  color: referralStatusHexColors[referral.status] || '#6b7280',
                                 }}
                               >
-                                {statusLabels[referral.status]}
+                                {referralStatusLabels[referral.status] || referral.status}
                               </span>
                             </td>
                             <td className="py-3 px-4 text-right font-semibold">
                               {referral.commissionAmount > 0
                                 ? formatCurrency(referral.commissionAmount)
-                                : '—'
+                                : '\u2014'
                               }
                             </td>
                           </tr>

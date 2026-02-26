@@ -5,6 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -12,18 +22,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { 
-  Monitor, 
-  Smartphone, 
-  Tablet, 
-  Loader2, 
-  Shield, 
+import {
+  Monitor,
+  Smartphone,
+  Tablet,
+  Loader2,
+  Shield,
   AlertCircle,
   CheckCircle2,
   XCircle
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ru } from "date-fns/locale";
+import { toast } from "sonner";
+import DashboardLayoutWrapper from "@/components/DashboardLayoutWrapper";
+import { useRequireAuth } from "@/hooks/useRequireAuth";
 
 /**
  * Session Management Page
@@ -44,7 +57,7 @@ interface SessionData {
 
 function getDeviceIcon(deviceInfo: string | null) {
   if (!deviceInfo) return <Monitor className="w-5 h-5" />;
-  
+
   const ua = deviceInfo.toLowerCase();
   if (ua.includes("mobile") || ua.includes("android") || ua.includes("iphone")) {
     return <Smartphone className="w-5 h-5" />;
@@ -57,16 +70,16 @@ function getDeviceIcon(deviceInfo: string | null) {
 
 function getDeviceName(deviceInfo: string | null): string {
   if (!deviceInfo) return "Неизвестное устройство";
-  
+
   const ua = deviceInfo;
-  
+
   // Browser detection
   let browser = "Браузер";
   if (ua.includes("Chrome")) browser = "Chrome";
   else if (ua.includes("Firefox")) browser = "Firefox";
   else if (ua.includes("Safari") && !ua.includes("Chrome")) browser = "Safari";
   else if (ua.includes("Edge")) browser = "Edge";
-  
+
   // OS detection
   let os = "";
   if (ua.includes("Windows")) os = "Windows";
@@ -74,7 +87,7 @@ function getDeviceName(deviceInfo: string | null): string {
   else if (ua.includes("Linux")) os = "Linux";
   else if (ua.includes("Android")) os = "Android";
   else if (ua.includes("iPhone") || ua.includes("iPad")) os = "iOS";
-  
+
   return os ? `${browser} на ${os}` : browser;
 }
 
@@ -89,8 +102,10 @@ function getLoginMethodBadge(method: string) {
 }
 
 export default function AgentSessions() {
+  useRequireAuth();
   const [revokingSessionId, setRevokingSessionId] = useState<number | null>(null);
   const [revokingAll, setRevokingAll] = useState(false);
+  const [revokeTarget, setRevokeTarget] = useState<number | "all" | null>(null);
 
   const { data: sessions, isLoading, error, refetch } = trpc.agent.getSessions.useQuery() as {
     data: SessionData[] | undefined;
@@ -102,10 +117,11 @@ export default function AgentSessions() {
     onSuccess: () => {
       refetch();
       setRevokingSessionId(null);
+      toast.success("Сессия завершена");
     },
     onError: (error: any) => {
       console.error("Failed to revoke session:", error);
-      alert("Не удалось отозвать сессию. Попробуйте снова.");
+      toast.error("Не удалось отозвать сессию", { description: "Попробуйте снова." });
       setRevokingSessionId(null);
     },
   });
@@ -114,48 +130,50 @@ export default function AgentSessions() {
     onSuccess: () => {
       refetch();
       setRevokingAll(false);
+      toast.success("Все остальные сессии завершены");
     },
     onError: (error: any) => {
       console.error("Failed to revoke all sessions:", error);
-      alert("Не удалось отозвать сессии. Попробуйте снова.");
+      toast.error("Не удалось отозвать сессии", { description: "Попробуйте снова." });
       setRevokingAll(false);
     },
   });
 
-  const handleRevokeSession = (sessionId: number) => {
-    if (confirm("Вы уверены, что хотите завершить эту сессию?")) {
-      setRevokingSessionId(sessionId);
-      revokeSessionMutation.mutate({ sessionId });
-    }
-  };
-
-  const handleRevokeAllOthers = () => {
-    if (confirm("Вы уверены, что хотите завершить все остальные сессии? Вы останетесь авторизованы только на этом устройстве.")) {
+  const handleConfirmRevoke = () => {
+    if (revokeTarget === "all") {
       setRevokingAll(true);
       revokeAllMutation.mutate();
+    } else if (typeof revokeTarget === "number") {
+      setRevokingSessionId(revokeTarget);
+      revokeSessionMutation.mutate({ sessionId: revokeTarget });
     }
+    setRevokeTarget(null);
   };
 
   if (isLoading) {
     return (
-      <div className="container max-w-6xl py-10">
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <DashboardLayoutWrapper>
+        <div className="container max-w-6xl py-10">
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          </div>
         </div>
-      </div>
+      </DashboardLayoutWrapper>
     );
   }
 
   if (error) {
     return (
-      <div className="container max-w-6xl py-10">
-        <Alert variant="destructive">
-          <AlertCircle className="w-4 h-4" />
-          <AlertDescription>
-            Не удалось загрузить список сессий. Попробуйте обновить страницу.
-          </AlertDescription>
-        </Alert>
-      </div>
+      <DashboardLayoutWrapper>
+        <div className="container max-w-6xl py-10">
+          <Alert variant="destructive">
+            <AlertCircle className="w-4 h-4" />
+            <AlertDescription>
+              Не удалось загрузить список сессий. Попробуйте обновить страницу.
+            </AlertDescription>
+          </Alert>
+        </div>
+      </DashboardLayoutWrapper>
     );
   }
 
@@ -164,169 +182,195 @@ export default function AgentSessions() {
   const otherSessions = activeSessions.filter((s: SessionData) => !s.isCurrent);
 
   return (
-    <div className="container max-w-6xl py-10 space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Управление сессиями</h1>
-        <p className="text-muted-foreground">
-          Просматривайте и управляйте устройствами, с которых вы вошли в систему
-        </p>
-      </div>
+    <DashboardLayoutWrapper>
+      <div className="container max-w-6xl py-10 space-y-8">
+        {/* Header */}
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Управление сессиями</h1>
+          <p className="text-muted-foreground">
+            Просматривайте и управляйте устройствами, с которых вы вошли в систему
+          </p>
+        </div>
 
-      {/* Security Info */}
-      <Alert>
-        <Shield className="w-4 h-4" />
-        <AlertDescription>
-          Если вы видите незнакомое устройство или подозрительную активность, немедленно завершите сессию и смените пароль.
-        </AlertDescription>
-      </Alert>
+        {/* Security Info */}
+        <Alert>
+          <Shield className="w-4 h-4" />
+          <AlertDescription>
+            Если вы видите незнакомое устройство или подозрительную активность, немедленно завершите сессию.
+          </AlertDescription>
+        </Alert>
 
-      {/* Current Session */}
-      {currentSession && (
-        <Card className="border-primary">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-primary" />
-              Текущая сессия
-            </CardTitle>
-            <CardDescription>
-              Это устройство, с которого вы сейчас работаете
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-start gap-4">
-              <div className="text-muted-foreground">
-                {getDeviceIcon(currentSession.deviceInfo)}
-              </div>
-              <div className="flex-1 space-y-2">
-                <div className="font-medium">{getDeviceName(currentSession.deviceInfo)}</div>
-                <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                  <div>IP: {currentSession.ipAddress || "Неизвестен"}</div>
-                  <div>
-                    Последняя активность: {formatDistanceToNow(new Date(currentSession.lastActivityAt), { 
-                      addSuffix: true, 
-                      locale: ru 
-                    })}
-                  </div>
-                  <div>
-                    Вход: {formatDistanceToNow(new Date(currentSession.createdAt), { 
-                      addSuffix: true, 
-                      locale: ru 
-                    })}
-                  </div>
+        {/* Current Session */}
+        {currentSession && (
+          <Card className="border-primary">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-primary" />
+                Текущая сессия
+              </CardTitle>
+              <CardDescription>
+                Это устройство, с которого вы сейчас работаете
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-start gap-4">
+                <div className="text-muted-foreground">
+                  {getDeviceIcon(currentSession.deviceInfo)}
                 </div>
-                <div>{getLoginMethodBadge(currentSession.loginMethod)}</div>
+                <div className="flex-1 space-y-2">
+                  <div className="font-medium">{getDeviceName(currentSession.deviceInfo)}</div>
+                  <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                    <div>IP: {currentSession.ipAddress || "Неизвестен"}</div>
+                    <div>
+                      Последняя активность: {formatDistanceToNow(new Date(currentSession.lastActivityAt), {
+                        addSuffix: true,
+                        locale: ru
+                      })}
+                    </div>
+                    <div>
+                      Вход: {formatDistanceToNow(new Date(currentSession.createdAt), {
+                        addSuffix: true,
+                        locale: ru
+                      })}
+                    </div>
+                  </div>
+                  <div>{getLoginMethodBadge(currentSession.loginMethod)}</div>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            </CardContent>
+          </Card>
+        )}
 
-      {/* Other Sessions */}
-      {otherSessions.length > 0 && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Другие сессии ({otherSessions.length})</CardTitle>
-                <CardDescription>
-                  Устройства, с которых вы входили ранее
-                </CardDescription>
+        {/* Other Sessions */}
+        {otherSessions.length > 0 && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Другие сессии ({otherSessions.length})</CardTitle>
+                  <CardDescription>
+                    Устройства, с которых вы входили ранее
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setRevokeTarget("all")}
+                  disabled={revokingAll}
+                >
+                  {revokingAll ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Завершение...
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-4 h-4 mr-2" />
+                      Завершить все
+                    </>
+                  )}
+                </Button>
               </div>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleRevokeAllOthers}
-                disabled={revokingAll}
-              >
-                {revokingAll ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Завершение...
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="w-4 h-4 mr-2" />
-                    Завершить все
-                  </>
-                )}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Устройство</TableHead>
-                  <TableHead>IP-адрес</TableHead>
-                  <TableHead>Последняя активность</TableHead>
-                  <TableHead>Метод входа</TableHead>
-                  <TableHead className="text-right">Действия</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {otherSessions.map((session: SessionData) => (
-                  <TableRow key={session.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="text-muted-foreground">
-                          {getDeviceIcon(session.deviceInfo)}
-                        </div>
-                        <div>
-                          <div className="font-medium">{getDeviceName(session.deviceInfo)}</div>
-                          <div className="text-sm text-muted-foreground">
-                            Вход {formatDistanceToNow(new Date(session.createdAt), { 
-                              addSuffix: true, 
-                              locale: ru 
-                            })}
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Устройство</TableHead>
+                    <TableHead>IP-адрес</TableHead>
+                    <TableHead>Последняя активность</TableHead>
+                    <TableHead>Метод входа</TableHead>
+                    <TableHead className="text-right">Действия</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {otherSessions.map((session: SessionData) => (
+                    <TableRow key={session.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="text-muted-foreground">
+                            {getDeviceIcon(session.deviceInfo)}
+                          </div>
+                          <div>
+                            <div className="font-medium">{getDeviceName(session.deviceInfo)}</div>
+                            <div className="text-sm text-muted-foreground">
+                              Вход {formatDistanceToNow(new Date(session.createdAt), {
+                                addSuffix: true,
+                                locale: ru
+                              })}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {session.ipAddress || "Неизвестен"}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatDistanceToNow(new Date(session.lastActivityAt), { 
-                        addSuffix: true, 
-                        locale: ru 
-                      })}
-                    </TableCell>
-                    <TableCell>
-                      {getLoginMethodBadge(session.loginMethod)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRevokeSession(session.id)}
-                        disabled={revokingSessionId === session.id}
-                      >
-                        {revokingSessionId === session.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          "Завершить"
-                        )}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {session.ipAddress || "Неизвестен"}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {formatDistanceToNow(new Date(session.lastActivityAt), {
+                          addSuffix: true,
+                          locale: ru
+                        })}
+                      </TableCell>
+                      <TableCell>
+                        {getLoginMethodBadge(session.loginMethod)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setRevokeTarget(session.id)}
+                          disabled={revokingSessionId === session.id}
+                        >
+                          {revokingSessionId === session.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            "Завершить"
+                          )}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
 
-      {/* No Other Sessions */}
-      {otherSessions.length === 0 && currentSession && (
-        <Card>
-          <CardContent className="py-10 text-center text-muted-foreground">
-            <Shield className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>Нет других активных сессий</p>
-            <p className="text-sm mt-2">Вы вошли только с этого устройства</p>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+        {/* No Other Sessions */}
+        {otherSessions.length === 0 && currentSession && (
+          <Card>
+            <CardContent className="py-10 text-center text-muted-foreground">
+              <Shield className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p>Нет других активных сессий</p>
+              <p className="text-sm mt-2">Вы вошли только с этого устройства</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Confirm Revoke Dialog */}
+      <AlertDialog open={revokeTarget !== null} onOpenChange={(open) => { if (!open) setRevokeTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Завершить сессию?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {revokeTarget === "all"
+                ? "Все остальные сессии будут завершены. Вы останетесь авторизованы только на этом устройстве."
+                : "Эта сессия будет завершена. Пользователь на этом устройстве будет отключён."
+              }
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmRevoke}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Завершить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </DashboardLayoutWrapper>
   );
 }

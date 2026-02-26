@@ -8,6 +8,7 @@ import { useState, useEffect, useMemo } from "react";
 import DashboardLayoutWrapper from "@/components/DashboardLayoutWrapper";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import ActSigningDialog from "@/components/ActSigningDialog";
+import { toast } from "sonner";
 
 export default function AgentPayments() {
   useRequireAuth();
@@ -94,13 +95,17 @@ export default function AgentPayments() {
       await refetch();
       setAmount("");
       if (result.jumpSubmitted) {
-        alert("✅ Заявка на выплату создана и отправлена на обработку! Вы получите уведомление в Telegram когда деньги поступят.");
+        toast.success("Заявка на выплату создана", {
+          description: "Отправлена на обработку. Вы получите уведомление в Telegram.",
+        });
       } else {
-        alert("✅ Заявка на выплату успешно создана! Она будет обработана в ближайшее время.");
+        toast.success("Заявка на выплату создана", {
+          description: "Будет обработана в ближайшее время.",
+        });
       }
     } catch (err: any) {
       const message = err?.message || err?.data?.message || "Неизвестная ошибка";
-      alert(`❌ ${message}`);
+      toast.error("Ошибка запроса выплаты", { description: message });
     }
   };
 

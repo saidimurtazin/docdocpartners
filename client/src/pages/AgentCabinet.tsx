@@ -34,10 +34,10 @@ export default function AgentCabinet() {
       try {
         setSession(JSON.parse(stored));
       } catch {
-        setLocation("/agent/login");
+        setLocation("/login");
       }
     } else {
-      setLocation("/agent/login");
+      setLocation("/login");
     }
   }, [setLocation]);
 
@@ -55,7 +55,7 @@ export default function AgentCabinet() {
 
   const handleLogout = () => {
     localStorage.removeItem("agent_session");
-    setLocation("/agent/login");
+    setLocation("/login");
   };
 
   const formatMoney = (kopecks: number) => {
@@ -104,7 +104,7 @@ export default function AgentCabinet() {
             <CardDescription>Пожалуйста, зарегистрируйтесь в боте</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => setLocation("/agent/login")} className="w-full">
+            <Button onClick={() => setLocation("/login")} className="w-full">
               Вернуться к входу
             </Button>
           </CardContent>

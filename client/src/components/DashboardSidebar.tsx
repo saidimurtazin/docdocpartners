@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, Users, Wallet, User as UserIcon, LogOut, Building2, Menu, X } from "lucide-react";
+import { Home, Users, Wallet, User as UserIcon, LogOut, Building2, Menu, X, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
 import Logo from "@/components/Logo";
@@ -16,6 +16,7 @@ export default function DashboardSidebar() {
     { path: "/dashboard/payments", label: "Выплаты", icon: Wallet },
     { path: "/dashboard/clinics", label: "Клиники", icon: Building2 },
     { path: "/dashboard/profile", label: "Профиль", icon: UserIcon },
+    { path: "/dashboard/sessions", label: "Сессии", icon: Shield },
   ];
 
   return (

@@ -7,6 +7,8 @@ import { User, CreditCard, Save, CheckCircle2, Edit, Smartphone, ExternalLink } 
 import { useState, useEffect } from "react";
 import DashboardLayoutWrapper from "@/components/DashboardLayoutWrapper";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
+import { toast } from "sonner";
+import { formatCardNumber, validateINN } from "@/lib/referral-utils";
 
 export default function AgentProfile() {
   useRequireAuth();
@@ -64,23 +66,30 @@ export default function AgentProfile() {
       });
       await refetch();
       setIsEditingPersonal(false);
-      alert("✅ Личные данные успешно обновлены!");
-    } catch (error) {
-      alert("❌ Ошибка сохранения. Попробуйте еще раз.");
+      toast.success("Личные данные обновлены");
+    } catch (error: any) {
+      toast.error("Ошибка сохранения", { description: error?.message || "Попробуйте ещё раз." });
     }
   };
 
   const handleSavePaymentDetails = async () => {
+    // Client-side INN validation
+    const innErr = validateINN(inn);
+    if (innErr) {
+      toast.error("Неверный ИНН", { description: innErr });
+      return;
+    }
+
     // Client-side MIR card validation
     if (payoutMethod === "card" && cardNumber) {
       const digits = cardNumber.replace(/\D/g, "");
       if (digits.length < 13 || digits.length > 19) {
-        alert("❌ Номер карты должен содержать 13-19 цифр");
+        toast.error("Неверный номер карты", { description: "Номер карты должен содержать 13-19 цифр." });
         return;
       }
       const prefix = parseInt(digits.substring(0, 4), 10);
       if (prefix < 2200 || prefix > 2204) {
-        alert("❌ Принимаются только карты МИР (номер начинается с 2200-2204).\nVisa и Mastercard не поддерживаются.");
+        toast.error("Неверный номер карты", { description: "Принимаются только карты МИР (2200-2204)." });
         return;
       }
     }
@@ -96,10 +105,10 @@ export default function AgentProfile() {
         isSelfEmployed,
       });
       await refetch();
-      alert("✅ Реквизиты успешно сохранены!");
+      toast.success("Реквизиты сохранены");
     } catch (error: any) {
-      const msg = error?.message || "Ошибка сохранения. Попробуйте еще раз.";
-      alert(`❌ ${msg}`);
+      const msg = error?.message || "Ошибка сохранения. Попробуйте ещё раз.";
+      toast.error("Ошибка сохранения", { description: msg });
     }
   };
 
@@ -347,14 +356,18 @@ export default function AgentProfile() {
                 <Input
                   id="inn"
                   value={inn}
-                  onChange={(e) => setInn(e.target.value)}
+                  onChange={(e) => setInn(e.target.value.replace(/\D/g, ""))}
                   placeholder="123456789012"
                   maxLength={12}
                   className="mt-2"
                 />
-                <p className="text-sm text-muted-foreground mt-1">
-                  12 цифр для физических лиц
-                </p>
+                {inn && validateINN(inn) ? (
+                  <p className="text-sm text-destructive mt-1">{validateINN(inn)}</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    10 или 12 цифр
+                  </p>
+                )}
               </div>
 
               {/* Payout Method Selector */}
@@ -394,11 +407,11 @@ export default function AgentProfile() {
                   <Label htmlFor="cardNumber">Номер карты</Label>
                   <Input
                     id="cardNumber"
-                    value={cardNumber}
+                    value={formatCardNumber(cardNumber)}
                     onChange={(e) => setCardNumber(e.target.value.replace(/\D/g, ""))}
                     placeholder="0000 0000 0000 0000"
-                    maxLength={19}
-                    className="mt-2"
+                    maxLength={23}
+                    className="mt-2 font-mono"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
                     Только карты МИР (номер начинается с 2200-2204)

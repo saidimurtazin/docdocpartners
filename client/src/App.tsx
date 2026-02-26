@@ -116,7 +116,7 @@ function Router() {
       <Route path={"/dashboard/payments"}>{() => <RequireAgent><AgentPayments /></RequireAgent>}</Route>
       <Route path={"/dashboard/referrals"}>{() => <RequireAgent><AgentReferrals /></RequireAgent>}</Route>
       <Route path={"/dashboard/clinics"}>{() => <RequireAgent><AgentClinics /></RequireAgent>}</Route>
-      <Route path={"/agent/sessions"}>{() => <RequireAgent><AgentSessions /></RequireAgent>}</Route>
+      <Route path={"/dashboard/sessions"}>{() => <RequireAgent><AgentSessions /></RequireAgent>}</Route>
 
       {/* Telegram WebApp — agent cabinet (uses its own session) */}
       <Route path={"/agent/cabinet"} component={AgentCabinet} />

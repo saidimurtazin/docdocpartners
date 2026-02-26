@@ -33,7 +33,6 @@ export default function KnowledgeBase() {
           <nav className="hidden md:flex items-center gap-6">
             <a href="/" className="text-sm font-medium hover:text-primary transition-colors">Главная</a>
             <a href="/knowledge-base" className="text-sm font-medium text-primary">База знаний</a>
-            <a href="/admin" className="text-sm font-medium hover:text-primary transition-colors">Админ-панель</a>
           </nav>
         </div>
       </header>

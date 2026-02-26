@@ -2,22 +2,35 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Building2, Globe, Phone, Mail, MapPin, Award, Calendar, Languages, Activity, ExternalLink } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Building2, Globe, Phone, Mail, MapPin, Award, Calendar, Languages, Activity, ExternalLink, Send, Loader2 } from "lucide-react";
 import DashboardLayoutWrapper from "@/components/DashboardLayoutWrapper";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { useState } from "react";
+import { useLocation } from "wouter";
+
+type SortOption = "name_asc" | "commission_desc" | "city_asc";
 
 export default function AgentClinics() {
   useRequireAuth();
   const { data: clinics, isLoading } = trpc.dashboard.clinics.useQuery();
   const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>("name_asc");
+  const [, navigate] = useLocation();
 
   if (isLoading) {
     return (
       <DashboardLayoutWrapper>
         <div className="min-h-screen flex items-center justify-center bg-muted/30">
           <div className="text-center">
-            <Activity className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
+            <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
             <p className="text-muted-foreground">Загрузка клиник...</p>
           </div>
         </div>
@@ -31,6 +44,14 @@ export default function AgentClinics() {
     return c.name.toLowerCase().includes(s) ||
       c.city?.toLowerCase().includes(s) ||
       c.specializations?.toLowerCase().includes(s);
+  });
+
+  // Sort
+  const sorted = [...filtered].sort((a: any, b: any) => {
+    if (sortBy === "name_asc") return (a.name || "").localeCompare(b.name || "", "ru");
+    if (sortBy === "commission_desc") return (b.commissionRate || 0) - (a.commissionRate || 0);
+    if (sortBy === "city_asc") return (a.city || "").localeCompare(b.city || "", "ru");
+    return 0;
   });
 
   const formatCurrency = (kopecks: number) =>
@@ -48,19 +69,29 @@ export default function AgentClinics() {
         </div>
 
         <div className="container py-8">
-          {/* Search */}
-          <div className="mb-6">
+          {/* Search & Sort */}
+          <div className="flex items-center gap-3 mb-6 flex-wrap">
             <Input
               placeholder="Поиск по названию, городу, специализации..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-md"
             />
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+              <SelectTrigger className="w-52">
+                <SelectValue placeholder="Сортировка" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name_asc">По названию (А-Я)</SelectItem>
+                <SelectItem value="commission_desc">По комиссии (выс-низ)</SelectItem>
+                <SelectItem value="city_asc">По городу</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Clinics Grid */}
           <div className="grid gap-6 md:grid-cols-2">
-            {filtered.map((clinic: any) => (
+            {sorted.map((clinic: any) => (
               <Card key={clinic.id} className="overflow-hidden border-2 hover:border-primary/50 transition-all hover:shadow-lg">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-2">
@@ -75,7 +106,7 @@ export default function AgentClinics() {
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Building2 className="w-4 h-4 flex-shrink-0" />
                     <span className="text-sm">
-                      {clinic.type || "Клиника"} {clinic.ownership ? `• ${clinic.ownership}` : ""}
+                      {clinic.type || "Клиника"} {clinic.ownership ? `\u2022 ${clinic.ownership}` : ""}
                     </span>
                   </div>
 
@@ -166,11 +197,23 @@ export default function AgentClinics() {
                       </a>
                     )}
                   </div>
+
+                  {/* Quick action: send patient */}
+                  <div className="pt-3 border-t">
+                    <Button
+                      size="sm"
+                      className="w-full gap-2"
+                      onClick={() => navigate(`/dashboard/referrals?clinicId=${clinic.id}`)}
+                    >
+                      <Send className="w-4 h-4" />
+                      Направить пациента
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}
 
-            {filtered.length === 0 && (
+            {sorted.length === 0 && (
               <div className="col-span-full text-center py-12 text-muted-foreground">
                 {search ? "Ничего не найдено" : "Пока нет клиник-партнеров"}
               </div>
