@@ -70,8 +70,8 @@ export default function AgentDashboard() {
     );
   }
 
-  // Extract items from paginated response
-  const recentReferrals = referralsData && 'items' in referralsData ? referralsData.items : (referralsData as any[] || []);
+  // Extract items from paginated response (always { items, total })
+  const recentReferrals = referralsData?.items || [];
 
   // Filter out zero-count statuses for the chart
   const chartStatusData = (statusData || []).filter((d: any) => d.count > 0);

@@ -49,9 +49,9 @@ export default function AgentReferrals() {
     setPage(1);
   }, [searchTerm, statusFilter]);
 
-  // Extract items and total from paginated response
-  const referrals = data && 'items' in data ? data.items : (data as any[] || []);
-  const totalCount = data && 'total' in data ? data.total : referrals.length;
+  // Extract items and total from paginated response (always { items, total })
+  const referrals = data?.items || [];
+  const totalCount = data?.total ?? referrals.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   if (isLoading) {

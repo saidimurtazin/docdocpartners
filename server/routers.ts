@@ -2549,9 +2549,9 @@ DocPartner — B2B-платформа агентских рекомендаци�
         if (input?.page && input?.pageSize) {
           return db.getReferralsByAgentIdPaginated(ctx.agentId, input.page, input.pageSize);
         }
-        // Backwards compatible: return flat array when no pagination params
+        // No pagination — return all in same format for consistent types
         const items = await db.getReferralsByAgentId(ctx.agentId);
-        return items;
+        return { items, total: items.length };
       }),
 
     createReferral: agentProcedure
@@ -2664,8 +2664,9 @@ DocPartner — B2B-платформа агентских рекомендаци�
         if (input?.page && input?.pageSize) {
           return db.getPaymentsByAgentIdPaginated(ctx.agentId, input.page, input.pageSize);
         }
+        // No pagination — return all in same format for consistent types
         const items = await db.getPaymentsByAgentId(ctx.agentId);
-        return items;
+        return { items, total: items.length };
       }),
 
     updatePersonalInfo: agentProcedure

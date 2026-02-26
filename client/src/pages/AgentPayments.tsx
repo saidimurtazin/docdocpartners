@@ -37,9 +37,9 @@ export default function AgentPayments() {
     }
   }, [stats?.isSelfEmployed]);
 
-  // Extract items and total from paginated response
-  const payments = data && 'items' in data ? data.items : (data as any[] || []);
-  const totalCount = data && 'total' in data ? data.total : payments.length;
+  // Extract items and total from paginated response (always { items, total })
+  const payments = data?.items || [];
+  const totalCount = data?.total ?? payments.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   // Tax preview calculation (client-side, same logic as server)
