@@ -72,7 +72,12 @@ export async function processJumpPayment(paymentId: number): Promise<JumpPayoutR
     }
 
     const { firstName, lastName, middleName } = parseAgentName(agent.fullName);
-    const amountRubles = payment.amount / 100; // convert kopecks to rubles
+    // For individuals: send netAmount (after NDFL 13% + social 30% deductions)
+    // For self-employed: send full amount (they pay 6% NPD themselves)
+    const payoutKopecks = payment.isSelfEmployedSnapshot === "yes"
+      ? payment.amount
+      : (payment.netAmount ?? payment.amount);
+    const amountRubles = payoutKopecks / 100;
     const customerPaymentId = makeCustomerPaymentId(payment.id);
 
     let jumpPayment;
