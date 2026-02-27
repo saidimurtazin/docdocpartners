@@ -480,7 +480,7 @@ export async function exportSignedActsRegistryToExcel(filters: {
 /**
  * Export clinic referrals to Excel (without patient phone/email for privacy)
  */
-export async function exportClinicReferralsToExcel(clinicName: string, filters?: {
+export async function exportClinicReferralsToExcel(clinicId: number, clinicName: string, filters?: {
   status?: string;
   startDate?: string;
   endDate?: string;
@@ -511,7 +511,7 @@ export async function exportClinicReferralsToExcel(clinicName: string, filters?:
     duplicate: 'Дубликат', no_answer: 'Нет ответа', cancelled: 'Отменён',
   };
 
-  const allReferrals = await db.getReferralsByClinicName(clinicName, filters);
+  const allReferrals = await db.getReferralsByTargetClinicId(clinicId, clinicName, filters);
 
   for (const r of allReferrals) {
     worksheet.addRow({

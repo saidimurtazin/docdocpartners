@@ -405,10 +405,11 @@ export async function getReferralsByTargetClinicId(clinicId: number, clinicName:
   const clinicIdStr = String(clinicId);
   const conditions: any[] = [];
 
-  // Main filter: targeted to this clinic OR old-style clinic name match
+  // Main filter: targeted to this clinic, OR no target (visible to all), OR old-style clinic name match
   const clinicFilter = sql`(
     JSON_CONTAINS(${referrals.targetClinicIds}, ${clinicIdStr}, '$')
-    OR (${referrals.targetClinicIds} IS NULL AND ${referrals.clinic} = ${clinicName})
+    OR ${referrals.targetClinicIds} IS NULL
+    OR ${referrals.clinic} = ${clinicName}
   )`;
   conditions.push(clinicFilter);
 

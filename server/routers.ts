@@ -2149,7 +2149,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
         if (!clinic) throw new TRPCError({ code: "NOT_FOUND", message: "Клиника не найдена" });
 
         const { exportClinicReferralsToExcel } = await import("./export");
-        const buffer = await exportClinicReferralsToExcel(clinic.name, input);
+        const buffer = await exportClinicReferralsToExcel(ctx.clinicId, clinic.name, input);
         const base64 = buffer.toString("base64");
         const filename = `referrals_${clinic.name.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.xlsx`;
         return { base64, filename };
