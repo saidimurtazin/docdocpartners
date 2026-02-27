@@ -476,6 +476,66 @@ async function startServer() {
 
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
+
+  // ========== TEMPORARY: Email audit + delete said.murtazin@mail.ru ==========
+  // Remove this block after checking Railway logs
+  setTimeout(async () => {
+    try {
+      const db = await import("../db");
+      const { getDb } = db;
+      const drizzleDb = await getDb();
+      if (!drizzleDb) { console.log("[Email Audit] No DB connection"); return; }
+
+      const { users, agents, otpCodes } = await import("../../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+
+      // 1. List all users (staff/clinic) with emails
+      console.log("[Email Audit] ========== USERS (staff/clinic) ==========");
+      const allUsers = await drizzleDb.select({
+        id: users.id, email: users.email, name: users.name, role: users.role
+      }).from(users);
+      for (const u of allUsers) {
+        console.log(`[Email Audit] ID=${u.id} | ${u.email} | name=${u.name} | role=${u.role}`);
+      }
+
+      // 2. List all agents with emails
+      console.log("[Email Audit] ========== AGENTS ==========");
+      const allAgents = await drizzleDb.select({
+        id: agents.id, email: agents.email, fullName: agents.fullName, status: agents.status, role: agents.role
+      }).from(agents);
+      for (const a of allAgents) {
+        console.log(`[Email Audit] ID=${a.id} | ${a.email} | name=${a.fullName} | status=${a.status} | role=${a.role}`);
+      }
+
+      // 3. Delete said.murtazin@mail.ru
+      const TARGET = "said.murtazin@mail.ru";
+      console.log(`[Email Audit] ========== DELETING ${TARGET} ==========`);
+
+      // From users table
+      const userMatch = allUsers.filter(u => u.email === TARGET);
+      for (const u of userMatch) {
+        await drizzleDb.delete(users).where(eq(users.id, u.id));
+        console.log(`[Email Audit] Deleted from USERS: ID=${u.id} role=${u.role}`);
+      }
+
+      // From agents table
+      const agentMatch = allAgents.filter(a => a.email === TARGET);
+      for (const a of agentMatch) {
+        console.log(`[Email Audit] Found in AGENTS: ID=${a.id} — using hardDeleteAgent for safe cascade`);
+        const result = await db.hardDeleteAgent(a.id);
+        console.log(`[Email Audit] hardDeleteAgent result:`, result);
+      }
+
+      // From otpCodes table
+      const otpDeleted = await drizzleDb.delete(otpCodes).where(eq(otpCodes.email, TARGET));
+      console.log(`[Email Audit] Cleaned otpCodes for ${TARGET}`);
+
+      console.log("[Email Audit] ========== DONE ==========");
+    } catch (err) {
+      console.error("[Email Audit] Error:", err);
+    }
+  }, 5000); // Wait 5s for DB to be ready
+  // ========== END TEMPORARY ==========
 }
 
 startServer().catch(console.error);
