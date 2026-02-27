@@ -128,17 +128,8 @@ export async function processJumpPayment(paymentId: number): Promise<JumpPayoutR
       status: "processing",
     });
 
-    // Notify agent via Telegram
-    try {
-      const { notifyAgent } = await import("./telegram-bot-webhook");
-      const methodText = payoutMethod === "card" ? "на карту" : payoutMethod === "sbp" ? "по СБП" : "на счёт";
-      await notifyAgent(
-        agent.telegramId,
-        `💳 <b>Выплата отправлена ${methodText}</b>\n\nСумма: ${amountRubles.toLocaleString("ru-RU")} ₽\nСтатус: Обрабатывается\n\nВы получите уведомление когда деньги поступят.`
-      );
-    } catch (err) {
-      console.error("[JumpPayout] Failed to notify agent:", err);
-    }
+    // NOTE: No Telegram notification here — agent gets notified only when
+    // payment status changes to "completed" (via notifyPaymentProcessed)
 
     return { success: true, jumpPaymentId: jumpPayment.id };
   } catch (err: any) {

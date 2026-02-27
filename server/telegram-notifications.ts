@@ -158,33 +158,29 @@ export async function notifyPaymentProcessed(
     transactionId?: string | null;
   }
 ): Promise<boolean> {
-  const { emoji, text } = getPaymentStatusInfo(paymentData.status);
-  
-  let message = `${emoji} <b>Обновление выплаты</b>\n\n`;
-  message += `<b>Выплата №:</b> ${paymentData.id}\n`;
-  message += `<b>Сумма:</b> ${formatAmount(paymentData.amount)}\n`;
-  message += `<b>Статус:</b> ${text}\n`;
-  
-  if (paymentData.method) {
-    const methodText = paymentData.method === "bank_transfer" ? "Банковский перевод" : paymentData.method;
-    message += `<b>Способ:</b> ${methodText}\n`;
+  // Only notify agent about final statuses (completed / failed).
+  // Intermediate statuses (pending, processing, etc.) should NOT generate
+  // notifications — the agent doesn't need to know until money actually arrives.
+  if (paymentData.status !== "completed" && paymentData.status !== "failed") {
+    return false;
   }
-  
+
   if (paymentData.status === "completed") {
-    message += `\n✅ <b>Выплата успешно завершена!</b>\n`;
+    let message = `✅ <b>Выплата завершена!</b>\n\n`;
+    message += `<b>Сумма:</b> ${formatAmount(paymentData.amount)}\n`;
     if (paymentData.transactionId) {
       message += `<b>ID транзакции:</b> ${paymentData.transactionId}\n`;
     }
-    message += `\nСредства должны поступить на ваш счет в течение 1-3 рабочих дней.`;
-  } else if (paymentData.status === "processing") {
-    message += `\n🔄 Выплата обрабатывается. Ожидайте завершения.`;
-  } else if (paymentData.status === "failed") {
-    message += `\n❌ <b>Ошибка при выплате</b>\n`;
-    message += `Пожалуйста, свяжитесь с поддержкой для уточнения деталей.`;
+    message += `\nСредства должны поступить на ваш счёт в течение 1-3 рабочих дней.`;
+    message += `\n\n📱 Проверьте детали в личном кабинете.`;
+    return sendTelegramMessage(telegramId, message);
   }
-  
-  message += `\n\n📱 Проверьте детали в личном кабинете или боте.`;
 
+  // failed
+  let message = `❌ <b>Ошибка при выплате</b>\n\n`;
+  message += `<b>Сумма:</b> ${formatAmount(paymentData.amount)}\n`;
+  message += `\nПожалуйста, свяжитесь с поддержкой для уточнения деталей.`;
+  message += `\n\n📱 Проверьте детали в личном кабинете.`;
   return sendTelegramMessage(telegramId, message);
 }
 
