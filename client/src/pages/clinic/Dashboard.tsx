@@ -50,13 +50,6 @@ export default function ClinicDashboard() {
     page: 1,
     perPage: 20,
   });
-  const confirmReferral = trpc.clinic.confirmReferral.useMutation({
-    onSuccess: () => {
-      toast.success("Пациент записан в вашу клинику");
-      refetch();
-    },
-    onError: (err) => toast.error(err.message),
-  });
 
   const isLoading = statsLoading || referralsLoading;
 
@@ -162,20 +155,6 @@ export default function ClinicDashboard() {
                               {r.treatmentAmount ? formatAmount(r.treatmentAmount) : "—"}
                             </TableCell>
                             <TableCell>
-                              {!isBookedElsewhere && !r.bookedClinicId && ["new", "in_progress", "contacted"].includes(r.status) && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    if (confirm("Подтвердить запись пациента в вашу клинику?")) {
-                                      confirmReferral.mutate({ referralId: r.id });
-                                    }
-                                  }}
-                                  disabled={confirmReferral.isPending}
-                                >
-                                  Записать к нам
-                                </Button>
-                              )}
                               {r.bookedClinicId && !isBookedElsewhere && (
                                 <span className="text-xs text-green-600">Записан к вам</span>
                               )}
