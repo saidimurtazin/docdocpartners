@@ -21,7 +21,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+
+/** Auto-format date input: 01012015 → 01.01.2015 */
+function formatDateMask(value: string, prev: string): string {
+  // Only allow digits and dots
+  const raw = value.replace(/[^\d]/g, "");
+  // If user is deleting, let them delete freely
+  if (value.length < prev.length) {
+    return value;
+  }
+  // Build formatted string
+  let result = "";
+  for (let i = 0; i < raw.length && i < 8; i++) {
+    if (i === 2 || i === 4) result += ".";
+    result += raw[i];
+  }
+  return result;
+}
 
 interface CreateReferralDialogProps {
   open: boolean;
@@ -48,6 +66,7 @@ export default function CreateReferralDialog({
     patientEmail: "",
     notes: "",
   });
+  const [contactConsent, setContactConsent] = useState(false);
   const [selectedClinicIds, setSelectedClinicIds] = useState<number[]>([]);
   const [formError, setFormError] = useState("");
 
@@ -69,6 +88,7 @@ export default function CreateReferralDialog({
       patientEmail: "",
       notes: "",
     });
+    setContactConsent(false);
     setSelectedClinicIds(initialClinicId ? [initialClinicId] : []);
     setFormError("");
   };
@@ -118,6 +138,11 @@ export default function CreateReferralDialog({
       return;
     }
 
+    if (contactConsent && !formData.patientPhone.trim()) {
+      setFormError("Укажите телефон пациента — он обязателен при запросе на связь");
+      return;
+    }
+
     // Derive clinic name from first selected clinic (for backward compat)
     const firstClinic = selectedClinicIds.length > 0
       ? clinicsList?.find((c: any) => c.id === selectedClinicIds[0])
@@ -130,6 +155,7 @@ export default function CreateReferralDialog({
         patientCity: formData.patientCity.trim() || undefined,
         patientPhone: formData.patientPhone.trim() || undefined,
         patientEmail: formData.patientEmail.trim() || undefined,
+        contactConsent,
         clinic: firstClinic?.name || undefined,
         targetClinicIds: selectedClinicIds.length > 0 ? selectedClinicIds : undefined,
         notes: formData.notes.trim() || undefined,
@@ -152,11 +178,11 @@ export default function CreateReferralDialog({
         if (!v) resetForm();
       }}
     >
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Новая рекомендация</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 mt-2">
+        <div className="space-y-4 mt-2 overflow-y-auto flex-1 pr-1">
           {/* Patient name */}
           <div>
             <Label htmlFor="crd-patientFullName">ФИО пациента *</Label>
@@ -176,9 +202,11 @@ export default function CreateReferralDialog({
             <Input
               id="crd-patientBirthdate"
               placeholder="ДД.ММ.ГГГГ"
+              maxLength={10}
+              inputMode="numeric"
               value={formData.patientBirthdate}
               onChange={(e) =>
-                setFormData({ ...formData, patientBirthdate: e.target.value })
+                setFormData({ ...formData, patientBirthdate: formatDateMask(e.target.value, formData.patientBirthdate) })
               }
             />
           </div>
@@ -198,7 +226,7 @@ export default function CreateReferralDialog({
 
           {/* Phone */}
           <div>
-            <Label htmlFor="crd-patientPhone">Телефон</Label>
+            <Label htmlFor="crd-patientPhone">Телефон {contactConsent && <span className="text-red-500">*</span>}</Label>
             <Input
               id="crd-patientPhone"
               placeholder="+7 (999) 123-45-67"
@@ -222,6 +250,21 @@ export default function CreateReferralDialog({
               }
             />
           </div>
+
+          {/* Contact consent */}
+          <label className="flex items-start gap-3 cursor-pointer py-1">
+            <Checkbox
+              checked={contactConsent}
+              onCheckedChange={(checked) => setContactConsent(!!checked)}
+              className="mt-0.5"
+            />
+            <div>
+              <span className="text-sm font-medium">Пациент хочет, чтобы с ним связались</span>
+              <p className="text-xs text-muted-foreground">
+                Наш сервис бесплатно свяжется с пациентом, поможет записаться к врачу и проконсультирует
+              </p>
+            </div>
+          </label>
 
           {/* Clinic multi-select */}
           <div>
@@ -302,31 +345,32 @@ export default function CreateReferralDialog({
             )}
           </div>
 
-          {/* Error */}
-          {formError && (
-            <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md border border-red-200">
-              {formError}
-            </div>
-          )}
+        </div>
 
-          {/* Actions */}
-          <div className="flex justify-end gap-3 pt-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                onOpenChange(false);
-                resetForm();
-              }}
-            >
-              Отмена
-            </Button>
-            <Button
-              onClick={handleCreate}
-              disabled={createReferral.isPending}
-            >
-              {createReferral.isPending ? "Создание..." : "Создать"}
-            </Button>
+        {/* Error */}
+        {formError && (
+          <div className="text-sm text-red-600 bg-red-50 p-3 rounded-md border border-red-200">
+            {formError}
           </div>
+        )}
+
+        {/* Actions — always visible at bottom */}
+        <div className="flex justify-end gap-3 pt-2 border-t">
+          <Button
+            variant="outline"
+            onClick={() => {
+              onOpenChange(false);
+              resetForm();
+            }}
+          >
+            Отмена
+          </Button>
+          <Button
+            onClick={handleCreate}
+            disabled={createReferral.isPending}
+          >
+            {createReferral.isPending ? "Создание..." : "Создать"}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

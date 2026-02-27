@@ -2561,6 +2561,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
         patientCity: z.string().optional(),
         patientPhone: z.string().optional(),
         patientEmail: z.string().email("Некорректный email").optional().or(z.literal("")),
+        contactConsent: z.boolean().optional(),
         clinic: z.string().optional(),
         targetClinicIds: z.array(z.number()).optional(), // массив ID клиник, куда отправить рекомендацию
         notes: z.string().max(500, "Примечание не должно превышать 500 символов").optional(),
@@ -2589,6 +2590,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
           patientCity: input.patientCity || undefined,
           patientPhone: input.patientPhone || undefined,
           patientEmail: input.patientEmail || undefined,
+          contactConsent: input.contactConsent ?? null,
           clinic: input.clinic || undefined,
           targetClinicIds: input.targetClinicIds?.length ? JSON.stringify(input.targetClinicIds) : undefined,
           notes: input.notes?.trim() || undefined,
