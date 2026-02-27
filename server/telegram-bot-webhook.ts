@@ -1947,6 +1947,17 @@ bot.action('contract_accept', async (ctx) => {
       { parse_mode: 'HTML' }
     );
 
+    // Send registration confirmation email
+    try {
+      const { sendRegistrationConfirmation } = await import('./email');
+      await sendRegistrationConfirmation({
+        to: data.email,
+        agentName: data.fullName,
+      });
+    } catch (err) {
+      console.error('[Telegram Bot] Failed to send registration confirmation email:', err);
+    }
+
     // Send web access info
     await ctx.reply(
       '🔐 <b>Доступ к веб-кабинету</b>\n\n' +

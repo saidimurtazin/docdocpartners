@@ -605,10 +605,11 @@ export default function Register() {
                 <div className="border rounded-lg p-4 space-y-3">
                   <h4 className="font-medium">Условия работы:</h4>
                   <ul className="text-sm text-muted-foreground space-y-1 list-disc pl-4">
-                    <li>Комиссия: от {rates?.baseRate || 7}% от суммы лечения</li>
+                    <li>Комиссия: до 10% от суммы лечения</li>
                     <li>Минимальная выплата: 1 000 руб.</li>
                     <li>Срок выплаты: 3-5 рабочих дней</li>
-                    <li>Самозанятые: 6% НПД (оплачиваете самостоятельно)</li>
+                    <li>Выплаты на карту или по СБП</li>
+                    <li>Вы самозанятый или физ.лицо</li>
                   </ul>
                   <label className="flex items-start gap-3 cursor-pointer pt-2">
                     <Checkbox

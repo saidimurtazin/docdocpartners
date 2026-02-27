@@ -2598,7 +2598,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
         try {
           const { sendReferralNotification } = await import("./email");
           await sendReferralNotification({
-            to: process.env.REFERRAL_NOTIFICATION_EMAIL || "said.murtazin@mail.ru",
+            to: process.env.REFERRAL_NOTIFICATION_EMAIL || "info@doc-partner.ru",
             referralId,
             agentName: agent.fullName,
             patientName: input.patientFullName,

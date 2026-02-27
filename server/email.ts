@@ -354,7 +354,7 @@ export async function sendReferralNotificationToClinic(referral: {
     </html>
   `;
 
-  const recipientEmail = referral.clinicEmail || process.env.CLINIC_NOTIFICATION_EMAIL || 'said.murtazin@mail.ru';
+  const recipientEmail = referral.clinicEmail || process.env.CLINIC_NOTIFICATION_EMAIL || 'info@doc-partner.ru';
   return sendInfoEmail({
     to: recipientEmail,
     subject: `Новая рекомендация пациента: ${escapeHtml(referral.patientName)}`,
