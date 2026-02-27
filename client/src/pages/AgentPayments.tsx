@@ -298,6 +298,35 @@ export default function AgentPayments() {
                   </div>
                 )}
 
+                {/* Commission tier progress */}
+                {stats?.tierInfo && stats.tierInfo.nextTierThreshold && (
+                  <div className="mt-3 pt-3 border-t">
+                    <div className="flex justify-between text-xs text-emerald-700 mb-1.5">
+                      <span>Комиссия: {stats.tierInfo.currentRate}%</span>
+                      <span className="font-medium">
+                        {((stats.tierInfo.currentMonthRevenue || 0) / 100).toLocaleString('ru-RU')} / {(stats.tierInfo.nextTierThreshold / 100).toLocaleString('ru-RU')} ₽
+                      </span>
+                    </div>
+                    <div className="w-full bg-emerald-100 rounded-full h-2">
+                      <div
+                        className="bg-emerald-500 h-2 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, ((stats.tierInfo.currentMonthRevenue || 0) / stats.tierInfo.nextTierThreshold) * 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-emerald-600 mt-1">
+                      Ещё {((stats.tierInfo.nextTierThreshold - (stats.tierInfo.currentMonthRevenue || 0)) / 100).toLocaleString('ru-RU')} ₽ до комиссии {stats.tierInfo.nextTierRate}%
+                    </p>
+                  </div>
+                )}
+                {stats?.tierInfo && !stats.tierInfo.nextTierThreshold && (
+                  <div className="mt-3 pt-3 border-t">
+                    <div className="flex items-center gap-1.5 text-xs text-emerald-700">
+                      <TrendingUp className="w-3.5 h-3.5" />
+                      <span>Ваша комиссия: <span className="font-bold">{stats.tierInfo.currentRate}%</span> (макс. тир)</span>
+                    </div>
+                  </div>
+                )}
+
                 <p className="text-xs text-muted-foreground mt-3 pt-2 border-t">
                   Минимум для вывода: 1 000 ₽
                 </p>

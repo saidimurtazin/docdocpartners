@@ -507,7 +507,7 @@ export async function exportClinicReferralsToExcel(clinicId: number, clinicName:
 
   const STATUS_LABELS: Record<string, string> = {
     new: 'Новый', in_progress: 'В работе', contacted: 'Связались',
-    scheduled: 'Записан', visited: 'Пролечен', paid: 'Оплачен',
+    scheduled: 'Записан', visited: 'Пролечен',
     duplicate: 'Дубликат', no_answer: 'Нет ответа', cancelled: 'Отменён',
   };
 

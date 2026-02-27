@@ -107,7 +107,6 @@ export default function AdminReferrals() {
       contacted: "default",
       scheduled: "default",
       visited: "default",
-      paid: "default",
       duplicate: "outline",
       no_answer: "outline",
       cancelled: "destructive",
@@ -118,7 +117,6 @@ export default function AdminReferrals() {
       contacted: "📞 Связались",
       scheduled: "📅 Записан",
       visited: "✅ Приём состоялся",
-      paid: "💰 Оплачено",
       duplicate: "🔁 Дубликат",
       no_answer: "📵 Не дозвонились",
       cancelled: "❌ Отменена",
@@ -126,7 +124,7 @@ export default function AdminReferrals() {
     return <Badge variant={variants[status] || "outline"}>{labels[status] || status}</Badge>;
   };
 
-  type ReferralStatus = "new" | "in_progress" | "contacted" | "scheduled" | "visited" | "paid" | "duplicate" | "no_answer" | "cancelled";
+  type ReferralStatus = "new" | "in_progress" | "contacted" | "scheduled" | "visited" | "duplicate" | "no_answer" | "cancelled";
 
   const handleStatusChange = async (id: number, status: ReferralStatus) => {
     if (status === "scheduled") {
@@ -231,7 +229,7 @@ export default function AdminReferrals() {
                     <SelectItem value="contacted">📞 Связались</SelectItem>
                     <SelectItem value="scheduled">📅 Записан</SelectItem>
                     <SelectItem value="visited">✅ Приём состоялся</SelectItem>
-                    <SelectItem value="paid">💰 Оплачено</SelectItem>
+
                     <SelectItem value="duplicate">🔁 Дубликат</SelectItem>
                     <SelectItem value="no_answer">📵 Не дозвонились</SelectItem>
                     <SelectItem value="cancelled">❌ Отменена</SelectItem>
@@ -344,7 +342,7 @@ export default function AdminReferrals() {
                                   <SelectItem value="contacted">📞 Связались</SelectItem>
                                   <SelectItem value="scheduled">📅 Записан</SelectItem>
                                   <SelectItem value="visited">✅ Приём состоялся</SelectItem>
-                                  <SelectItem value="paid">💰 Оплачено</SelectItem>
+              
                                   <SelectItem value="duplicate">🔁 Дубликат</SelectItem>
                                   <SelectItem value="no_answer">📵 Не дозвонились</SelectItem>
                                   <SelectItem value="cancelled">❌ Отменена</SelectItem>

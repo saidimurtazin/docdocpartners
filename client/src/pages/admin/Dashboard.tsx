@@ -44,7 +44,7 @@ export default function AdminDashboard() {
     
     const statusCounts: Record<string, number> = {
       new: 0, in_progress: 0, contacted: 0, scheduled: 0,
-      visited: 0, paid: 0, duplicate: 0, no_answer: 0, cancelled: 0,
+      visited: 0, duplicate: 0, no_answer: 0, cancelled: 0,
     };
 
     allReferrals.forEach((ref: any) => {
@@ -57,7 +57,6 @@ export default function AdminDashboard() {
       { status: "📞 Связались", count: statusCounts.contacted, color: "bg-blue-500" },
       { status: "📅 Записан", count: statusCounts.scheduled, color: "bg-purple-500" },
       { status: "✅ Приём", count: statusCounts.visited, color: "bg-emerald-500" },
-      { status: "💰 Оплачено", count: statusCounts.paid, color: "bg-green-500" },
       { status: "🔁 Дубликат", count: statusCounts.duplicate, color: "bg-gray-400" },
       { status: "📵 Нет ответа", count: statusCounts.no_answer, color: "bg-orange-500" },
       { status: "❌ Отменена", count: statusCounts.cancelled, color: "bg-red-500" },
@@ -78,7 +77,7 @@ export default function AdminDashboard() {
       }
       
       clinicCounts[ref.clinic].count++;
-      if (ref.status === "paid" || ref.status === "visited") {
+      if (ref.status === "visited") {
         clinicCounts[ref.clinic].completed++;
         clinicCounts[ref.clinic].revenue += ref.treatmentAmount || 0;
       }

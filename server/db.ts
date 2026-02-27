@@ -456,7 +456,7 @@ export async function createReferral(data: any) {
 
 export async function updateReferralStatus(
   id: number, 
-  status: "new" | "in_progress" | "contacted" | "scheduled" | "visited" | "paid" | "duplicate" | "no_answer" | "cancelled"
+  status: "new" | "in_progress" | "contacted" | "scheduled" | "visited" | "duplicate" | "no_answer" | "cancelled"
 ) {
   const db = await getDb();
   if (!db) return;
@@ -766,7 +766,7 @@ export async function getStatistics() {
   const [totalReferrals] = await db.select({ count: sql<number>`count(*)` }).from(referrals);
   const [completedReferrals] = await db.select({ count: sql<number>`count(*)` })
     .from(referrals)
-    .where(sql`${referrals.status} IN ('paid', 'visited')`);
+    .where(sql`${referrals.status} = 'visited'`);
   const [totalPayments] = await db.select({ 
     sum: sql<number>`COALESCE(SUM(amount), 0)` 
   }).from(payments).where(eq(payments.status, "completed"));
@@ -955,7 +955,7 @@ export async function getAgentStatistics(agentId: number) {
   
   const [completedReferrals] = await db.select({ count: sql<number>`count(*)` })
     .from(referrals)
-    .where(and(eq(referrals.agentId, agentId), sql`${referrals.status} IN ('paid', 'visited')`));
+    .where(and(eq(referrals.agentId, agentId), sql`${referrals.status} = 'visited'`));
   
   const [totalEarnings] = await db.select({ 
     sum: sql<number>`COALESCE(SUM(amount), 0)` 
@@ -1345,7 +1345,7 @@ export async function getAgentPaidReferrals(agentId: number) {
     .where(and(
       eq(referrals.agentId, agentId),
       sql`${referrals.commissionAmount} > 0`,
-      sql`${referrals.status} IN ('visited', 'paid')`
+      sql`${referrals.status} = 'visited'`
     ))
     .orderBy(desc(referrals.createdAt));
 }
@@ -1518,7 +1518,7 @@ export async function createPaymentWithLock(
 }
 
 /**
- * Месячная выручка агента (сумма treatmentAmount за текущий месяц, visited/paid)
+ * Месячная выручка агента (сумма treatmentAmount за текущий месяц, visited)
  */
 export async function getAgentMonthlyRevenue(agentId: number): Promise<number> {
   const db = await getDb();
@@ -1530,7 +1530,7 @@ export async function getAgentMonthlyRevenue(agentId: number): Promise<number> {
   }).from(referrals)
     .where(and(
       eq(referrals.agentId, agentId),
-      sql`${referrals.status} IN ('visited', 'paid')`,
+      sql`${referrals.status} = 'visited'`,
       sql`${referrals.createdAt} >= ${firstOfMonth}`
     ));
   return result.sum;
@@ -1548,14 +1548,14 @@ export async function getAgentMonthlyRevenueByTreatmentMonth(agentId: number, tr
   }).from(referrals)
     .where(and(
       eq(referrals.agentId, agentId),
-      sql`${referrals.status} IN ('visited', 'paid')`,
+      sql`${referrals.status} = 'visited'`,
       eq(referrals.treatmentMonth, treatmentMonth)
     ));
   return result.sum;
 }
 
 /**
- * Все referrals агента за конкретный treatmentMonth (visited/paid).
+ * Все referrals агента за конкретный treatmentMonth (visited).
  * Используется для пересчёта комиссий при изменении тира.
  */
 export async function getReferralsByAgentAndMonth(agentId: number, treatmentMonth: string) {
@@ -1565,7 +1565,7 @@ export async function getReferralsByAgentAndMonth(agentId: number, treatmentMont
     .where(and(
       eq(referrals.agentId, agentId),
       eq(referrals.treatmentMonth, treatmentMonth),
-      sql`${referrals.status} IN ('visited', 'paid')`
+      sql`${referrals.status} = 'visited'`
     ));
 }
 
@@ -1650,7 +1650,7 @@ export async function getAgentReferralCount(agentId: number): Promise<number> {
 }
 
 /**
- * Количество пролеченных/оплаченных пациентов агента (status='visited' или 'paid')
+ * Количество пролеченных пациентов агента (status='visited')
  */
 export async function getAgentPaidReferralCount(agentId: number): Promise<number> {
   const db = await getDb();
@@ -1660,7 +1660,7 @@ export async function getAgentPaidReferralCount(agentId: number): Promise<number
   }).from(referrals)
     .where(and(
       eq(referrals.agentId, agentId),
-      sql`${referrals.status} IN ('visited', 'paid')`
+      sql`${referrals.status} = 'visited'`
     ));
   return result.count;
 }
@@ -1686,11 +1686,11 @@ export async function unlockBonusToEarnings(agentId: number, threshold?: number)
     const agentRow = (lockResult as any)[0]?.[0];
     if (!agentRow || !agentRow.bonusPoints || agentRow.bonusPoints <= 0) return 0;
 
-    // Check paid/visited referral count within the transaction (consistent with getAgentPaidReferralCount)
+    // Check visited referral count within the transaction (consistent with getAgentPaidReferralCount)
     const [countResult] = await tx.select({
       count: sql<number>`count(*)`
     }).from(referrals)
-      .where(and(eq(referrals.agentId, agentId), sql`${referrals.status} IN ('visited', 'paid')`));
+      .where(and(eq(referrals.agentId, agentId), sql`${referrals.status} = 'visited'`));
 
     if (countResult.count < bonusThreshold) return 0;
 

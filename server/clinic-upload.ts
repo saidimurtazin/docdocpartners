@@ -123,7 +123,7 @@ export async function parseClinicUploadExcel(base64: string, clinicName: string,
       }
 
       // Check if already treated
-      if (['visited', 'paid'].includes(match.status)) {
+      if (match.status === 'visited') {
         alreadyTreated.push({ rowIndex: rowNumber, patientName, birthdate: birthdateRaw, referralId: match.id });
         return;
       }

@@ -577,7 +577,7 @@ bot.on(message('text'), async (ctx) => {
     return;
   }
   if (text === '💰 Запросить выплату') {
-    // Request payout — new multi-step flow
+    // Redirect to web version for payouts
     try {
       const db = await getDb();
       if (!db) {
@@ -594,74 +594,22 @@ bot.on(message('text'), async (ctx) => {
 
       const { getAgentAvailableBalance } = await import('./db');
       const availableBalanceKop = await getAgentAvailableBalance(agent.id);
-      const availableBalance = availableBalanceKop / 100; // копейки → рубли
-      const minPayout = 1000; // 1000 рублей
+      const availableBalance = availableBalanceKop / 100;
 
-      // Step 1: General info
       let message = '💰 <b>Запрос выплаты</b>\n\n';
-      message += `💵 Доступно к выводу: <b>${availableBalance.toLocaleString('ru-RU')} ₽</b>\n`;
-      message += `📊 Минимальная сумма: <b>${minPayout.toLocaleString('ru-RU')} ₽</b>\n\n`;
+      message += `💵 Доступно к выводу: <b>${availableBalance.toLocaleString('ru-RU')} ₽</b>\n\n`;
+      message += '📱 Заявка на вывод средств доступна только в личном кабинете:\n\n';
+      message += '🔗 <b>https://doc-partner.ru/payments</b>\n\n';
+      message += 'Войдите с тем же email, который указан при регистрации.';
 
-      if (availableBalance < minPayout) {
-        message += '⚠️ Недостаточно средств для вывода.\n';
-        message += 'Продолжайте отправлять рекомендации для накопления суммы.';
-        await ctx.reply(message, { parse_mode: 'HTML' });
-        return;
-      }
-
-      // Step 2: Check requisites
-      const pm = agent.payoutMethod || 'card';
-      const hasRequisites = agent.inn && (
-        (pm === 'card' && agent.cardNumber) ||
-        (pm === 'sbp' && agent.phone) ||
-        (pm === 'bank_account' && agent.bankAccount && agent.bankName && agent.bankBik)
-      );
-
-      if (!hasRequisites) {
-        // No requisites — ask to fill them
-        message += '⚠️ <b>Для оформления выплаты необходимо заполнить реквизиты.</b>\n\n';
-        message += 'Нужно указать:\n';
-        message += `${agent.inn ? '✅' : '❌'} ИНН (12 цифр)\n`;
-        message += `❌ Способ выплаты (карта или СБП)\n`;
-
-        await ctx.reply(message, {
-          parse_mode: 'HTML',
-          ...Markup.inlineKeyboard([
-            [Markup.button.callback('📝 Заполнить реквизиты', 'payout_fill_requisites')],
-            [Markup.button.callback('❌ Отмена', 'payout_cancel')]
-          ])
-        });
-        return;
-      }
-
-      // Has requisites — show them for confirmation
-      message += '📋 <b>Ваши реквизиты:</b>\n';
-      message += `• ИНН: <code>${agent.inn}</code>\n`;
-      if (pm === 'card') {
-        message += `• Способ: 💳 Карта (**** ${agent.cardNumber?.slice(-4)})\n`;
-      } else if (pm === 'sbp') {
-        message += `• Способ: 📱 СБП (${agent.phone})\n`;
-      } else {
-        message += `• Банк: ${escapeHtml(agent.bankName || '')}\n`;
-        message += `• Счёт: <code>${agent.bankAccount}</code>\n`;
-        message += `• БИК: <code>${agent.bankBik}</code>\n`;
-      }
-      message += '\nПроверьте данные и выберите действие:';
-
-      await ctx.reply(message, {
-        parse_mode: 'HTML',
-        ...Markup.inlineKeyboard([
-          [Markup.button.callback('✅ Всё верно — запросить выплату', 'payout_confirm_request')],
-          [Markup.button.callback('✏️ Скорректировать реквизиты', 'payout_fill_requisites')],
-          [Markup.button.callback('❌ Отмена', 'payout_cancel')]
-        ])
-      });
+      await ctx.reply(message, { parse_mode: 'HTML' });
     } catch (error) {
-      console.error('[Telegram Bot] Request payout error:', error);
-      await ctx.reply('❌ Произошла ошибка.');
+      console.error('Error in payout redirect:', error);
+      await ctx.reply('❌ Произошла ошибка. Попробуйте позже.');
     }
     return;
   }
+
   if (text === '👥 Мои рекомендации') {
     // Show referrals directly
     try {
@@ -693,13 +641,13 @@ bot.on(message('text'), async (ctx) => {
 
       const statusEmoji: Record<string, string> = {
         new: '🆕', in_progress: '⚙️', contacted: '📞', scheduled: '📅',
-        visited: '✅', paid: '💰', duplicate: '🔁', no_answer: '📵', cancelled: '❌'
+        visited: '✅', duplicate: '🔁', no_answer: '📵', cancelled: '❌'
       };
 
       const statusNames: Record<string, string> = {
         new: 'Новая', in_progress: 'В работе', contacted: 'Связались',
         scheduled: 'Записан на приём', visited: 'Приём состоялся',
-        paid: 'Оплачено', duplicate: 'Дубликат', no_answer: 'Не дозвонились', cancelled: 'Отменена'
+        duplicate: 'Дубликат', no_answer: 'Не дозвонились', cancelled: 'Отменена'
       };
 
       let message = '📊 <b>Мои рекомендации</b>\n\n';
@@ -3073,7 +3021,7 @@ bot.action('cmd_referral_program', async (ctx) => {
 // PAYOUT FLOW CALLBACKS
 // ===============================
 
-// Callback from inline menu "Запросить выплату"
+// Callback from inline menu "Запросить выплату" — redirect to web
 bot.action('cmd_request_payout', async (ctx) => {
   const userId = ctx.from?.id;
   if (!userId) return;
@@ -3089,59 +3037,14 @@ bot.action('cmd_request_payout', async (ctx) => {
     const { getAgentAvailableBalance } = await import('./db');
     const availableBalanceKop = await getAgentAvailableBalance(agent.id);
     const availableBalance = availableBalanceKop / 100;
-    const minPayout = 1000;
 
     let message = '💰 <b>Запрос выплаты</b>\n\n';
-    message += `💵 Доступно к выводу: <b>${availableBalance.toLocaleString('ru-RU')} ₽</b>\n`;
-    message += `📊 Минимальная сумма: <b>${minPayout.toLocaleString('ru-RU')} ₽</b>\n\n`;
+    message += `💵 Доступно к выводу: <b>${availableBalance.toLocaleString('ru-RU')} ₽</b>\n\n`;
+    message += '📱 Заявка на вывод средств доступна только в личном кабинете:\n\n';
+    message += '🔗 <b>https://doc-partner.ru/payments</b>\n\n';
+    message += 'Войдите с тем же email, который указан при регистрации.';
 
-    if (availableBalance < minPayout) {
-      message += '⚠️ Недостаточно средств для вывода.\nПродолжайте отправлять рекомендации.';
-      await ctx.reply(message, { parse_mode: 'HTML' });
-      return;
-    }
-
-    const pm2 = agent.payoutMethod || 'card';
-    const hasRequisites2 = agent.inn && (
-      (pm2 === 'card' && agent.cardNumber) ||
-      (pm2 === 'sbp' && agent.phone) ||
-      (pm2 === 'bank_account' && agent.bankAccount && agent.bankName && agent.bankBik)
-    );
-    if (!hasRequisites2) {
-      message += '⚠️ <b>Необходимо заполнить реквизиты.</b>\n\n';
-      message += `${agent.inn ? '✅' : '❌'} ИНН\n`;
-      message += '❌ Способ выплаты\n';
-      await ctx.reply(message, {
-        parse_mode: 'HTML',
-        ...Markup.inlineKeyboard([
-          [Markup.button.callback('📝 Заполнить реквизиты', 'payout_fill_requisites')],
-          [Markup.button.callback('❌ Отмена', 'payout_cancel')]
-        ])
-      });
-      return;
-    }
-
-    message += '📋 <b>Ваши реквизиты:</b>\n';
-    message += `• ИНН: <code>${agent.inn}</code>\n`;
-    if (pm2 === 'card') {
-      message += `• Способ: 💳 Карта (**** ${agent.cardNumber?.slice(-4)})\n`;
-    } else if (pm2 === 'sbp') {
-      message += `• Способ: 📱 СБП (${agent.phone})\n`;
-    } else {
-      message += `• Банк: ${escapeHtml(agent.bankName || '')}\n`;
-      message += `• Счёт: <code>${agent.bankAccount}</code>\n`;
-      message += `• БИК: <code>${agent.bankBik}</code>\n`;
-    }
-    message += '\nПроверьте данные и выберите действие:';
-
-    await ctx.reply(message, {
-      parse_mode: 'HTML',
-      ...Markup.inlineKeyboard([
-        [Markup.button.callback('✅ Всё верно — запросить выплату', 'payout_confirm_request')],
-        [Markup.button.callback('✏️ Скорректировать реквизиты', 'payout_fill_requisites')],
-        [Markup.button.callback('❌ Отмена', 'payout_cancel')]
-      ])
-    });
+    await ctx.reply(message, { parse_mode: 'HTML' });
   } catch (error) {
     console.error('[Telegram Bot] Request payout callback error:', error);
     await ctx.reply('❌ Произошла ошибка.');

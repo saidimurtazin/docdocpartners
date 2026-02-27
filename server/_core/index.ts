@@ -228,6 +228,25 @@ async function startServer() {
     console.log(`Server running on http://localhost:${port}/`);
   });
 
+  // One-time migration: convert 'paid' status to 'visited' (paid is removed as redundant)
+  try {
+    const db = await import("../db");
+    const database = await db.getDb();
+    if (database) {
+      const { sql } = await import("drizzle-orm");
+      const result = await database.execute(sql`UPDATE referrals SET status = 'visited' WHERE status = 'paid'`);
+      console.log("[Migration] Converted paid→visited referrals:", result);
+      // Also update the enum column to remove 'paid'
+      await database.execute(sql`ALTER TABLE referrals MODIFY COLUMN status enum('new','in_progress','contacted','scheduled','visited','duplicate','no_answer','cancelled') NOT NULL DEFAULT 'new'`);
+      console.log("[Migration] Removed 'paid' from status enum");
+    }
+  } catch (err: any) {
+    // Ignore if already migrated (e.g., enum already doesn't have 'paid')
+    if (!err?.message?.includes("Data truncated")) {
+      console.error("[Migration] Error:", err?.message || err);
+    }
+  }
+
   // Clinic reports email polling — every 5 minutes
   cronTasks.push(cron.schedule("*/5 * * * *", async () => {
     if (cronLocks.emailPoll) return;

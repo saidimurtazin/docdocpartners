@@ -69,7 +69,6 @@ function getReferralStatusInfo(status: string): { emoji: string; text: string } 
     contacted: { emoji: "📞", text: "Связались с пациентом" },
     scheduled: { emoji: "📅", text: "Записан на приём" },
     visited: { emoji: "✅", text: "Приём состоялся" },
-    paid: { emoji: "💰", text: "Оплачено" },
     duplicate: { emoji: "🔁", text: "Дубликат — пациент уже в базе клиники" },
     no_answer: { emoji: "📵", text: "Не дозвонились" },
     cancelled: { emoji: "❌", text: "Отменена" },
@@ -118,13 +117,15 @@ export async function notifyReferralStatusChange(
   message += `\n<b>Новый статус:</b> ${text}\n`;
   
   // Add special messages for certain statuses
-  if (referralData.newStatus === "paid" && referralData.commissionAmount) {
-    message += `\n💰 <b>Ваше вознаграждение:</b> ${formatAmount(referralData.commissionAmount)}\n`;
-    if (referralData.treatmentAmount) {
-      message += `<b>Сумма лечения:</b> ${formatAmount(referralData.treatmentAmount)}\n`;
+  if (referralData.newStatus === "visited") {
+    if (referralData.commissionAmount) {
+      message += `\n💰 <b>Ваше вознаграждение:</b> ${formatAmount(referralData.commissionAmount)}\n`;
+      if (referralData.treatmentAmount) {
+        message += `<b>Сумма лечения:</b> ${formatAmount(referralData.treatmentAmount)}\n`;
+      }
+    } else {
+      message += `\n✅ Приём состоялся. Вознаграждение будет начислено после подтверждения суммы лечения.\n`;
     }
-  } else if (referralData.newStatus === "visited") {
-    message += `\n✅ Пациент посетил приём. Ожидайте подтверждения оплаты для начисления вознаграждения.\n`;
   } else if (referralData.newStatus === "scheduled") {
     message += `\n📅 Пациент записан на приём. Ожидайте информации о визите.\n`;
   } else if (referralData.newStatus === "contacted") {

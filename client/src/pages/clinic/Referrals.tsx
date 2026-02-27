@@ -33,7 +33,6 @@ const STATUS_LABELS: Record<string, string> = {
   contacted: "Связались",
   scheduled: "Записан",
   visited: "Пролечен",
-  paid: "Оплачен",
   duplicate: "Дубликат",
   no_answer: "Нет ответа",
   cancelled: "Отменён",
@@ -45,7 +44,6 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "outline" | "des
   contacted: "secondary",
   scheduled: "default",
   visited: "default",
-  paid: "default",
   duplicate: "destructive",
   no_answer: "destructive",
   cancelled: "destructive",
@@ -222,7 +220,7 @@ export default function ClinicReferrals() {
                             {r.treatmentAmount ? formatAmount(r.treatmentAmount) : "—"}
                           </TableCell>
                           <TableCell>
-                            {!["visited", "paid"].includes(r.status) && (
+                            {r.status !== "visited" && (
                               <Button
                                 size="sm"
                                 variant="outline"

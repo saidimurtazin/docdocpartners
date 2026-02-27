@@ -162,6 +162,37 @@ async function recalculateMonthlyCommissions(agentId: number, treatmentMonth: st
   }
 }
 
+/**
+ * Reusable: notify agent via Telegram about referral status change.
+ * Safe to call from any place (admin, clinic, report approval).
+ * Does NOT throw — logs errors silently.
+ */
+async function notifyAgentAboutReferralStatusChange(
+  referralId: number,
+  oldStatus: string,
+  newStatus: string
+): Promise<void> {
+  if (oldStatus === newStatus) return;
+  try {
+    const referral = await db.getReferralById(referralId);
+    if (!referral) return;
+    const agent = await db.getAgentById(referral.agentId);
+    if (!agent?.telegramId) return;
+    const { notifyReferralStatusChange } = await import("./telegram-notifications");
+    await notifyReferralStatusChange(agent.telegramId, {
+      id: referral.id,
+      patientFullName: referral.patientFullName,
+      oldStatus,
+      newStatus,
+      clinic: referral.clinic,
+      treatmentAmount: referral.treatmentAmount ?? undefined,
+      commissionAmount: referral.commissionAmount ?? undefined,
+    });
+  } catch (err) {
+    console.error(`[Notify] Failed to notify agent about referral ${referralId} status change:`, err);
+  }
+}
+
 /** Staff roles that can access admin panel */
 const STAFF_ROLES = ["admin", "support", "accountant", "clinic"] as const;
 type StaffRole = typeof STAFF_ROLES[number];
@@ -1213,7 +1244,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
       updateStatus: protectedProcedure
         .input(z.object({
           id: z.number(),
-          status: z.enum(["new", "in_progress", "contacted", "scheduled", "visited", "paid", "duplicate", "no_answer", "cancelled"]),
+          status: z.enum(["new", "in_progress", "contacted", "scheduled", "visited", "duplicate", "no_answer", "cancelled"]),
           bookedClinicId: z.number().optional(), // клиника, куда записан пациент (при статусе "записан")
         }))
         .mutation(async ({ ctx, input }) => {
@@ -1238,23 +1269,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
 
           // Send Telegram notification to agent about status change
           if (oldStatus !== input.status) {
-            try {
-              const agent = await db.getAgentById(referral.agentId);
-              if (agent?.telegramId) {
-                const { notifyReferralStatusChange } = await import("./telegram-notifications");
-                await notifyReferralStatusChange(agent.telegramId, {
-                  id: referral.id,
-                  patientFullName: referral.patientFullName,
-                  oldStatus,
-                  newStatus: input.status,
-                  clinic: referral.clinic,
-                  treatmentAmount: referral.treatmentAmount ?? undefined,
-                  commissionAmount: referral.commissionAmount ?? undefined,
-                });
-              }
-            } catch (err) {
-              console.error("[Admin] Failed to send referral status notification:", err);
-            }
+            await notifyAgentAboutReferralStatusChange(input.id, oldStatus, input.status);
 
             // Auto-create tasks based on new status
             try {
@@ -1760,10 +1775,14 @@ DocPartner — B2B-платформа агентских рекомендаци�
               // 3. Обновить суммы этого referral
               const commission = Math.round(amount * commissionRate / 100);
               await db.updateReferralAmounts(refId, amount, commission);
+              const oldStatus = referral.status;
               await db.updateReferralStatus(refId, "visited");
 
               // 4. Пересчитать ВСЕ referrals этого месяца (новая выручка может изменить тир)
               await recalculateMonthlyCommissions(referral.agentId, treatmentMonth);
+
+              // 5. Уведомить агента в Telegram
+              await notifyAgentAboutReferralStatusChange(refId, oldStatus, "visited");
             }
           }
 
@@ -2018,10 +2037,10 @@ DocPartner — B2B-платформа агентских рекомендаци�
       const allReferrals = await db.getReferralsByTargetClinicId(ctx.clinicId, clinicName);
 
       const total = allReferrals.length;
-      const treated = allReferrals.filter(r => ["visited", "paid"].includes(r.status)).length;
+      const treated = allReferrals.filter(r => r.status === "visited").length;
       const conversionRate = total > 0 ? Math.round((treated / total) * 100) : 0;
       const totalTreatmentAmount = allReferrals
-        .filter(r => ["visited", "paid"].includes(r.status))
+        .filter(r => r.status === "visited")
         .reduce((sum, r) => sum + (r.treatmentAmount || 0), 0);
 
       return { clinicName, total, treated, conversionRate, totalTreatmentAmount };
@@ -2085,6 +2104,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
         }
 
         // Book the patient at this clinic
+        const oldStatus = referral.status;
         await db.updateReferral(input.referralId, {
           bookedClinicId: ctx.clinicId,
           bookedByPartner: "yes",
@@ -2092,6 +2112,10 @@ DocPartner — B2B-платформа агентских рекомендаци�
         });
 
         console.log(`[Clinic] Referral ${input.referralId} confirmed by clinic ${clinic.name} (id=${ctx.clinicId})`);
+
+        // Notify agent via Telegram
+        await notifyAgentAboutReferralStatusChange(input.referralId, oldStatus, "scheduled");
+
         return { success: true };
       }),
 
@@ -2116,6 +2140,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
         }
 
         // Update referral
+        const oldStatus = referral.status;
         const treatmentMonth = parseTreatmentMonth(input.visitDate) || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
         await db.updateReferral(input.referralId, {
           status: "visited",
@@ -2134,6 +2159,9 @@ DocPartner — B2B-платформа агентских рекомендаци�
 
         // Recalculate monthly commissions (tier may have changed)
         await recalculateMonthlyCommissions(referral.agentId, treatmentMonth);
+
+        // Notify agent via Telegram
+        await notifyAgentAboutReferralStatusChange(input.referralId, oldStatus, "visited");
 
         return { success: true };
       }),
@@ -2315,7 +2343,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
             continue;
           }
 
-          if (["visited", "paid"].includes(referral.status)) {
+          if (referral.status === "visited") {
             alreadyTreated.push({
               rowIndex: i + 1,
               patientName: p.patientName,
@@ -2437,12 +2465,12 @@ DocPartner — B2B-платформа агентских рекомендаци�
 
       const referrals = await db.getReferralsByAgentId(ctx.agentId);
       const activeReferrals = referrals.filter(r => ["new", "in_progress", "contacted", "scheduled"].includes(r.status));
-      const completedReferrals = referrals.filter(r => r.status === "paid" || r.status === "visited");
+      const completedReferrals = referrals.filter(r => r.status === "visited");
 
       const now = new Date();
       const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       const thisMonthEarnings = referrals
-        .filter(r => r.treatmentMonth === currentMonth && (r.status === "paid" || r.status === "visited"))
+        .filter(r => r.treatmentMonth === currentMonth && r.status === "visited")
         .reduce((sum, r) => sum + (r.commissionAmount || 0), 0);
 
       const conversionRate = referrals.length > 0
@@ -2450,7 +2478,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
         : 0;
 
       // Bonus info
-      const paidReferralCount = referrals.filter(r => r.status === "paid" || r.status === "visited").length;
+      const paidReferralCount = referrals.filter(r => r.status === "visited").length;
       const [pendingPaymentsSum, completedPaymentsSum] = await Promise.all([
         db.getAgentPendingPaymentsSum(ctx.agentId),
         db.getAgentCompletedPaymentsSum(ctx.agentId),
@@ -2471,6 +2499,48 @@ DocPartner — B2B-платформа агентских рекомендаци�
         referredAgentsCount = referred.length;
       }
 
+      // Tier info for commission progress bar
+      let tierInfo: {
+        currentRate: number;
+        currentMonthRevenue: number;
+        nextTierThreshold: number | null;
+        nextTierRate: number | null;
+        currentMonth: string;
+      } | null = null;
+
+      try {
+        const globalJson = await db.getAppSetting("agentCommissionTiers");
+        if (globalJson) {
+          const tiers: { minMonthlyRevenue: number; commissionRate: number }[] = JSON.parse(globalJson);
+          if (tiers.length > 0) {
+            const sorted = [...tiers].sort((a, b) => a.minMonthlyRevenue - b.minMonthlyRevenue);
+            const monthlyRevenue = await db.getAgentMonthlyRevenueByTreatmentMonth(ctx.agentId, currentMonth);
+
+            // Find current tier
+            let currentTierIdx = 0;
+            for (let i = sorted.length - 1; i >= 0; i--) {
+              if (monthlyRevenue >= sorted[i].minMonthlyRevenue) {
+                currentTierIdx = i;
+                break;
+              }
+            }
+
+            const currentRate = sorted[currentTierIdx].commissionRate;
+            const nextTier = sorted[currentTierIdx + 1] || null;
+
+            tierInfo = {
+              currentRate,
+              currentMonthRevenue: monthlyRevenue,
+              nextTierThreshold: nextTier ? nextTier.minMonthlyRevenue : null,
+              nextTierRate: nextTier ? nextTier.commissionRate : null,
+              currentMonth,
+            };
+          }
+        }
+      } catch (err) {
+        console.error("[Dashboard] Failed to compute tier info:", err);
+      }
+
       return {
         totalEarnings: agent.totalEarnings ?? 0,
         availableBalance: Math.max(0, (agent.totalEarnings ?? 0) - (completedPaymentsSum ?? 0) - (pendingPaymentsSum ?? 0)),
@@ -2486,6 +2556,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
         referredAgentsCount,
         referralLink: `https://t.me/docpartnerbot?start=ref_${ctx.agentId}`,
         isSelfEmployed: agent.isSelfEmployed || "unknown",
+        tierInfo,
         // Onboarding fields
         agentFullName: agent.fullName,
         hasTelegram: !!agent.telegramId,
@@ -2506,7 +2577,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
 
         const earnings = referrals
           .filter(r => {
-            if (!(r.status === "paid" || r.status === "visited")) return false;
+            if (r.status !== "visited") return false;
             // Prefer treatmentMonth, fallback to createdAt for old data
             if ((r as any).treatmentMonth) {
               return (r as any).treatmentMonth === monthKey;
@@ -2523,7 +2594,7 @@ DocPartner — B2B-платформа агентских рекомендаци�
 
     referralsByStatus: agentProcedure.query(async ({ ctx }) => {
       const referrals = await db.getReferralsByAgentId(ctx.agentId);
-      const statusCounts: Record<string, number> = { new: 0, in_progress: 0, contacted: 0, scheduled: 0, visited: 0, paid: 0, duplicate: 0, no_answer: 0, cancelled: 0 };
+      const statusCounts: Record<string, number> = { new: 0, in_progress: 0, contacted: 0, scheduled: 0, visited: 0, duplicate: 0, no_answer: 0, cancelled: 0 };
       referrals.forEach(r => {
         if (r.status in statusCounts) statusCounts[r.status]++;
       });
@@ -2533,7 +2604,6 @@ DocPartner — B2B-платформа агентских рекомендаци�
         { status: 'Связались', count: statusCounts.contacted },
         { status: 'Записан', count: statusCounts.scheduled },
         { status: 'Приём состоялся', count: statusCounts.visited },
-        { status: 'Оплачено', count: statusCounts.paid },
         { status: 'Дубликат', count: statusCounts.duplicate },
         { status: 'Не дозвонились', count: statusCounts.no_answer },
         { status: 'Отменена', count: statusCounts.cancelled },

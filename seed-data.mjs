@@ -185,7 +185,7 @@ async function seed() {
 
   // ========= REFERRALS =========
   const clinicNames = ["MEDSI", "МИБС", "Olymp Clinic", "Millenium Clinic", "EMC", "СМ-Клиника"];
-  const statuses = ["new", "in_progress", "contacted", "scheduled", "visited", "paid", "duplicate", "no_answer", "cancelled"];
+  const statuses = ["new", "in_progress", "contacted", "scheduled", "visited", "duplicate", "no_answer", "cancelled"];
   const patientNames = [
     "Андреева Светлана Олеговна", "Белов Кирилл Анатольевич", "Васильева Дарья Михайловна",
     "Григорьев Роман Павлович", "Дмитриева Юлия Сергеевна", "Егоров Николай Витальевич",
@@ -206,7 +206,7 @@ async function seed() {
     const numReferrals = 2 + Math.floor(Math.random() * 7);
     for (let i = 0; i < numReferrals; i++) {
       const status = statuses[Math.floor(Math.random() * statuses.length)];
-      const isPaid = status === 'paid' || status === 'visited';
+      const isPaid = status === 'visited';
       const treatmentAmount = isPaid ? (300000 + Math.floor(Math.random() * 1500000)) : 0; // 3k-18k rub in kopecks
       const commissionAmount = isPaid ? Math.round(treatmentAmount * 0.1) : 0;
       const patientName = patientNames[Math.floor(Math.random() * patientNames.length)];
