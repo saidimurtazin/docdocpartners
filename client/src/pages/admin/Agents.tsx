@@ -325,19 +325,6 @@ export default function AdminAgents() {
                               </Button>
                             )}
                           </div>
-                          {/* Jump verification */}
-                          {agent.inn && !(agent as any).jumpIdentified && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => verifyViaJump.mutate({ agentId: agent.id })}
-                              disabled={verifyViaJump.isPending}
-                              className="text-xs"
-                            >
-                              <Shield className="w-3 h-3 mr-1" />
-                              Проверить Jump
-                            </Button>
-                          )}
                           {/* Self-employment toggle */}
                           {agent.isSelfEmployed !== "yes" && agent.inn && (
                             <Button
