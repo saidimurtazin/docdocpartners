@@ -193,6 +193,59 @@ async function notifyAgentAboutReferralStatusChange(
   }
 }
 
+/**
+ * Check and award referral bonus when an agent gets their first "visited" referral.
+ * Conditions: agent has referredBy set, referralBonusAwarded is false, at least 1 visited referral.
+ * Awards 1,000₽ (100000 kopecks) to the referrer.
+ * Safe to call from any place — does NOT throw.
+ */
+async function checkAndAwardReferralBonus(agentId: number): Promise<void> {
+  try {
+    const agent = await db.getAgentById(agentId);
+    if (!agent || !agent.referredBy) return;
+    // Already awarded
+    if ((agent as any).referralBonusAwarded) return;
+
+    // Check if this agent has at least 1 visited referral
+    const paidCount = await db.getAgentPaidReferralCount(agentId);
+    if (paidCount < 1) return;
+
+    // Award bonus to the referrer
+    await db.addBonusPoints(agent.referredBy, 100000); // 1,000₽
+
+    // Mark as awarded so we don't double-credit
+    const database = await db.getDb();
+    if (database) {
+      const { agents: agentsTable } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      await database.update(agentsTable)
+        .set({ referralBonusAwarded: true } as any)
+        .where(eq(agentsTable.id, agentId));
+    }
+
+    console.log(`[Referral Bonus] Awarded 1000₽ to agent ${agent.referredBy} for referred agent ${agentId} first visited referral`);
+
+    // Notify referrer
+    try {
+      const referrer = await db.getAgentById(agent.referredBy);
+      if (referrer?.telegramId) {
+        const { notifyAgent } = await import("./telegram-bot-webhook");
+        await notifyAgent(
+          referrer.telegramId,
+          `🎉 <b>Бонус начислен!</b>\n\n` +
+          `Агент <b>${agent.fullName}</b>, которого вы пригласили, получил первую подтверждённую рекомендацию.\n\n` +
+          `💰 Вам начислен бонус: <b>1 000 ₽</b>\n` +
+          `📊 Бонус будет доступен для вывода после 5 оплаченных пациентов.`
+        );
+      }
+    } catch (notifyErr) {
+      console.error(`[Referral Bonus] Failed to notify referrer:`, notifyErr);
+    }
+  } catch (err) {
+    console.error(`[Referral Bonus] Error checking bonus for agent ${agentId}:`, err);
+  }
+}
+
 /** Staff roles that can access admin panel */
 const STAFF_ROLES = ["admin", "support", "accountant", "clinic"] as const;
 type StaffRole = typeof STAFF_ROLES[number];
@@ -987,11 +1040,9 @@ export const appRouter = router({
           console.error("[Register] Failed to send confirmation email:", err);
         }
 
-        // 10. Credit referral bonus to inviting agent
+        // 10. Notify referrer about new agent registration (bonus is NOT awarded here —
+        // it's awarded when this agent gets their first visited referral)
         if (referredByAgentId) {
-          await db.addBonusPoints(referredByAgentId, 100000); // 1,000₽
-
-          // Notify inviter via Telegram if they have telegramId
           try {
             const inviter = await db.getAgentById(referredByAgentId);
             if (inviter?.telegramId) {
@@ -1000,8 +1051,7 @@ export const appRouter = router({
                 inviter.telegramId,
                 `🎉 <b>Новый реферал!</b>\n\n` +
                 `Агент <b>${capitalizeWords(input.fullName)}</b> зарегистрировался по вашей ссылке.\n\n` +
-                `💰 Вам начислен бонус: <b>1 000 ₽</b>\n` +
-                `📊 Бонус будет доступен после 10 оплаченных направлений.`
+                `💡 Бонус <b>1 000 ₽</b> будет начислен, когда этот агент получит первую подтверждённую рекомендацию.`
               );
             }
           } catch (err) {
@@ -1270,6 +1320,11 @@ DocPartner — B2B-платформа агентских рекомендаци�
           // Send Telegram notification to agent about status change
           if (oldStatus !== input.status) {
             await notifyAgentAboutReferralStatusChange(input.id, oldStatus, input.status);
+
+            // Check referral bonus when status becomes "visited"
+            if (input.status === "visited") {
+              await checkAndAwardReferralBonus(referral.agentId);
+            }
 
             // Auto-create tasks based on new status
             try {
@@ -1783,6 +1838,9 @@ DocPartner — B2B-платформа агентских рекомендаци�
 
               // 5. Уведомить агента в Telegram
               await notifyAgentAboutReferralStatusChange(refId, oldStatus, "visited");
+
+              // 6. Check referral bonus for the agent
+              await checkAndAwardReferralBonus(referral.agentId);
             }
           }
 
@@ -2163,6 +2221,9 @@ DocPartner — B2B-платформа агентских рекомендаци�
         // Notify agent via Telegram
         await notifyAgentAboutReferralStatusChange(input.referralId, oldStatus, "visited");
 
+        // Check referral bonus for the agent
+        await checkAndAwardReferralBonus(referral.agentId);
+
         return { success: true };
       }),
 
@@ -2484,9 +2545,9 @@ DocPartner — B2B-платформа агентских рекомендаци�
         db.getAgentCompletedPaymentsSum(ctx.agentId),
       ]);
 
-      // Read bonusUnlockThreshold from settings (default 10)
+      // Read bonusUnlockThreshold from settings (default 5)
       const thresholdSetting = await db.getAppSetting("bonusUnlockThreshold");
-      const bonusUnlockThreshold = thresholdSetting ? parseInt(thresholdSetting, 10) : 10;
+      const bonusUnlockThreshold = thresholdSetting ? parseInt(thresholdSetting, 10) : 5;
 
       // Referral program: count active agents invited by this agent
       const { agents: agentsTable } = await import("../drizzle/schema");

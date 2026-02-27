@@ -106,7 +106,7 @@ export function calculateWithdrawalTax(grossAmount: number, isSelfEmployed: bool
 /**
  * Проверить, может ли агент запросить выплату
  */
-export function canRequestPayout(totalReferrals: number, bonusPoints: number, bonusUnlockThreshold = 10): {
+export function canRequestPayout(totalReferrals: number, bonusPoints: number, bonusUnlockThreshold = 5): {
   canWithdraw: boolean;
   reason?: string;
 } {

@@ -74,21 +74,21 @@ describe("Self-Employment Verification", () => {
 describe("Referral System", () => {
   it("should award 5000 bonus points for successful referral", () => {
     const bonusPoints = 5000;
-    const minimumReferralsForWithdrawal = 10;
+    const minimumReferralsForWithdrawal = 5;
 
     expect(bonusPoints).toBe(5000);
-    expect(minimumReferralsForWithdrawal).toBe(10);
+    expect(minimumReferralsForWithdrawal).toBe(5);
   });
 
-  it("should block withdrawal with less than 10 referrals", () => {
-    const result = canRequestPayout(8, 15000);
+  it("should block withdrawal with less than 5 referrals", () => {
+    const result = canRequestPayout(3, 15000);
 
     expect(result.canWithdraw).toBe(false);
-    expect(result.reason).toContain("минимум 10");
+    expect(result.reason).toContain("минимум 5");
   });
 
-  it("should allow withdrawal with 10+ referrals", () => {
-    const result = canRequestPayout(12, 20000);
+  it("should allow withdrawal with 5+ referrals", () => {
+    const result = canRequestPayout(6, 20000);
 
     expect(result.canWithdraw).toBe(true);
   });

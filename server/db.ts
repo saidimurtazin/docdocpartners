@@ -1667,7 +1667,7 @@ export async function getAgentPaidReferralCount(agentId: number): Promise<number
 
 /**
  * Разблокировать бонус → перенести bonusPoints в totalEarnings
- * Только если агент имеет >= 10 оплаченных пациентов
+ * Только если агент имеет >= 5 оплаченных пациентов (configurable via bonusUnlockThreshold)
  * Использует транзакцию с FOR UPDATE для предотвращения двойного начисления
  * Возвращает сумму бонуса (в копейках) или 0 если бонус не разблокирован
  */
@@ -1675,8 +1675,8 @@ export async function unlockBonusToEarnings(agentId: number, threshold?: number)
   const db = await getDb();
   if (!db) return 0;
 
-  // Read threshold from settings if not provided
-  const bonusThreshold = threshold ?? parseInt(await getAppSetting("bonusUnlockThreshold") || "10", 10);
+  // Read threshold from settings if not provided (default 5)
+  const bonusThreshold = threshold ?? parseInt(await getAppSetting("bonusUnlockThreshold") || "5", 10);
 
   return await db.transaction(async (tx) => {
     // Lock agent row to prevent concurrent bonus unlocks

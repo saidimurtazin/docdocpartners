@@ -247,6 +247,22 @@ async function startServer() {
     }
   }
 
+  // One-time migration: add referralBonusAwarded column + mark existing referred agents as awarded
+  try {
+    const db = await import("../db");
+    const database = await db.getDb();
+    if (database) {
+      const { sql } = await import("drizzle-orm");
+      await database.execute(sql`ALTER TABLE agents ADD COLUMN referralBonusAwarded boolean DEFAULT false`);
+      await database.execute(sql`UPDATE agents SET referralBonusAwarded = true WHERE referredBy IS NOT NULL`);
+      console.log("[Migration] Added referralBonusAwarded column");
+    }
+  } catch (err: any) {
+    if (!err?.message?.includes("Duplicate column")) {
+      console.error("[Migration] referralBonusAwarded:", err?.message || err);
+    }
+  }
+
   // Clinic reports email polling — every 5 minutes
   cronTasks.push(cron.schedule("*/5 * * * *", async () => {
     if (cronLocks.emailPoll) return;
@@ -402,41 +418,81 @@ async function startServer() {
     }
   }));
 
-  // Referral bonus unlock check — every hour
+  // Referral bonus unlock + award check — every hour
   cronTasks.push(cron.schedule("0 * * * *", async () => {
     if (cronLocks.bonusCheck) return;
     cronLocks.bonusCheck = true;
     try {
-      const { getDb, unlockBonusToEarnings } = await import("../db");
-      const { agents: agentsTable } = await import("../../drizzle/schema");
-      const { gt } = await import("drizzle-orm");
+      const { getDb, unlockBonusToEarnings, addBonusPoints, getAgentPaidReferralCount } = await import("../db");
+      const { agents: agentsTable, referrals: referralsTable } = await import("../../drizzle/schema");
+      const { gt, eq, and, isNotNull, sql } = await import("drizzle-orm");
 
       const database = await getDb();
       if (!database) return;
 
-      // Find agents with pending bonus points
+      // 1. Check for pending referral bonus awards (referred agents who got first visited referral but bonus not yet awarded)
+      const pendingBonusAgents = await database.select()
+        .from(agentsTable)
+        .where(and(
+          isNotNull(agentsTable.referredBy),
+          eq(agentsTable.referralBonusAwarded as any, false),
+          eq(agentsTable.status, "active")
+        ));
+
+      if (pendingBonusAgents.length > 0) {
+        console.log(`[Bonus Cron] Checking ${pendingBonusAgents.length} agent(s) for pending referral bonus award...`);
+        for (const agent of pendingBonusAgents) {
+          try {
+            const paidCount = await getAgentPaidReferralCount(agent.id);
+            if (paidCount >= 1 && agent.referredBy) {
+              await addBonusPoints(agent.referredBy, 100000); // 1,000₽
+              await database.update(agentsTable)
+                .set({ referralBonusAwarded: true } as any)
+                .where(eq(agentsTable.id, agent.id));
+              console.log(`[Bonus Cron] Awarded 1000₽ to agent ${agent.referredBy} for referred agent ${agent.id}`);
+
+              // Notify referrer
+              const [referrer] = await database.select().from(agentsTable).where(eq(agentsTable.id, agent.referredBy));
+              if (referrer?.telegramId) {
+                const { notifyAgent } = await import("../telegram-bot-webhook");
+                await notifyAgent(
+                  referrer.telegramId,
+                  `🎉 <b>Бонус начислен!</b>\n\n` +
+                  `Агент <b>${agent.fullName}</b>, которого вы пригласили, получил первую подтверждённую рекомендацию.\n\n` +
+                  `💰 Вам начислен бонус: <b>1 000 ₽</b>\n` +
+                  `📊 Бонус будет доступен для вывода после 5 оплаченных пациентов.`
+                );
+              }
+            }
+          } catch (err) {
+            console.error(`[Bonus Cron] Error awarding bonus for agent ${agent.id}:`, err);
+          }
+        }
+      }
+
+      // 2. Check for bonus unlock (agents with bonusPoints > 0 and enough paid referrals)
       const agentsWithBonus = await database.select()
         .from(agentsTable)
         .where(gt(agentsTable.bonusPoints, 0));
 
-      if (agentsWithBonus.length === 0) return;
-      console.log(`[Bonus Cron] Checking ${agentsWithBonus.length} agent(s) with pending bonus...`);
-
-      for (const agent of agentsWithBonus) {
-        try {
-          const unlockedBonus = await unlockBonusToEarnings(agent.id);
-          if (unlockedBonus > 0 && agent.telegramId) {
-            const { notifyAgent } = await import("../telegram-bot-webhook");
-            const bonusRub = (unlockedBonus / 100).toLocaleString("ru-RU");
-            await notifyAgent(
-              agent.telegramId,
-              `🎉 <b>Бонус разблокирован!</b>\n\n` +
-              `Ваш реферальный бонус ${bonusRub} ₽ добавлен к балансу.\n` +
-              `Поздравляем — вы рекомендовали 10+ пациентов с оплатой!`
-            );
+      if (agentsWithBonus.length > 0) {
+        console.log(`[Bonus Cron] Checking ${agentsWithBonus.length} agent(s) for bonus unlock...`);
+        for (const agent of agentsWithBonus) {
+          try {
+            const unlockedBonus = await unlockBonusToEarnings(agent.id);
+            if (unlockedBonus > 0 && agent.telegramId) {
+              const { notifyAgent } = await import("../telegram-bot-webhook");
+              const bonusRub = (unlockedBonus / 100).toLocaleString("ru-RU");
+              await notifyAgent(
+                agent.telegramId,
+                `🎉 <b>Бонус разблокирован!</b>\n\n` +
+                `Ваш реферальный бонус ${bonusRub} ₽ добавлен к балансу.\n` +
+                `Поздравляем — вы рекомендовали 5+ пациентов с оплатой!`
+              );
+            }
+          } catch (err) {
+            console.error(`[Bonus Cron] Error for agent ${agent.id}:`, err);
           }
-        } catch (err) {
-          console.error(`[Bonus Cron] Error for agent ${agent.id}:`, err);
         }
       }
     } catch (error) {

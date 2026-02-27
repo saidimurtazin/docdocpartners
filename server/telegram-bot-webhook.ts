@@ -563,11 +563,11 @@ bot.on(message('text'), async (ctx) => {
         message += `🎁 Бонусные баллы: <b>${bonusRub} ₽</b>\n`;
       }
       message += `\n🔗 <b>Ваша реферальная ссылка:</b>\n📱 Telegram: <code>${referralLink}</code>\n🌐 Веб: <code>${webReferralLink}</code>\n`;
-      message += '📢 За каждого приглашённого агента — <b>1 000 ₽</b> бонус\n\n';
+      message += '📢 За каждого приглашённого агента с подтверждённой рекомендацией — <b>1 000 ₽</b> бонус\n\n';
       message += '📈 <b>Как заработать больше:</b>\n';
       message += '• Отправляйте пациентов через меню\n';
       message += '• Приглашайте коллег по реферальной ссылке\n';
-      message += '• Бонус разблокируется после 10 оплаченных пациентов';
+      message += '• Бонус разблокируется после 5 оплаченных пациентов';
 
       await ctx.reply(message, { parse_mode: 'HTML' });
     } catch (error) {
@@ -824,7 +824,7 @@ bot.on(message('text'), async (ctx) => {
       const { getAgentPaidReferralCount } = await import('./db');
       const paidCount = await getAgentPaidReferralCount(agent.id);
       const bonusRub = (bonusPoints / 100).toLocaleString("ru-RU");
-      const bonusUnlocked = paidCount >= 10;
+      const bonusUnlocked = paidCount >= 5;
 
       let message = '👥 <b>Реферальная программа</b>\n\n';
       message += '🎁 Приглашайте коллег и зарабатывайте!\n\n';
@@ -834,13 +834,13 @@ bot.on(message('text'), async (ctx) => {
       message += `• Бонус за рефералов: ${bonusRub} ₽`;
       if (bonusPoints > 0 && !bonusUnlocked) {
         message += ` (🔒 заблокирован)\n`;
-        message += `• Прогресс: ${paidCount}/10 оплаченных пациентов\n`;
+        message += `• Прогресс: ${paidCount}/5 оплаченных пациентов\n`;
       } else if (bonusPoints > 0 && bonusUnlocked) {
         message += ` (✅ доступен для вывода)\n`;
       } else {
         message += `\n`;
       }
-      message += '\n💡 За каждого приглашённого — 1 000 ₽. Разблокировка после 10 оплаченных пациентов.';
+      message += '\n💡 За каждого приглашённого агента с первой подтверждённой рекомендацией — 1 000 ₽. Разблокировка после 5 оплаченных пациентов.';
 
       await ctx.reply(message, { parse_mode: 'HTML' });
     } catch (error) {
@@ -1856,28 +1856,21 @@ bot.action('contract_accept', async (ctx) => {
       }
     } catch (e) { /* ignore cleanup errors */ }
 
-    // Credit referral bonus to inviting agent (1000 RUB = 100000 kopecks)
+    // Notify referrer about new agent registration (bonus is NOT awarded here —
+    // it's awarded when this agent gets their first visited referral)
     if (referredByAgentId) {
       try {
-        const { addBonusPoints } = await import('./db');
-        await addBonusPoints(referredByAgentId, 100000);
-        console.log(`[Telegram Bot] Referral bonus +1000₽ credited to agent ${referredByAgentId}`);
-
-        // Notify inviting agent
         const [inviter] = await db.select().from(agents).where(eq(agents.id, referredByAgentId));
         if (inviter?.telegramId) {
           await notifyAgent(
             inviter.telegramId,
-            `🎁 <b>Новый реферал!</b>\n\n` +
-            `Агент ${escapeHtml(data.fullName || "")} зарегистрировался по вашей ссылке.\n` +
-            `+1 000 ₽ начислено в бонусы.\n\n` +
-            `💡 Бонусы станут доступны для вывода после 10 оплаченных пациентов.`
+            `🎉 <b>Новый реферал!</b>\n\n` +
+            `Агент ${escapeHtml(data.fullName || "")} зарегистрировался по вашей ссылке.\n\n` +
+            `💡 Бонус <b>1 000 ₽</b> будет начислен, когда этот агент получит первую подтверждённую рекомендацию.`
           );
-        } else {
-          console.warn(`[Telegram Bot] Referrer ${referredByAgentId} has no telegramId, cannot notify`);
         }
       } catch (err) {
-        console.error('[Telegram Bot] Failed to credit referral bonus to agent', referredByAgentId, ':', err);
+        console.error('[Telegram Bot] Failed to notify referrer:', err);
       }
     }
 
@@ -2736,7 +2729,7 @@ bot.command('referral_program', async (ctx) => {
     const { getAgentPaidReferralCount } = await import('./db');
     const paidCount = await getAgentPaidReferralCount(agent.id);
     const bonusRub = (bonusPoints / 100).toLocaleString("ru-RU");
-    const bonusUnlocked = paidCount >= 10;
+    const bonusUnlocked = paidCount >= 5;
 
     let message = '🎁 <b>Реферальная программа</b>\n\n';
     message += '📢 Приглашайте коллег и зарабатывайте!\n\n';
@@ -2745,7 +2738,7 @@ bot.command('referral_program', async (ctx) => {
     message += `💰 Бонус за рефералов: ${bonusRub} ₽`;
     if (bonusPoints > 0 && !bonusUnlocked) {
       message += ` (🔒 заблокирован)\n`;
-      message += `📊 Прогресс разблокировки: ${paidCount}/10 оплаченных пациентов\n`;
+      message += `📊 Прогресс разблокировки: ${paidCount}/5 оплаченных пациентов\n`;
     } else if (bonusPoints > 0 && bonusUnlocked) {
       message += ` (✅ доступен)\n`;
     } else {
@@ -2753,8 +2746,8 @@ bot.command('referral_program', async (ctx) => {
     }
     message += '\n<b>Как это работает:</b>\n';
     message += '• Поделитесь ссылкой с коллегами\n';
-    message += '• За каждого зарегистрированного агента — 1 000 ₽\n';
-    message += '• Бонус разблокируется после 10 ваших оплаченных пациентов\n';
+    message += '• Когда приглашённый агент получит первую подтверждённую рекомендацию — вам 1 000 ₽\n';
+    message += '• Бонус разблокируется после 5 ваших оплаченных пациентов\n';
     message += '• После разблокировки бонус доступен для вывода';
 
     await ctx.reply(message, { parse_mode: 'HTML' });
@@ -2928,11 +2921,11 @@ bot.action('cmd_stats', async (ctx) => {
       message += `🎁 Бонусные баллы: <b>${bonusRub} ₽</b>\n`;
     }
     message += `\n🔗 <b>Ваша реферальная ссылка:</b>\n📱 Telegram: <code>${referralLink}</code>\n🌐 Веб: <code>${webReferralLink}</code>\n`;
-    message += '📢 За каждого приглашённого агента — <b>1 000 ₽</b> бонус\n\n';
+    message += '📢 За каждого приглашённого агента с подтверждённой рекомендацией — <b>1 000 ₽</b> бонус\n\n';
     message += '📈 <b>Как заработать больше:</b>\n';
     message += '• Отправляйте пациентов через /patient\n';
     message += '• Приглашайте коллег по реферальной ссылке\n';
-    message += '• Бонус разблокируется после 10 оплаченных пациентов';
+    message += '• Бонус разблокируется после 5 оплаченных пациентов';
 
     await ctx.reply(message, { parse_mode: 'HTML' });
   } catch (error) {
@@ -2992,7 +2985,7 @@ bot.action('cmd_referral_program', async (ctx) => {
     const { getAgentPaidReferralCount } = await import('./db');
     const paidCount = await getAgentPaidReferralCount(agent.id);
     const bonusRub = (bonusPoints / 100).toLocaleString("ru-RU");
-    const bonusUnlocked = paidCount >= 10;
+    const bonusUnlocked = paidCount >= 5;
 
     let message = '👥 <b>Реферальная программа</b>\n\n';
     message += '🎁 Приглашайте коллег и зарабатывайте!\n\n';
@@ -3002,13 +2995,13 @@ bot.action('cmd_referral_program', async (ctx) => {
     message += `• Бонус за рефералов: ${bonusRub} ₽`;
     if (bonusPoints > 0 && !bonusUnlocked) {
       message += ` (🔒 заблокирован)\n`;
-      message += `• Прогресс: ${paidCount}/10 оплаченных пациентов\n`;
+      message += `• Прогресс: ${paidCount}/5 оплаченных пациентов\n`;
     } else if (bonusPoints > 0 && bonusUnlocked) {
       message += ` (✅ доступен для вывода)\n`;
     } else {
       message += `\n`;
     }
-    message += '\n💡 За каждого приглашённого — 1 000 ₽. Разблокировка после 10 оплаченных пациентов.';
+    message += '\n💡 За каждого приглашённого агента с первой подтверждённой рекомендацией — 1 000 ₽. Разблокировка после 5 оплаченных пациентов.';
 
     await ctx.reply(message, { parse_mode: 'HTML' });
   } catch (error) {
@@ -3762,11 +3755,11 @@ bot.command('stats', async (ctx) => {
       message += `🎁 Бонусные баллы: <b>${bonusRub} ₽</b>\n`;
     }
     message += `\n🔗 <b>Ваша реферальная ссылка:</b>\n📱 Telegram: <code>${referralLink}</code>\n🌐 Веб: <code>${webReferralLink}</code>\n`;
-    message += '📢 За каждого приглашённого агента — <b>1 000 ₽</b> бонус\n\n';
+    message += '📢 За каждого приглашённого агента с подтверждённой рекомендацией — <b>1 000 ₽</b> бонус\n\n';
     message += '📈 <b>Как заработать больше:</b>\n';
     message += '• Отправляйте пациентов через /patient\n';
     message += '• Приглашайте коллег по реферальной ссылке\n';
-    message += '• Бонус разблокируется после 10 оплаченных пациентов';
+    message += '• Бонус разблокируется после 5 оплаченных пациентов';
 
     await ctx.reply(message, { parse_mode: 'HTML' });
   } catch (error) {

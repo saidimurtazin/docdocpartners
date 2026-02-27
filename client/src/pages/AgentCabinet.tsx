@@ -240,7 +240,7 @@ export default function AgentCabinet() {
                 {agent.bonusPoints?.toLocaleString()} баллов
               </div>
               <p className="text-sm text-muted-foreground">
-                Вывод доступен после {stats?.totalReferrals || 0}/10 собственных рекомендаций
+                Вывод доступен после {stats?.totalReferrals || 0}/5 собственных рекомендаций
               </p>
             </CardContent>
           </Card>

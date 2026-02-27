@@ -110,7 +110,7 @@ export default function AgentDashboard() {
       id: 'invite',
       icon: UserPlus,
       title: 'Пригласите коллегу',
-      description: 'Поделитесь реферальной ссылкой и получите 1 000 руб. бонус за каждого нового агента',
+      description: 'Поделитесь ссылкой — 1 000 ₽ за каждого агента с первой подтверждённой рекомендацией',
       completed: (stats?.referredAgentsCount ?? 0) > 0,
       action: () => {
         if (stats?.referralLink) {
@@ -371,15 +371,15 @@ export default function AgentDashboard() {
                       Реферальный бонус: {formatCurrency(stats.bonusPoints ?? 0)}
                     </div>
                     <div className="text-sm text-amber-700">
-                      {(stats.paidReferralCount ?? 0) >= (stats.bonusUnlockThreshold ?? 10)
+                      {(stats.paidReferralCount ?? 0) >= (stats.bonusUnlockThreshold ?? 5)
                         ? "Бонус будет автоматически добавлен к балансу"
-                        : `Разблокируется после ${(stats.bonusUnlockThreshold ?? 10) - (stats.paidReferralCount ?? 0)} оплаченных пациентов (сейчас ${stats.paidReferralCount ?? 0}/${stats.bonusUnlockThreshold ?? 10})`
+                        : `Разблокируется после ${(stats.bonusUnlockThreshold ?? 5) - (stats.paidReferralCount ?? 0)} оплаченных пациентов (сейчас ${stats.paidReferralCount ?? 0}/${stats.bonusUnlockThreshold ?? 5})`
                       }
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
                     <div className="text-2xl font-bold text-amber-600">
-                      {stats.paidReferralCount ?? 0}/{stats.bonusUnlockThreshold ?? 10}
+                      {stats.paidReferralCount ?? 0}/{stats.bonusUnlockThreshold ?? 5}
                     </div>
                     <div className="text-xs text-amber-600">пациентов</div>
                   </div>

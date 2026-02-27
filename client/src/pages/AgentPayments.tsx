@@ -206,7 +206,7 @@ export default function AgentPayments() {
   const completedPaymentsSum = (stats?.completedPaymentsSum || 0) / 100;
   const bonusPoints = (stats?.bonusPoints || 0) / 100;
   const paidReferralCount = stats?.paidReferralCount || 0;
-  const bonusUnlockThreshold = stats?.bonusUnlockThreshold || 10;
+  const bonusUnlockThreshold = stats?.bonusUnlockThreshold || 5;
   const bonusUnlocked = paidReferralCount >= bonusUnlockThreshold;
   const referredAgentsCount = stats?.referredAgentsCount || 0;
   const referralLink = stats?.referralLink || '';
@@ -504,7 +504,7 @@ export default function AgentPayments() {
                         </div>
                       </div>
                       <p className="text-xs text-muted-foreground mb-2">
-                        Приглашайте коллег — <strong>1 000 ₽</strong> за каждого.
+                        Приглашайте коллег — <strong>1 000 ₽</strong> за каждого с подтверждённой рекомендацией.
                         {!bonusUnlocked && ` Бонус разблокируется после ${bonusUnlockThreshold} оплаченных пациентов.`}
                       </p>
                       <div className="flex gap-2">

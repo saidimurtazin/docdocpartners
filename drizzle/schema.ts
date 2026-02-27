@@ -87,6 +87,7 @@ export const agents = mysqlTable("agents", {
   cardNumber: varchar("cardNumber", { length: 19 }), // номер карты (16-19 цифр)
   jumpRequisiteId: int("jumpRequisiteId"), // ID реквизита в Jump.Finance
   jumpIdentified: boolean("jumpIdentified").default(false), // прошёл идентификацию в Jump
+  referralBonusAwarded: boolean("referralBonusAwarded").default(false), // true = bonus already credited to referrer when this agent got first visited referral
   excludedClinics: text("excludedClinics"), // JSON array of clinic IDs, e.g. "[1,3,5]"
   commissionOverride: text("commissionOverride"), // DEPRECATED: never read, use app_settings["agentCommissionTiers"]. TODO: drop in next migration
   createdAt: timestamp("createdAt").defaultNow().notNull(),
