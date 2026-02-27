@@ -6,7 +6,7 @@
  */
 
 import * as db from "./db";
-import { jumpFinance, parseAgentName, makeCustomerPaymentId, REQUISITE_TYPE, getLegalFormId } from "./jump-finance";
+import { jumpFinance, parseAgentName, makeCustomerPaymentId, REQUISITE_TYPE, getLegalFormId, LEGAL_FORM } from "./jump-finance";
 
 export interface JumpPayoutResult {
   success: boolean;
@@ -101,6 +101,8 @@ export async function processJumpPayment(paymentId: number): Promise<JumpPayoutR
         firstName,
         lastName,
         middleName,
+        legalFormId: getLegalFormId(agent.isSelfEmployed || "no"),
+        tin: agent.inn || undefined,
         amount: amountRubles,
         requisite,
         serviceName: "Вознаграждение за рекомендацию пациентов",

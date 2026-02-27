@@ -206,8 +206,15 @@ class JumpFinanceClient {
           } catch { /* ignore parse errors */ }
 
           const detail = errorBody?.error?.detail || res.statusText;
-          console.error(`[Jump.Finance] Error ${res.status}: ${detail}`, errorBody?.error?.fields);
-          throw new JumpFinanceError(res.status, errorBody, `Jump.Finance API error ${res.status}: ${detail}`);
+          // Include field-level errors in message for better debugging
+          let fieldErrors = "";
+          if (errorBody?.error?.fields?.length) {
+            fieldErrors = " | Поля: " + errorBody.error.fields
+              .map(f => `${f.field}: ${f.messages.join("; ")}`)
+              .join(", ");
+          }
+          console.error(`[Jump.Finance] Error ${res.status}: ${detail}${fieldErrors}`, errorBody?.error?.fields);
+          throw new JumpFinanceError(res.status, errorBody, `Jump.Finance API error ${res.status}: ${detail}${fieldErrors}`);
         }
 
         // Some endpoints return 204 No Content
@@ -275,7 +282,7 @@ class JumpFinanceClient {
       phone: params.phone,
       first_name: params.firstName,
       last_name: params.lastName,
-      middle_name: params.middleName,
+      middle_name: params.middleName || "",
       legal_form_id: params.legalFormId,
       tin: params.tin,
     });
@@ -355,6 +362,8 @@ class JumpFinanceClient {
     firstName: string;
     lastName: string;
     middleName?: string;
+    legalFormId?: number; // 1=individual, 2=self-employed
+    tin?: string; // INN
     amount: number; // in rubles
     requisite: { typeId: number; accountNumber?: string; sbpBankId?: number };
     serviceName: string;
@@ -365,10 +374,12 @@ class JumpFinanceClient {
       phone: params.phone,
       first_name: params.firstName,
       last_name: params.lastName,
-      middle_name: params.middleName,
+      middle_name: params.middleName || "",
       amount: params.amount,
       agent_id: parseInt(this.agentId) || undefined,
       bank_account_id: parseInt(this.bankAccountId) || undefined,
+      ...(params.legalFormId && { legal_form_id: params.legalFormId }),
+      ...(params.tin && { tin: params.tin }),
       requisite: {
         type_id: params.requisite.typeId,
         ...(params.requisite.accountNumber && { account_number: params.requisite.accountNumber }),
@@ -476,20 +487,22 @@ export const jumpFinance = new JumpFinanceClient();
 /**
  * Parse agent full name into first/last/middle for Jump API.
  * Russian names: "Иванов Иван Иванович" → { lastName: "Иванов", firstName: "Иван", middleName: "Иванович" }
+ * For 2-word names: "Иванов Иван" → { lastName: "Иванов", firstName: "Иван", middleName: "" }
+ * Note: middleName always returned (empty string if missing) — Jump API may require it.
  */
 export function parseAgentName(fullName: string): {
   firstName: string;
   lastName: string;
-  middleName?: string;
+  middleName: string;
 } {
   const parts = fullName.trim().split(/\s+/);
   if (parts.length >= 3) {
     return { lastName: parts[0], firstName: parts[1], middleName: parts.slice(2).join(" ") };
   }
   if (parts.length === 2) {
-    return { lastName: parts[0], firstName: parts[1] };
+    return { lastName: parts[0], firstName: parts[1], middleName: "" };
   }
-  return { lastName: fullName, firstName: fullName };
+  return { lastName: fullName, firstName: fullName, middleName: "" };
 }
 
 /**
